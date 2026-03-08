@@ -320,8 +320,6 @@ a{text-decoration:none;color:inherit}
   border:none;font-size:12px;font-weight:600;
 }
 
-
-
 /* SEARCH PAGE */
 #spage{display:none;padding:14px}
 #spage.on{display:block}
@@ -365,7 +363,8 @@ footer{
 .stream-row:active { transform:scale(.98); }
 .stream-row-left { display:flex;align-items:center;gap:7px;min-width:0;flex:1; }
 .stream-row-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
-.sq {
+/* FIX: renamed from .sq to .qlabel to avoid conflict with #sq search input */
+.qlabel {
   font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;
   flex-shrink:0;text-transform:uppercase;letter-spacing:.5px;
 }
@@ -468,12 +467,12 @@ footer{
       </div>
 
       <div class="pwrap" id="pwrap">
-        <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Trying best source…</div></div>
+        <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Tap a source below to play</div></div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
         <iframe id="pframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation"></iframe>
       </div>
 
-      <!-- Quality/File selector (shown after source loads) -->
+      <!-- Quality/File selector -->
       <div class="crow" id="file-row" style="display:none;margin-top:10px">
         <span class="clabel">🎬 File</span>
         <div class="cbtns" id="filebns"></div>
@@ -498,6 +497,9 @@ footer{
 <footer><strong>CineVault</strong> · Free streaming · For entertainment only</footer>
 
 <script>
+// ── FIX: $ helper must be defined FIRST before anything else uses it ──
+const $ = id => document.getElementById(id);
+
 // ── CONFIG ──────────────────────────────────────────────────────
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
@@ -518,7 +520,24 @@ const SOURCES = [
 // ── STATE ───────────────────────────────────────────────────────
 let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null, curStreams = [];
 
-// ── TORRENTIO QUALITY PICKER ─────────────────────────────────
+// ── UTILS ───────────────────────────────────────────────────────
+const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
+const back   = p => p ? `${IMG}w1280${p}` : "";
+
+function toast(msg, ms=2200) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), ms);
+}
+
+// ── TMDB ────────────────────────────────────────────────────────
+async function tmdb(path, params={}) {
+  const q = new URLSearchParams({ api_key: TMDB_KEY, ...params });
+  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
+  if (!r.ok) throw new Error("TMDB " + r.status);
+  return r.json();
+}
+
+// ── TORRENTIO STREAMS ────────────────────────────────────────────
 async function fetchStreams(imdbId, type, s, e) {
   try {
     const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
@@ -526,21 +545,6 @@ async function fetchStreams(imdbId, type, s, e) {
     const d = await r.json();
     return (d.streams || []).slice(0, 12);
   } catch(err) { return []; }
-}
-
-function streamLabel(s) {
-  const t = (s.title || "") + (s.name || "");
-  let q = "SD";
-  if (/4k|2160p/i.test(t)) q = "4K";
-  else if (/1080p/i.test(t)) q = "1080p";
-  else if (/720p/i.test(t)) q = "720p";
-  else if (/480p/i.test(t)) q = "480p";
-  let lang = "";
-  if (/hindi/i.test(t)) lang = " HIN";
-  else if (/korean/i.test(t)) lang = " KOR";
-  else if (/japanese/i.test(t)) lang = " JPN";
-  const seeds = t.match(/[uD][uD][uD] (\d+)/)?.[1] || "";
-  return q + lang + (seeds ? " " + seeds + "s" : "");
 }
 
 function qClass(name) {
@@ -562,8 +566,8 @@ function buildStreamPicker(streams) {
     const lines  = (s.title || s.name || "").split("\n");
     const fname  = lines[0] || "Unknown";
     const meta   = lines[1] || lines[2] || "";
-    const seeds  = (meta.match(/[👤]\s*(\d+)/) || [])[1] || "?";
-    const size   = (meta.match(/[💾]\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
+    const seeds  = (meta.match(/👤\s*(\d+)/) || [])[1] || "?";
+    const size   = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
     const [ql, qc] = qClass(fname);
     let lang = "";
     if (/hindi/i.test(fname+meta)) lang = "🇮🇳 ";
@@ -572,9 +576,10 @@ function buildStreamPicker(streams) {
 
     const row = document.createElement("div");
     row.className = "stream-row";
+    // FIX: use .qlabel instead of .sq to avoid ID conflict with search input
     row.innerHTML =
       '<div class="stream-row-left">' +
-        '<span class="sq ' + qc + '">' + ql + '</span>' +
+        '<span class="qlabel ' + qc + '">' + ql + '</span>' +
         '<span class="stream-name">' + lang + fname + '</span>' +
       '</div>' +
       '<div class="stream-row-right">' +
@@ -588,18 +593,10 @@ function buildStreamPicker(streams) {
       row.classList.add("active");
       document.querySelectorAll("#srcbns .cbtn").forEach(x => x.classList.remove("on"));
       if (s.infoHash) {
-        // Use vidsrc torrent player (works on mobile)
         const hash = s.infoHash.toLowerCase();
         const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
-        // Use debrid-like embed via torrent — best mobile option
-        const mag  = "magnet:?xt=urn:btih:" + hash + "&dn=" + encodeURIComponent(fname);
-        // Try embed.io torrent player
-        const url  = "https://iframe.mediadelivery.net/play/" + hash + "/" + fi +
-                     "?token=" + hash;
-        // Fallback: open magnet directly
         $("pph").style.display = "none";
         $("pframe").style.display = "block";
-        // Use torrent.stream embed
         $("pframe").src = "https://www.torrent.stream/embed?infohash=" + hash + "&fileIndex=" + fi;
         toast("▶ " + ql + " — " + fname.slice(0, 35));
       }
@@ -617,24 +614,6 @@ async function loadDirectStreams() {
   const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", curS, curE);
   curStreams = streams;
   buildStreamPicker(streams);
-}
-
-// ── UTILS ───────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
-const back   = p => p ? `${IMG}w1280${p}` : "";
-
-function toast(msg, ms=2200) {
-  const t = $("toast"); t.textContent = msg; t.classList.add("on");
-  setTimeout(() => t.classList.remove("on"), ms);
-}
-
-// ── TMDB ────────────────────────────────────────────────────────
-async function tmdb(path, params={}) {
-  const q = new URLSearchParams({ api_key: TMDB_KEY, ...params });
-  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
-  if (!r.ok) throw new Error("TMDB " + r.status);
-  return r.json();
 }
 
 // ── CARDS ───────────────────────────────────────────────────────
@@ -713,7 +692,7 @@ async function openModal(item, type) {
     } catch(e) {}
   }
 
-  // TV
+  // TV controls
   const isTv = type==="tv"||type==="series";
   $("tv-ctrl").style.display = isTv ? "block" : "none";
   if (isTv) await loadSeasons(item.id);
@@ -722,14 +701,10 @@ async function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-
-
   // Load subs in background
   loadSubs();
   // Load quality streams
   loadDirectStreams();
-
-  // Download link
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -825,7 +800,6 @@ async function loadSubs() {
     if (!Array.isArray(data)||!data.length) return;
     const sel = $("subsel");
     sel.innerHTML = `<option value="">🔤 No subtitle</option>`;
-    // Group by language
     const langs = {};
     data.forEach(s => {
       if (!langs[s.LanguageName]) langs[s.LanguageName] = [];
@@ -860,13 +834,11 @@ function closeModal() {
 }
 
 // ── SEARCH ──────────────────────────────────────────────────────
-const sq = $("sq");
-sq.addEventListener("input", handleSearch);
-sq.addEventListener("keydown", e => { if(e.key==="Enter") { e.target.blur(); handleSearch(e); } });
-
-// Fix mobile: also listen on focus/blur for iOS
-sq.addEventListener("focus", () => {
-  if(sq.value.trim()) showSearch(sq.value.trim());
+const searchInput = $("sq");
+searchInput.addEventListener("input", handleSearch);
+searchInput.addEventListener("keydown", e => { if(e.key==="Enter") { e.target.blur(); handleSearch(e); } });
+searchInput.addEventListener("focus", () => {
+  if(searchInput.value.trim()) showSearch(searchInput.value.trim());
 });
 
 function handleSearch(e) {
@@ -878,8 +850,8 @@ function handleSearch(e) {
 }
 
 function clearSearch() {
-  sq.value = ""; $("search-clear").style.display = "none";
-  hideSearch(); sq.focus();
+  searchInput.value = ""; $("search-clear").style.display = "none";
+  hideSearch(); searchInput.focus();
 }
 
 function showSearch(q) {
@@ -949,10 +921,11 @@ document.querySelectorAll(".tab").forEach(tab => {
 });
 
 // ── PWA SERVICE WORKER ──────────────────────────────────────────
+// FIX: fixed missing leading slash on second cache path
 if ("serviceWorker" in navigator) {
   const swCode = `
 const CACHE = "cv-v1";
-const SHELL = ["/cinevault/","cinevault/index.html"];
+const SHELL = ["/cinevault/","/cinevault/index.html"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));
 self.addEventListener("fetch", e => {
   if (e.request.url.includes("tmdb") || e.request.url.includes("vidsrc") || e.request.url.includes("opensubtitles")) return;
