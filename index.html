@@ -274,13 +274,25 @@ a{text-decoration:none;color:inherit}
   overflow:hidden;background:#000;
   border:1px solid var(--border);position:relative;
 }
-.pwrap iframe{width:100%;height:100%;border:none;display:none}
+.pwrap iframe{width:100%;height:100%;border:none;display:block}
 .pph{
-  width:100%;height:100%;
+  position:absolute;inset:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:8px;color:var(--muted);font-size:13px;
+  background:#000;
 }
+.pph.hidden{display:none}
 .pph-icon{font-size:40px}
+
+/* STREAM NAME BAR below player */
+#stream-name-bar{
+  margin-top:8px;padding:8px 12px;
+  background:var(--s2);border:1px solid var(--border);border-radius:8px;
+  font-size:11px;color:var(--text);line-height:1.5;
+  display:none;word-break:break-all;
+}
+#stream-name-bar.on{display:block}
+#stream-name-bar strong{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
 .ploader{
   display:none;position:absolute;inset:0;
   background:rgba(0,0,0,.6);
@@ -467,10 +479,11 @@ footer{
       </div>
 
       <div class="pwrap" id="pwrap">
-        <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Tap a source below to play</div></div>
+        <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
         <iframe id="pframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation"></iframe>
       </div>
+      <div id="stream-name-bar"><strong>▶ Now Playing</strong><span id="stream-name-text"></span></div>
 
       <!-- Quality/File selector -->
       <div class="crow" id="file-row" style="display:none;margin-top:10px">
@@ -595,9 +608,11 @@ function buildStreamPicker(streams) {
       if (s.infoHash) {
         const hash = s.infoHash.toLowerCase();
         const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
-        $("pph").style.display = "none";
-        $("pframe").style.display = "block";
+        $("pph").classList.add("hidden");
         $("pframe").src = "https://www.torrent.stream/embed?infohash=" + hash + "&fileIndex=" + fi;
+        // Show full filename in name bar
+        $("stream-name-text").textContent = fname;
+        $("stream-name-bar").classList.add("on");
         toast("▶ " + ql + " — " + fname.slice(0, 35));
       }
     };
@@ -671,12 +686,12 @@ async function openModal(item, type) {
   $("mdesc").textContent  = item.overview || "";
   $("mbg").src = back(item.backdrop_path);
   $("pframe").src = "";
-  $("pframe").style.display = "none";
-  $("pph").style.display = "flex";
-  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Tap a source below to play</div>`;
+  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
+  $("pph").classList.remove("hidden");
   $("ploader").classList.remove("on");
   $("subbar").classList.remove("on");
   $("file-row").style.display = "none";
+  $("stream-name-bar").classList.remove("on");
   if($("srv-row")) $("srv-row").style.display = "none";
 
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
@@ -700,6 +715,9 @@ async function openModal(item, type) {
   buildSources();
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
+
+  // Auto-play first source immediately
+  loadSource(0);
 
   // Load subs in background
   loadSubs();
@@ -733,13 +751,17 @@ function loadSource(i) {
   if (!id) { toast("❌ ID not found, try another source"); return; }
 
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  const title = cur.title || cur.name || "";
 
-  // Show player, hide placeholder
-  $("pph").style.display = "none";
-  $("pframe").style.display = "block";
+  // Show player
+  $("pph").classList.add("hidden");
   $("pframe").src = "";
-  // Small delay prevents some mobile browser iframe caching issues
   setTimeout(() => { $("pframe").src = url; }, 100);
+
+  // Show stream name bar below player
+  $("stream-name-text").textContent = title + (isMovie ? "" : ` · S${curS} E${curE}`) + "  [" + src.name + "]";
+  $("stream-name-bar").classList.add("on");
+
   toast("▶ " + src.name);
 }
 
@@ -830,6 +852,9 @@ $("modal").onclick = e => { if(e.target===$("modal")) closeModal(); };
 function closeModal() {
   $("modal").classList.remove("on");
   $("pframe").src = "";
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Tap a source below to play</div>`;
+  $("stream-name-bar").classList.remove("on");
   document.body.style.overflow = "";
 }
 
