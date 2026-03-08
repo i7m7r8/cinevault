@@ -613,8 +613,7 @@ function setNameBar(title, sub) {
 // ── PLAYER ──────────────────────────────────────────────────────
 function playUrl(url) {
   $("pph").classList.add("hidden");
-  $("pframe").src = "";
-  setTimeout(() => { $("pframe").src = url; }, 150);
+  $("pframe").src = url;
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -852,9 +851,9 @@ async function openModal(item, type) {
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
   $("mbg").src            = back(item.backdrop_path);
-  $("pframe").src         = "";
-  $("pph").innerHTML      = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
+  $("pframe").src = "";
   $("pph").classList.remove("hidden");
+  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
   $("subbar").classList.remove("on");
   $("file-row").style.display = "none";
   $("stream-name-bar").classList.remove("on");
