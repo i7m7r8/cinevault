@@ -541,16 +541,19 @@ const $ = id => document.getElementById(id);
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
-// VidSrc removed. Sources use TMDB id or IMDB id.
+// Sources — 2Embed confirmed working. Others are well-known active embeds.
 const SOURCES = [
-  { name:"AutoEmbed",    useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                  tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
-  { name:"EmbedSu",      useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                     tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name:"2Embed",       useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                      tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name:"SuperEmbed",   useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,           tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name:"SmashyStream", useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,               tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
-  { name:"MoviesAPI",    useImdb:false, movie:id=>`https://moviesapi.club/movie/${id}`,                     tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}` },
-  { name:"RiveStream",   useImdb:true,  movie:id=>`https://rivestream.live/embed?type=movie&id=${id}`,      tv:(id,s,e)=>`https://rivestream.live/embed?type=tv&id=${id}&season=${s}&episode=${e}` },
-  { name:"NontonGo",     useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,        tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  // ✅ Confirmed working
+  { name:"2Embed",       useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                           tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  // Active & popular embeds (TMDB id based — no IMDB needed)
+  { name:"VidLink",      useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}`,                             tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
+  { name:"EmbedGG",      useImdb:false, movie:id=>`https://embed.gg/movie/${id}`,                                tv:(id,s,e)=>`https://embed.gg/tv/${id}/${s}/${e}` },
+  { name:"PlayerX",      useImdb:false, movie:id=>`https://playerx.stream/embed/movie/${id}`,                   tv:(id,s,e)=>`https://playerx.stream/embed/tv/${id}/${s}/${e}` },
+  { name:"SmashyStream", useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,                   tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name:"MoviesAPI",    useImdb:false, movie:id=>`https://moviesapi.club/movie/${id}`,                         tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}` },
+  { name:"NontonGo",     useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,            tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name:"RiveStream",   useImdb:false, movie:id=>`https://rivestream.live/embed?type=movie&id=${id}`,          tv:(id,s,e)=>`https://rivestream.live/embed?type=tv&id=${id}&season=${s}&episode=${e}` },
+  { name:"MultiEmbed",   useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,              tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
