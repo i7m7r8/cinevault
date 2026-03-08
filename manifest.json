@@ -1,0 +1,14 @@
+{
+  "name": "CineVault",
+  "short_name": "CineVault",
+  "description": "Free movies & TV streaming",
+  "start_url": "/cinevault/",
+  "display": "standalone",
+  "background_color": "#0d0d14",
+  "theme_color": "#0d0d14",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "https://i.imgur.com/uwDqNDd.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "https://i.imgur.com/uwDqNDd.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
