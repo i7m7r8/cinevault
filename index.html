@@ -288,13 +288,13 @@ a{text-decoration:none;color:inherit}
 #stream-name-bar{
   display:none;
   margin-top:10px;
-  background:var(--s2);
+  background:var(--s1);
   border:2px solid var(--accent);
   border-radius:12px;
   padding:12px 16px;
-  box-shadow:0 0 16px rgba(232,23,58,0.2);
+  box-shadow:0 4px 20px rgba(232,23,58,0.15);
 }
-#stream-name-bar.on{display:block}
+#stream-name-bar.on{ display:block; }
 #stream-name-bar .snb-label{
   font-size:10px;font-weight:800;letter-spacing:1.2px;
   text-transform:uppercase;color:var(--accent);
@@ -302,12 +302,10 @@ a{text-decoration:none;color:inherit}
 }
 #stream-name-bar .snb-title{
   font-size:12px;font-weight:600;color:var(--text);
-  word-break:break-word;overflow-wrap:anywhere;line-height:1.5;
-  margin-bottom:4px;
+  word-break:break-all;line-height:1.5;margin-bottom:4px;
 }
 #stream-name-bar .snb-source{
-  font-size:11px;color:var(--muted);
-  display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+  font-size:11px;color:var(--muted);margin-top:2px;
 }
 .ploader{
   display:none;position:absolute;inset:0;
@@ -381,20 +379,25 @@ footer{
 /* ── STREAM LIST ─────────────────────────────── */
 .stream-row {
   display:flex;align-items:center;gap:10px;
-  padding:10px 12px;margin-bottom:6px;
-  background:var(--s2);border:1px solid var(--border);
-  border-radius:9px;cursor:pointer;transition:all .15s;
-}
-.stream-row:hover,.stream-row.active {
-  border-color:var(--accent);background:var(--accent-dim);
+  padding:10px 12px;margin-bottom:5px;
+  background:var(--s2);border:2px solid var(--border);
+  border-radius:10px;cursor:pointer;
+  transition:border-color .15s,background .15s,transform .1s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
 }
 .stream-row:active { transform:scale(.98); }
-.stream-row-left { display:flex;align-items:center;gap:7px;min-width:0;flex:1; }
-.stream-row-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
-/* FIX: renamed from .sq to .qlabel to avoid conflict with #sq search input */
+.stream-row.active {
+  border-color:var(--accent);
+  background:var(--accent-dim);
+  box-shadow:0 0 0 1px var(--accent);
+}
+.stream-row-left { display:flex;align-items:center;gap:8px;min-width:0;flex:1; }
+.stream-row-right { display:flex;align-items:center;gap:5px;flex-shrink:0; }
 .qlabel {
-  font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;
+  font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;
   flex-shrink:0;text-transform:uppercase;letter-spacing:.5px;
+  white-space:nowrap;
 }
 .sq-4k   { background:#a855f7;color:#fff; }
 .sq-1080 { background:var(--accent);color:#fff; }
@@ -408,12 +411,14 @@ footer{
 .stream-seeds { font-size:10px;color:var(--green);font-weight:700;flex-shrink:0; }
 .stream-size  { font-size:10px;color:var(--muted);flex-shrink:0; }
 .stream-play-btn {
-  width:26px;height:26px;border-radius:50%;flex-shrink:0;
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
   background:var(--s3);color:var(--text);border:1px solid var(--border);
   display:flex;align-items:center;justify-content:center;
-  font-size:10px;transition:all .15s;
+  font-size:11px;transition:all .15s;pointer-events:none;
 }
-.stream-row.active .stream-play-btn { background:var(--accent);border-color:var(--accent);color:#fff; }
+.stream-row.active .stream-play-btn {
+  background:var(--accent);border-color:var(--accent);color:#fff;
+}
 </style>
 </head>
 <body>
@@ -595,57 +600,62 @@ function buildStreamPicker(streams) {
   $("stream-picker").style.display = streams.length ? "block" : "none";
   if (!streams.length) return;
 
-  streams.forEach((s) => {
-    const lines  = (s.title || s.name || "").split("\n");
-    const fname  = lines[0] || "Unknown";
-    const meta   = lines[1] || lines[2] || "";
-    const seeds  = (meta.match(/👤\s*(\d+)/) || [])[1] || "?";
-    const size   = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
+  streams.forEach((s, idx) => {
+    const lines = (s.title || s.name || "").split("\n");
+    const fname = lines[0] || "Unknown";
+    const meta  = lines.slice(1).join(" ");
+    const seeds = (meta.match(/👤\s*(\d+)/) || [])[1] || "";
+    const size  = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
     const [ql, qc] = qClass(fname);
     let lang = "";
-    if (/hindi/i.test(fname+meta)) lang = "🇮🇳 ";
-    else if (/korean/i.test(fname+meta)) lang = "🇰🇷 ";
+    if (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
+    else if (/korean/i.test(fname+meta))  lang = "🇰🇷 ";
     else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
 
     const row = document.createElement("div");
     row.className = "stream-row";
-    // FIX: use .qlabel instead of .sq to avoid ID conflict with search input
+    row.dataset.idx = idx;
     row.innerHTML =
       '<div class="stream-row-left">' +
         '<span class="qlabel ' + qc + '">' + ql + '</span>' +
         '<span class="stream-name">' + lang + fname + '</span>' +
       '</div>' +
       '<div class="stream-row-right">' +
-        '<span class="stream-seeds">👤' + seeds + '</span>' +
-        (size ? '<span class="stream-size"> 💾' + size + '</span>' : '') +
+        (seeds ? '<span class="stream-seeds">👤' + seeds + '</span>' : '') +
+        (size  ? '<span class="stream-size">💾' + size + '</span>' : '') +
         '<span class="stream-play-btn">▶</span>' +
       '</div>';
 
-    row.onclick = () => {
-      // Mark this row active — do NOT touch source buttons
+    row.addEventListener("click", function(e) {
+      e.stopPropagation();
+
+      // 1. Highlight this row
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
 
-      const hash = (s.infoHash || "").toLowerCase();
-      const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
+      // 2. Update the NOW PLAYING box with full name
+      setNameBar(fname,
+        (ql ? ql : "") +
+        (size  ? "  💾 " + size  : "") +
+        (seeds ? "  👤 " + seeds : "")
+      );
 
-      if (!hash) { toast("❌ No hash for this stream"); return; }
+      // 3. Play through current embed source (VidSrc etc.) — it stays selected
+      //    The source button is NOT touched at all
+      const isMovie = cur.mediaType === "movie";
+      const id = cur.imdb_id || cur.id;
+      if (!id) { toast("❌ No ID found"); return; }
 
-      // Build magnet link
-      const magnet = "magnet:?xt=urn:btih:" + hash +
-        "&dn=" + encodeURIComponent(fname) +
-        "&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337" +
-        "&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969";
+      const src = SOURCES[srcIdx] || SOURCES[0];
+      const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
 
-      // Open AllDebrid / Real-Debrid / direct magnet in new tab
-      // Using seedr.cc embed which supports magnet-to-stream
-      const playerUrl = "https://www.seedr.cc/?magnet=" + encodeURIComponent(magnet);
-      window.open(playerUrl, "_blank");
+      $("pph").classList.add("hidden");
+      $("pframe").src = "";
+      setTimeout(() => { $("pframe").src = url; }, 120);
 
-      // Update name bar with FULL filename + meta
-      setNameBar(fname, ql + (size ? "  💾 " + size : "") + (seeds && seeds !== "?" ? "  👤 " + seeds : ""));
-      toast("▶ Opening " + ql + " stream…");
-    };
+      toast("▶ " + ql + " — " + fname.slice(0,40));
+    });
+
     wrap.appendChild(row);
   });
 }
