@@ -793,6 +793,7 @@ function loadSource(i) {
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
+}
 
 // ── CARDS ───────────────────────────────────────────────────────
 function makeCard(item, type) {
