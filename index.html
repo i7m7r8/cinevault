@@ -653,7 +653,7 @@ function buildStreamPicker(streams) {
   $("stream-picker").style.display = "block";
 
   const label = $("stream-label");
-  if (label) label.innerHTML = '📊 STREAMS &nbsp;<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;vertical-align:middle">' + SOURCES[srcIdx].name + '</span>';
+  if (label) label.textContent = "📊 AVAILABLE TORRENTS";
 
   streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
@@ -691,15 +691,12 @@ function buildStreamPicker(streams) {
   });
 }
 
-// Tap a stream row → just highlight it (quality info only, source plays)
+// Tap stream row → highlight it and show full name
 function playStream(row) {
   document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
   row.classList.add("active");
-  toast("✓ Selected: " + row._ql + (row._seeds ? "  👤" + row._seeds : ""));
-  // If a source already active, reload it so user sees something
-  if (srcIdx >= 0 && document.querySelector("#srcbns .cbtn.on")) {
-    loadSource(srcIdx);
-  }
+  // Show full torrent name in toast
+  toast(row._fname.slice(0, 60));
 }
 
 // Load streams from Torrentio — only fetches once per title/episode
@@ -763,41 +760,16 @@ function loadSource(i) {
   // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
-  // Update stream label badge
+  // Update stream label to show active source
   const lbl = $("stream-label");
-  if (lbl) lbl.innerHTML = '📊 STREAMS &nbsp;<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;vertical-align:middle">' + src.name + '</span>';
+  if (lbl) lbl.textContent = "📊 AVAILABLE TORRENTS";
 
   const isMovie = cur.mediaType === "movie";
 
-  // If source needs imdb and we don't have it yet, play with tmdb id then reload when ready
-  if (src.useImdb && !cur.imdb_id) {
-    // Play with tmdb id as fallback first
-    const tmpUrl = isMovie ? src.movie(cur.id) : src.tv(cur.id, curS, curE);
-    playUrl(tmpUrl);
-    toast("⏳ Loading proper ID for " + src.name + "…");
-    // Poll for imdb_id
-    const poll = setInterval(() => {
-      if (cur && cur.imdb_id) {
-        clearInterval(poll);
-        if (srcIdx === i) { // still on same source
-          const url = isMovie ? src.movie(cur.imdb_id) : src.tv(cur.imdb_id, curS, curE);
-          playUrl(url);
-          toast("▶ " + src.name + " (reloaded with IMDB id)");
-        }
-      }
-    }, 300);
-    return;
-  }
-
-  const id = src.useImdb ? cur.imdb_id : cur.id;
+  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
-
-  // Reload stream rows so they reflect current context
-  _cachedStreams = [];
-  _cacheKey = "";
-  loadDirectStreams();
 }
 
 // ── CARDS ───────────────────────────────────────────────────────
