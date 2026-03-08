@@ -701,13 +701,17 @@ function buildStreamPicker(streams) {
 
 async function loadDirectStreams() {
   if (!cur || !cur.imdb_id) return;
+  // Immediately clear old list so user sees it's reloading
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
-  // Clear active row when list reloads
+  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+  // Snapshot curS/curE at call time so async result matches
+  const snapS = curS, snapE = curE;
   const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-  const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", curS, curE);
-  buildStreamPicker(streams);
+  const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
+  // Only render if episode hasn't changed while we were fetching
+  if (snapS === curS && snapE === curE) buildStreamPicker(streams);
 }
 
 // ── CARDS ───────────────────────────────────────────────────────
@@ -815,6 +819,7 @@ async function loadSeasons(tvId) {
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
         loadSource(srcIdx);
+        loadDirectStreams();
       };
       wrap.appendChild(b);
     });
