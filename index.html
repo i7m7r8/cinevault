@@ -621,12 +621,17 @@ function loadSource(i) {
   const title = cur.title || cur.name || "";
   const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
 
-  // If a stream row is active, re-click it so name+link update for the new source
+  playUrl(url);
+
+  // Always update name bar with new source
+  // If a stream row is active, keep its filename but update source name
   const activeRow = document.querySelector(".stream-row.active");
   if (activeRow) {
-    activeRow.click();
+    const fname = activeRow.querySelector(".stream-name")?.textContent || (title + ep);
+    const seeds = activeRow.querySelector(".stream-seeds")?.textContent || "";
+    const size  = activeRow.querySelector(".stream-size")?.textContent  || "";
+    setNameBar(fname, "▶ " + src.name + (size ? "  " + size : "") + (seeds ? "  " + seeds : ""));
   } else {
-    playUrl(url);
     setNameBar(title + ep, "▶ " + src.name);
   }
 
