@@ -542,7 +542,7 @@ const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
-  { name:"2Embed",     useImdb:false, movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
   { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,  tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                     tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
   { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                               tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
@@ -763,14 +763,33 @@ function loadSource(i) {
   // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
-  // Update stream section header to show active source
+  // Update stream label badge
   const lbl = $("stream-label");
   if (lbl) lbl.innerHTML = '📊 STREAMS &nbsp;<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;vertical-align:middle">' + src.name + '</span>';
 
   const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("⏳ Still loading ID…"); return; }
 
+  // If source needs imdb and we don't have it yet, play with tmdb id then reload when ready
+  if (src.useImdb && !cur.imdb_id) {
+    // Play with tmdb id as fallback first
+    const tmpUrl = isMovie ? src.movie(cur.id) : src.tv(cur.id, curS, curE);
+    playUrl(tmpUrl);
+    toast("⏳ Loading proper ID for " + src.name + "…");
+    // Poll for imdb_id
+    const poll = setInterval(() => {
+      if (cur && cur.imdb_id) {
+        clearInterval(poll);
+        if (srcIdx === i) { // still on same source
+          const url = isMovie ? src.movie(cur.imdb_id) : src.tv(cur.imdb_id, curS, curE);
+          playUrl(url);
+          toast("▶ " + src.name + " (reloaded with IMDB id)");
+        }
+      }
+    }, 300);
+    return;
+  }
+
+  const id = src.useImdb ? cur.imdb_id : cur.id;
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
