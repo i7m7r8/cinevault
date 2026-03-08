@@ -613,7 +613,9 @@ function setNameBar(title, sub) {
 // ── PLAYER ──────────────────────────────────────────────────────
 function playUrl(url) {
   $("pph").classList.add("hidden");
-  $("pframe").src = url;
+  const f = $("pframe");
+  f.src = "about:blank";
+  setTimeout(() => { f.src = url; }, 80);
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -660,7 +662,7 @@ function buildStreamPicker(streams) {
   $("stream-picker").style.display = "block";
 
   const label = $("stream-picker").querySelector(".clabel");
-  if (label) label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
+  if (label) label.textContent = "📊 AVAILABLE STREAMS";
 
   streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
@@ -698,21 +700,31 @@ function buildStreamPicker(streams) {
   });
 }
 
-// Play a stream row using CURRENT source (reads srcIdx at call time)
+// Play stream row — uses current embed source, auto-selects first if none chosen
 function playStream(row) {
   document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
   row.classList.add("active");
-  const src     = SOURCES[srcIdx];
+
+  // Auto-select first source if none selected yet
+  if (!document.querySelector("#srcbns .cbtn.on")) {
+    srcIdx = 0;
+    document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===0));
+  }
+
+  const src = SOURCES[srcIdx];
+  if (!src || !cur) return;
+
   const isMovie = cur.mediaType === "movie";
-  const id      = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ No ID"); return; }
+  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("❌ No ID — tap a source button first"); return; }
+
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   setNameBar(
     row._fname,
     "▶ " + src.name + (row._size ? "  💾" + row._size : "") + (row._seeds ? "  👤" + row._seeds : "")
   );
-  toast("▶ " + src.name + " · " + row._ql);
+  toast("▶ " + row._ql + " · " + src.name);
 }
 
 // Load streams from Torrentio — only fetches once per title/episode
@@ -767,20 +779,12 @@ async function loadDirectStreams() {
   }
 }
 
-// Called when source changes — updates label + name bar, re-plays active row
+// Called when source changes — re-plays if a stream row was active
 function onSourceChange() {
-  const label = $("stream-picker")?.querySelector(".clabel");
-  if (label && $("stream-picker").style.display !== "none") {
-    label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
-  }
   const activeRow = document.querySelector(".stream-row.active");
   if (activeRow && activeRow._fname) {
-    // Update name bar only — don't reload player
-    const src = SOURCES[srcIdx];
-    setNameBar(
-      activeRow._fname,
-      "▶ " + src.name + (activeRow._size ? "  💾" + activeRow._size : "") + (activeRow._seeds ? "  👤" + activeRow._seeds : "")
-    );
+    // Re-play with new source
+    playStream(activeRow);
   }
 }
 
@@ -803,8 +807,6 @@ function loadSource(i) {
   playUrl(url);
   setNameBar(title + ep, "▶ " + src.name);
   toast("▶ " + src.name);
-
-  // Update stream list for new source
   onSourceChange();
 }
 
