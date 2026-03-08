@@ -517,7 +517,7 @@ footer{
       </div>
 
       <div id="stream-picker" style="display:none;margin-top:14px">
-        <div class="clabel" style="margin-bottom:8px">🎬 AVAILABLE STREAMS</div>
+        <div class="clabel" style="margin-bottom:8px">📊 STREAM QUALITY INFO</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
@@ -685,24 +685,14 @@ function buildStreamPicker(streams) {
       `</div>`;
 
     row.onclick = () => {
-      // Highlight row
+      // Just highlight + show quality info in NOW PLAYING box
+      // Embed sources (buttons above) are independent — they serve their own stream
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
-
-      // Update now-playing box with full filename + quality info
       setNameBar(fname,
         ql + (size ? "  💾 " + size : "") + (seeds ? "  👤 " + seeds : "")
       );
-
-      // Play via current source — clicking a stream just selects quality display
-      // The actual embed source (AutoEmbed etc.) handles the stream
-      const src = SOURCES[srcIdx] || SOURCES[0];
-      const isMovie = cur.mediaType === "movie";
-      const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-      if (!id) { toast("❌ No ID"); return; }
-      const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-      playUrl(url);
-      toast("▶ " + ql + " — " + fname.slice(0, 38));
+      toast("ℹ️ " + ql + " available — use source buttons above to play");
     };
 
     wrap.appendChild(row);
