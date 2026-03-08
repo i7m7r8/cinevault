@@ -988,39 +988,54 @@ function stopSub() {
 async function startSubSync() {
   const lang = $("subsel").value;
   if (!lang) { toast("Select a language first"); return; }
-  if (!cur?.imdb_id) { toast("⏳ Still loading…"); return; }
+  if (!cur?.imdb_id) { toast("⏳ Still loading IMDB ID…"); return; }
   toast("⏳ Fetching subtitle…");
   try {
     const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-    const langMap = {en:"EN",hi:"HI",ar:"AR",fr:"FR",es:"ES",de:"DE",pt:"PT",it:"IT",ja:"JA",ko:"KO",zh:"ZH"};
-    const sdlLang = langMap[lang] || lang.toUpperCase();
-    let apiUrl = `https://subdl.com/api/v1/?api_key=&imdb_id=${cur.imdb_id}&language=${sdlLang}&subs_per_page=5&type=${isTv?"tv":"movie"}`;
-    if (isTv) apiUrl += `&season_number=${curS}&episode_number=${curE}`;
 
-    const r = await fetch(apiUrl);
-    if (!r.ok) throw new Error("subdl fetch failed");
-    const d = await r.json();
-    const subs = d.subtitles || [];
-    if (!subs.length) { toast("❌ No subtitle for " + lang.toUpperCase()); return; }
+    // OpenSubtitles REST API — confirmed working, returns direct .srt links
+    const langMap = {en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
+    const osLang = langMap[lang] || "eng";
+    const imdbNum = cur.imdb_id.replace("tt", "");
 
-    // Prefer direct .srt over .zip
-    const sub = subs.find(s => (s.url||"").endsWith(".srt")) || subs[0];
-    const rawUrl = (sub.url||"").startsWith("http") ? sub.url : "https://subdl.com" + sub.url;
+    // Build search URL — for TV include season+episode
+    let searchUrl = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${osLang}`;
+    if (isTv) searchUrl += `/season-${curS}/episode-${curE}`;
 
-    const r2 = await fetch(rawUrl);
+    const r = await fetch(searchUrl, {
+      headers: { "X-User-Agent": "TemporaryUserAgent" }
+    });
+    if (!r.ok) throw new Error("OpenSubtitles error " + r.status);
+    const subs = await r.json();
+    if (!Array.isArray(subs) || !subs.length) {
+      toast("❌ No " + lang.toUpperCase() + " subtitle found");
+      return;
+    }
+
+    // Pick first .srt result
+    const sub = subs.find(s => s.SubFormat === "srt") || subs[0];
+    const srtUrl = sub.SubDownloadLink || "";
+    if (!srtUrl) { toast("❌ No download link"); return; }
+
+    // Fetch SRT via CORS proxy (direct fetch blocked by browser)
+    const proxy = "https://api.allorigins.win/raw?url=";
+    const r2 = await fetch(proxy + encodeURIComponent(srtUrl));
+    if (!r2.ok) throw new Error("Download failed");
     const srtText = await r2.text();
-    if (!srtText.includes("-->")) { toast("❌ File is zipped — no direct .srt available"); return; }
+
+    if (!srtText.includes("-->")) { toast("❌ Invalid subtitle file"); return; }
 
     _subCues = parseSRT(srtText);
     if (!_subCues.length) { toast("❌ Could not parse subtitle"); return; }
+
     clearInterval(_subTimer);
     _subStart = Date.now();
     _subTimer = setInterval(tickSub, 250);
     $("sub-overlay").style.display = "block";
-    toast(`🔤 ${lang.toUpperCase()} · ${_subCues.length} cues loaded`);
+    toast(`🔤 ${lang.toUpperCase()} · ${_subCues.length} cues loaded ✅`);
   } catch(e) {
-    console.log("sub err", e);
-    toast("❌ Subtitle failed — " + e.message);
+    console.error("sub err", e);
+    toast("❌ Subtitle failed: " + e.message);
   }
 }
 
