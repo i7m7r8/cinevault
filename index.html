@@ -541,12 +541,37 @@ const $ = id => document.getElementById(id);
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
-// Sources — 2Embed + MultiEmbed confirmed working
+// Sources — each with multiple servers shown in stream list
 const SOURCES = [
-  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,              tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,   tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}`,                 tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
-  { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,        tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  {
+    name: "2Embed", useImdb: true,
+    servers: [
+      { name:"2Embed S1", movie:id=>`https://www.2embed.cc/embed/${id}`,         tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+      { name:"2Embed S2", movie:id=>`https://2embed.org/embed/movie/${id}`,      tv:(id,s,e)=>`https://2embed.org/embed/tv/${id}/${s}/${e}` },
+      { name:"2Embed S3", movie:id=>`https://www.2embed.skin/embed/${id}`,       tv:(id,s,e)=>`https://www.2embed.skin/embedtv/${id}&s=${s}&e=${e}` },
+    ]
+  },
+  {
+    name: "MultiEmbed", useImdb: false,
+    servers: [
+      { name:"Multi S1",  movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                  tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+      { name:"Multi S2",  movie:id=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv:(id,s,e)=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+    ]
+  },
+  {
+    name: "VidLink", useImdb: false,
+    servers: [
+      { name:"VidLink S1", movie:id=>`https://vidlink.pro/movie/${id}`,               tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
+      { name:"VidLink S2", movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true`, tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true` },
+    ]
+  },
+  {
+    name: "Smashy", useImdb: false,
+    servers: [
+      { name:"Smashy S1", movie:id=>`https://player.smashy.stream/movie/${id}`,  tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+      { name:"Smashy S2", movie:id=>`https://smashy.stream/embed/${id}`,         tv:(id,s,e)=>`https://smashy.stream/embed/${id}?s=${s}&e=${e}` },
+    ]
+  },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
@@ -605,6 +630,48 @@ function buildSources() {
   });
 }
 
+// Build server list for current source into stream picker
+function buildServerList() {
+  const src     = SOURCES[srcIdx];
+  const wrap    = $("streambns");
+  const isMovie = cur.mediaType === "movie";
+  wrap.innerHTML = "";
+  $("stream-loading").style.display = "none";
+  $("stream-picker").style.display  = "block";
+  // Update label
+  const label = $("stream-picker").querySelector(".clabel");
+  if (label) label.textContent = "🎬 " + src.name.toUpperCase() + " SERVERS";
+
+  src.servers.forEach((srv, i) => {
+    const id  = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+    const url = id ? (isMovie ? srv.movie(id) : srv.tv(id, curS, curE)) : "";
+
+    const row = document.createElement("div");
+    row.className = "stream-row" + (i === 0 ? " active" : "");
+    row.innerHTML =
+      `<div class="stream-row-left">` +
+        `<span class="qlabel sq-1080">S${i+1}</span>` +
+        `<span class="stream-name">${srv.name}</span>` +
+      `</div>` +
+      `<div class="stream-row-right">` +
+        `<span class="stream-play-btn">▶</span>` +
+      `</div>`;
+
+    row.onclick = () => {
+      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+      row.classList.add("active");
+      const title = cur.title || cur.name || "";
+      const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
+      setNameBar(srv.name, "▶ " + src.name + " · " + (isMovie ? "Movie" : ep));
+      if (!url) { toast("❌ No ID yet"); return; }
+      playUrl(url);
+      toast("▶ " + srv.name);
+    };
+
+    wrap.appendChild(row);
+  });
+}
+
 function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
@@ -613,116 +680,26 @@ function loadSource(i) {
   // Highlight selected source button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
-  const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ No ID — try another source"); return; }
+  // Build this source's server list in stream picker
+  buildServerList();
 
-  const url   = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  // Auto-play first server of this source
+  const isMovie = cur.mediaType === "movie";
+  const id  = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("❌ No ID — try another source"); return; }
+  const srv = src.servers[0];
+  const url = isMovie ? srv.movie(id) : srv.tv(id, curS, curE);
   const title = cur.title || cur.name || "";
   const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
 
   playUrl(url);
-
-  // Always update name bar with new source
-  // If a stream row is active, keep its filename but update source name
-  const activeRow = document.querySelector(".stream-row.active");
-  if (activeRow) {
-    const fname = activeRow.querySelector(".stream-name")?.textContent || (title + ep);
-    const seeds = activeRow.querySelector(".stream-seeds")?.textContent || "";
-    const size  = activeRow.querySelector(".stream-size")?.textContent  || "";
-    setNameBar(fname, "▶ " + src.name + (size ? "  " + size : "") + (seeds ? "  " + seeds : ""));
-  } else {
-    setNameBar(title + ep, "▶ " + src.name);
-  }
-
-  toast("▶ " + src.name);
+  setNameBar(srv.name, "▶ " + src.name + (isMovie ? "" : ep));
+  toast("▶ " + src.name + " · " + srv.name);
 }
 
-// ── TORRENTIO STREAM LIST ────────────────────────────────────────
-async function fetchStreams(imdbId, type, s, e) {
-  try {
-    const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
-    const r = await fetch(`https://torrentio.strem.fun/stream/${path}.json`);
-    const d = await r.json();
-    return (d.streams || []).slice(0, 15);
-  } catch { return []; }
-}
+// Torrentio removed — using per-source server list instead
 
-function buildStreamPicker(streams) {
-  const wrap = $("streambns");
-  wrap.innerHTML = "";
-  $("stream-loading").style.display = "none";
-
-  if (!streams.length) {
-    $("stream-picker").style.display = "none";
-    return;
-  }
-  $("stream-picker").style.display = "block";
-
-  streams.forEach((s) => {
-    const lines = (s.title || s.name || "").split("\n");
-    const fname = lines[0] || "Unknown";
-    const meta  = lines.slice(1).join(" ");
-    const seeds = (meta.match(/👤\s*(\d+)/) || [])[1] || "";
-    const size  = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
-    const [ql, qc] = qClass(fname);
-    let lang = "";
-    if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
-    else if (/korean/i.test(fname+meta))   lang = "🇰🇷 ";
-    else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
-
-    const row = document.createElement("div");
-    row.className = "stream-row";
-    row.innerHTML =
-      `<div class="stream-row-left">` +
-        `<span class="qlabel ${qc}">${ql}</span>` +
-        `<span class="stream-name">${lang}${fname}</span>` +
-      `</div>` +
-      `<div class="stream-row-right">` +
-        (seeds ? `<span class="stream-seeds">👤${seeds}</span>` : "") +
-        (size  ? `<span class="stream-size">💾${size}</span>`  : "") +
-        `<span class="stream-play-btn">▶</span>` +
-      `</div>`;
-
-    row.onclick = () => {
-      // Highlight this row
-      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-      row.classList.add("active");
-
-      // Update NOW PLAYING box with this stream's info
-      setNameBar(fname,
-        ql + (size ? "  💾 " + size : "") + (seeds ? "  👤 " + seeds : "")
-      );
-
-      // Play using CURRENT srcIdx (read at click time, not build time)
-      // This means changing source button then clicking a stream row works correctly
-      const src     = SOURCES[srcIdx] || SOURCES[0];
-      const isMovie = cur.mediaType === "movie";
-      const id      = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-      if (!id) { toast("❌ No ID"); return; }
-      const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-      playUrl(url);
-      toast("▶ " + src.name + " · " + ql);
-    };
-
-    wrap.appendChild(row);
-  });
-}
-
-async function loadDirectStreams() {
-  if (!cur || !cur.imdb_id) return;
-  // Immediately clear old list so user sees it's reloading
-  $("stream-picker").style.display = "block";
-  $("stream-loading").style.display = "block";
-  $("streambns").innerHTML = "";
-  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-  // Snapshot curS/curE at call time so async result matches
-  const snapS = curS, snapE = curE;
-  const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-  const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
-  // Only render if episode hasn't changed while we were fetching
-  if (snapS === curS && snapE === curE) buildStreamPicker(streams);
-}
+// buildStreamPicker + loadDirectStreams replaced by buildServerList
 
 // ── CARDS ───────────────────────────────────────────────────────
 function makeCard(item, type) {
@@ -810,7 +787,7 @@ async function openModal(item, type) {
 
   loadSource(0);       // auto-play first source
   loadSubs();          // subtitles in background
-  loadDirectStreams();  // stream quality list
+  buildServerList();  // show this source's servers
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
@@ -829,7 +806,6 @@ async function loadSeasons(tvId) {
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
         loadSource(srcIdx);
-        loadDirectStreams();
       };
       wrap.appendChild(b);
     });
@@ -851,7 +827,6 @@ async function loadEps(tvId, s) {
         b.classList.add("on");
         curE = ep.episode_number;
         loadSource(srcIdx);
-        loadDirectStreams();
       };
       wrap.appendChild(b);
     });
