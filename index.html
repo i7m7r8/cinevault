@@ -501,7 +501,6 @@ footer{
 
       <div class="pwrap" id="pwrap">
         <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
-        <button id="try-next-btn" onclick="loadSource((srcIdx+1)%SOURCES.length)" style="display:none;position:absolute;bottom:10px;right:10px;z-index:10;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer">⚡ Try Next Source</button>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
         <iframe id="pframe" style="position:relative;z-index:1" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" referrerpolicy="no-referrer"></iframe>
       </div>
@@ -523,9 +522,22 @@ footer{
         <div id="streambns"></div>
       </div>
 
-      <div class="subbar" id="subbar">
-        <select class="subsel" id="subsel"><option value="">🔤 No subtitle</option></select>
-        <button class="subbtn" onclick="applySub()">Apply</button>
+      <div class="subbar" id="subbar" style="display:flex;margin-top:10px;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="clabel">🔤 SUBTITLE</span>
+        <select class="subsel" id="subsel" onchange="applySubLang()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
+          <option value="">Off</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="ar">Arabic</option>
+          <option value="fr">French</option>
+          <option value="es">Spanish</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="it">Italian</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="zh">Chinese</option>
+        </select>
       </div>
 
     </div>
@@ -590,28 +602,12 @@ function setNameBar(title, sub) {
 }
 
 // ── PLAYER ──────────────────────────────────────────────────────
-let _nextTimer = null;
 function playUrl(url) {
   $("pph").classList.add("hidden");
-  const btn = $("try-next-btn");
-  if (btn) btn.style.display = "none";
   const f = $("pframe");
   f.removeAttribute("src");
   void f.offsetHeight;
   f.src = url;
-
-  // Show "Try Next" button after 6s — if video hasn't started, source might be broken
-  clearTimeout(_nextTimer);
-  _nextTimer = setTimeout(() => {
-    if (btn) btn.style.display = "block";
-  }, 6000);
-
-  // Hide button when iframe loads successfully
-  f.onload = () => {
-    clearTimeout(_nextTimer);
-    // Keep button visible as convenience — user might still want to switch
-    setTimeout(() => { if (btn) btn.style.display = "block"; }, 3000);
-  };
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -625,13 +621,6 @@ function buildSources() {
     b.onclick = () => loadSource(i);
     wrap.appendChild(b);
   });
-  // Add ⚡ Next button at end
-  const nb = document.createElement("button");
-  nb.className = "cbtn";
-  nb.textContent = "⚡ Next";
-  nb.style.cssText = "background:var(--accent);color:#fff;opacity:0.85";
-  nb.onclick = () => { const n = (srcIdx+1)%SOURCES.length; loadSource(n); };
-  wrap.appendChild(nb);
 }
 
 // ── TORRENTIO STREAM LIST ────────────────────────────────────────
@@ -804,7 +793,6 @@ function loadSource(i) {
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
-}
 
 // ── CARDS ───────────────────────────────────────────────────────
 function makeCard(item, type) {
@@ -864,7 +852,7 @@ function openModal(item, type) {
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
   $("mbg").src            = back(item.backdrop_path);
-  $("subbar").classList.remove("on");
+  $("subbar").style.display = "flex";
   $("file-row").style.display = "none";
   $("stream-name-bar").classList.remove("on");
   $("stream-picker").style.display = "block";
@@ -957,63 +945,28 @@ async function loadEps(tvId, s) {
 }
 
 // ── SUBTITLES ───────────────────────────────────────────────────
-async function loadSubs() {
-  try {
-    const imdb = cur?.imdb_id || "";
-    if (!imdb) return;
-    const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
+// VidLink supports native subtitle language param — no external API needed
+function loadSubs() {} // no-op, subtitle UI is always visible
 
-    // Use OpenSubtitles REST API via allorigins proxy (CORS-safe on mobile)
-    const osUrl = `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdb.replace("tt","")}&${isTv?`season_number=${curS}&episode_number=${curE}&`:""}languages=en,hi,ar,fr,es,de,pt,it,ja,ko&per_page=30`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(osUrl)}`;
+function applySubLang() {
+  const lang = $("subsel").value;
+  if (!cur) return;
 
-    const r = await fetch(proxyUrl);
-    const d = await r.json();
-    const items = (d.data || []);
-
-    if (!items.length) {
-      $("subbar").classList.remove("on");
-      return;
-    }
-
-    const sel = $("subsel");
-    sel.innerHTML = `<option value="">🔤 Select subtitle</option>`;
-    items.slice(0, 25).forEach(it => {
-      const attr = it.attributes || {};
-      const lang = (attr.language || "?").toUpperCase();
-      const name = (attr.release || attr.files?.[0]?.file_name || "").slice(0, 45);
-      const fileId = attr.files?.[0]?.file_id;
-      if (!fileId) return;
-      const opt = document.createElement("option");
-      opt.value = "os:" + fileId;
-      opt.textContent = `${lang} — ${name}`;
-      sel.appendChild(opt);
-    });
-    $("subbar").classList.add("on");
-  } catch(e) { console.log("subs error", e); }
-}
-
-async function applySub() {
-  const val = $("subsel").value;
-  if (!val) return toast("No subtitle selected");
-
-  if (val.startsWith("os:")) {
-    const fileId = val.replace("os:", "");
-    try {
-      toast("⏳ Getting subtitle link…");
-      // Request download link via proxy
-      const body = JSON.stringify({ file_id: parseInt(fileId) });
-      const proxyReq = `https://api.allorigins.win/raw?url=${encodeURIComponent("https://api.opensubtitles.com/api/v1/download")}`;
-      const r = await fetch(proxyReq, {
-        method: "POST",
-        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
-        body
-      });
-      const d = await r.json();
-      if (d.link) { window.open(d.link, "_blank"); toast("📥 Subtitle downloading…"); }
-      else toast("❌ Limit reached — try another");
-    } catch { toast("❌ Subtitle fetch failed"); }
+  // Switch to VidLink if not already — it's the only source with native subtitle support
+  const vidLinkIdx = SOURCES.findIndex(s => s.name === "VidLink");
+  if (srcIdx !== vidLinkIdx && vidLinkIdx >= 0) {
+    srcIdx = vidLinkIdx;
+    document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === srcIdx));
   }
+
+  const isMovie = cur.mediaType === "movie";
+  const id = cur.id;
+  let url = isMovie
+    ? `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`
+    : `https://vidlink.pro/tv/${id}/${curS}/${curE}?autoplay=true&primaryColor=e8173a`;
+  if (lang) url += `&sub_lang=${lang}`;
+  playUrl(url);
+  toast(lang ? `🔤 ${lang.toUpperCase()} subtitle on` : "🔤 Subtitle off");
 }
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
