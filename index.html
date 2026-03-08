@@ -443,10 +443,10 @@ footer{
         <div class="cbtns" id="filebns"></div>
       </div>
 
-      <div id="stream-picker" style="display:none;margin-bottom:10px">
-        <div class="clabel" style="margin-bottom:6px">🎬 Direct Streams (Quality)</div>
-        <div id="streambns" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-        <div id="stream-loading" style="font-size:11px;color:var(--muted);padding:4px 0;display:none">Loading streams…</div>
+      <div id="stream-picker" style="display:none;margin-top:14px">
+        <div class="clabel" style="margin-bottom:8px">🎬 Available Streams</div>
+        <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
+        <div id="streambns"></div>
       </div>
 
       <div class="subbar" id="subbar">
@@ -512,25 +512,57 @@ function buildStreamPicker(streams) {
   wrap.innerHTML = "";
   $("stream-picker").style.display = streams.length ? "block" : "none";
   $("stream-loading").style.display = "none";
+  if (!streams.length) return;
+
   streams.forEach((s, i) => {
-    const b = document.createElement("button");
-    b.className = "cbtn";
-    b.textContent = streamLabel(s);
-    b.title = (s.title || "").split("\n")[0].slice(0, 60);
-    b.onclick = () => {
-      document.querySelectorAll("#streambns .cbtn").forEach(x => x.classList.remove("on"));
-      b.classList.add("on");
+    // Parse full name and meta from title
+    const lines   = (s.title || s.name || "").split("\n");
+    const fname   = lines[0] || "Unknown";
+    const meta    = lines[1] || "";
+    const seedsM  = meta.match(/[👤]\s*(\d+)/);
+    const sizeM   = meta.match(/[💾]\s*([\d.]+ \w+)/);
+    const seeds   = seedsM ? seedsM[1] : "?";
+    const size    = sizeM  ? sizeM[1]  : "";
+
+    let q = "SD";
+    if (/4k|2160p/i.test(fname)) q = "4K";
+    else if (/1080p/i.test(fname)) q = "1080p";
+    else if (/720p/i.test(fname)) q = "720p";
+    else if (/480p/i.test(fname)) q = "480p";
+
+    let lang = "";
+    if (/hindi/i.test(fname+meta)) lang = "🇮🇳";
+    else if (/korean/i.test(fname+meta)) lang = "🇰🇷";
+    else if (/japanese|anime/i.test(fname+meta)) lang = "🇯🇵";
+
+    const row = document.createElement("div");
+    row.className = "stream-row";
+    row.innerHTML =
+      '<div class="stream-row-left">' +
+        '<span class="stream-q ' + q.toLowerCase() + '">' + q + '</span>' +
+        (lang ? '<span class="stream-lang">' + lang + '</span>' : '') +
+        '<span class="stream-name">' + fname + '</span>' +
+      '</div>' +
+      '<div class="stream-row-right">' +
+        '<span class="stream-seeds">👤' + seeds + '</span>' +
+        (size ? '<span class="stream-size">💾' + size + '</span>' : '') +
+        '<span class="stream-play">▶</span>' +
+      '</div>';
+
+    row.onclick = () => {
+      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+      row.classList.add("active");
       document.querySelectorAll("#srcbns .cbtn").forEach(x => x.classList.remove("on"));
       if (s.infoHash) {
-        const mag = "magnet:?xt=urn:btih:" + s.infoHash + "&dn=" + encodeURIComponent(s.title || "");
+        const mag = "magnet:?xt=urn:btih:" + s.infoHash + "&dn=" + encodeURIComponent(fname);
         const fi  = s.fileIdx !== undefined ? "&file=" + s.fileIdx : "";
         $("pph").style.display = "none";
         $("pframe").style.display = "block";
         $("pframe").src = "https://www.webtor.io/player?magnet=" + encodeURIComponent(mag) + fi;
-        toast("Playing " + streamLabel(s));
+        toast("▶ " + q + " " + fname.slice(0,30) + "…");
       }
     };
-    wrap.appendChild(b);
+    wrap.appendChild(row);
   });
 }
 
