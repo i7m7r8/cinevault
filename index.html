@@ -948,59 +948,26 @@ async function loadEps(tvId, s) {
 // ── SUBTITLES ───────────────────────────────────────────────────
 function loadSubs() {} // no-op
 
-async function applySubLang() {
+function applySubLang() {
   const lang = $("subsel").value;
-  if (!cur || !cur.imdb_id) { toast("⏳ Wait for title to load"); return; }
-  if (!lang) {
-    // Turn off — just reload VidLink without sub param
-    const vidLinkIdx = SOURCES.findIndex(s => s.name === "VidLink");
-    srcIdx = vidLinkIdx >= 0 ? vidLinkIdx : srcIdx;
-    document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===srcIdx));
-    const isMovie = cur.mediaType === "movie";
-    playUrl(isMovie
-      ? `https://vidlink.pro/movie/${cur.id}?autoplay=true&primaryColor=e8173a`
-      : `https://vidlink.pro/tv/${cur.id}/${curS}/${curE}?autoplay=true&primaryColor=e8173a`);
-    toast("🔤 Subtitle off");
-    return;
-  }
+  if (!cur) return;
 
-  toast("⏳ Fetching subtitle…");
-  try {
-    const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-    const imdbNum = cur.imdb_id.replace("tt","");
-    let apiUrl = `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbNum}&languages=${lang}&per_page=5`;
-    if (isTv) apiUrl += `&season_number=${curS}&episode_number=${curE}`;
+  // Switch to VidLink
+  const vidLinkIdx = SOURCES.findIndex(s => s.name === "VidLink");
+  srcIdx = vidLinkIdx >= 0 ? vidLinkIdx : srcIdx;
+  document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===srcIdx));
 
-    const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
-    const d = await r.json();
-    const fileId = d.data?.[0]?.attributes?.files?.[0]?.file_id;
-    if (!fileId) { toast("❌ No subtitle found for " + lang.toUpperCase()); return; }
+  const isMovie = cur.mediaType === "movie";
+  const id = cur.id;
+  let url = isMovie
+    ? `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`
+    : `https://vidlink.pro/tv/${id}/${curS}/${curE}?autoplay=true&primaryColor=e8173a`;
 
-    // Get direct download link
-    const r2 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent("https://api.opensubtitles.com/api/v1/download")}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa" },
-      body: JSON.stringify({ file_id: fileId })
-    });
-    const d2 = await r2.json();
-    const subUrl = d2.link;
-    if (!subUrl) { toast("❌ Could not get subtitle link"); return; }
+  // VidLink multiSub param enables their built-in subtitle selector UI
+  if (lang) url += `&multiSub=true&defaultSubLanguage=${lang}`;
 
-    // Switch to VidLink and pass subtitle URL
-    const vidLinkIdx = SOURCES.findIndex(s => s.name === "VidLink");
-    srcIdx = vidLinkIdx >= 0 ? vidLinkIdx : srcIdx;
-    document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===srcIdx));
-
-    const isMovie = cur.mediaType === "movie";
-    const base = isMovie
-      ? `https://vidlink.pro/movie/${cur.id}?autoplay=true&primaryColor=e8173a`
-      : `https://vidlink.pro/tv/${cur.id}/${curS}/${curE}?autoplay=true&primaryColor=e8173a`;
-    const finalUrl = base + `&sub_url=${encodeURIComponent(subUrl)}&sub_label=${lang.toUpperCase()}`;
-    playUrl(finalUrl);
-    toast(`🔤 ${lang.toUpperCase()} subtitle loaded`);
-  } catch(e) {
-    toast("❌ Subtitle fetch failed");
-  }
+  playUrl(url);
+  toast(lang ? `🔤 ${lang.toUpperCase()} — pick from player CC menu` : "🔤 Subtitle off");
 }
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
