@@ -518,7 +518,7 @@ footer{
 
       <div id="stream-picker" style="display:block;margin-top:14px">
         <div class="clabel" style="margin-bottom:8px">📊 STREAM QUALITY INFO</div>
-        <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:block">🔄 Loading streams…</div>
+        <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
 
@@ -623,6 +623,7 @@ function buildSources() {
   SOURCES.forEach((src, i) => {
     const b = document.createElement("button");
     b.className = "cbtn" + (i === srcIdx ? " on" : "");
+    b.dataset.i = i;
     b.textContent = src.name;
     b.onclick = () => loadSource(i);
     wrap.appendChild(b);
@@ -882,35 +883,23 @@ function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Play immediately using TMDB id (no waiting)
+  // Reset player — wait for user to tap a source
   $("pframe").src = "";
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
+  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Tap a source above to play</div>`;
 
-  const src0 = SOURCES[0];
-  const id0  = src0.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  const url0 = isTv ? src0.tv(id0, 1, 1) : src0.movie(id0);
-  $("pph").classList.add("hidden");
-  $("pframe").src = url0;
-  setNameBar((item.title || item.name) + (isTv ? " · S1 E1" : ""), "▶ " + src0.name);
-  $("srcbns").querySelectorAll(".cbtn").forEach((b,j) => b.classList.toggle("on", j===0));
-
-  // Load everything else async in background
+  // Load everything async in background
   (async () => {
-    // Fetch IMDB id
+    // Fetch IMDB id first (needed for most sources + streams)
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
-        // Reload source 0 if it needs imdb
-        if (src0.useImdb) {
-          $("pframe").src = isTv ? src0.tv(cur.imdb_id, curS, curE) : src0.movie(cur.imdb_id);
-        }
       } catch {}
     }
     // Load seasons for TV
     if (isTv) await loadSeasons(item.id);
-    // Load streams and subs
+    // Now load streams (imdb_id is ready)
     loadDirectStreams();
     loadSubs();
   })();
