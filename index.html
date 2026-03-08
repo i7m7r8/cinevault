@@ -516,9 +516,9 @@ footer{
         <div class="cbtns" id="filebns"></div>
       </div>
 
-      <div id="stream-picker" style="display:none;margin-top:14px">
+      <div id="stream-picker" style="display:block;margin-top:14px">
         <div class="clabel" style="margin-bottom:8px">📊 STREAM QUALITY INFO</div>
-        <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
+        <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:block">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
 
@@ -715,26 +715,43 @@ function playStream(row) {
 // Load streams from Torrentio — only fetches once per title/episode
 let _cachedStreams = [], _cacheKey = "";
 async function loadDirectStreams() {
-  if (!cur || !cur.imdb_id) return;
+  if (!cur) return;
+
+  // Show section immediately
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
+
+  // If no imdb_id, show message and stop
+  if (!cur.imdb_id) {
+    $("stream-loading").textContent = "⚠️ No IMDB ID — streams unavailable";
+    return;
+  }
 
   const snapS = curS, snapE = curE;
   const isTv  = cur.mediaType === "tv" || cur.mediaType === "series";
   const key   = cur.imdb_id + "|" + snapS + "|" + snapE;
 
-  // Use cached result if same title+episode
   if (key === _cacheKey && _cachedStreams.length) {
     buildStreamPicker(_cachedStreams);
     return;
   }
 
-  const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
-  if (snapS === curS && snapE === curE) {
-    _cachedStreams = streams;
-    _cacheKey = key;
-    buildStreamPicker(streams);
+  try {
+    const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
+    if (snapS === curS && snapE === curE) {
+      _cachedStreams = streams;
+      _cacheKey = key;
+      if (!streams.length) {
+        $("stream-loading").style.display = "block";
+        $("stream-loading").textContent = "⚠️ No streams found";
+      } else {
+        buildStreamPicker(streams);
+      }
+    }
+  } catch(err) {
+    $("stream-loading").style.display = "block";
+    $("stream-loading").textContent = "⚠️ Failed to load streams";
   }
 }
 
