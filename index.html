@@ -858,7 +858,21 @@ async function openModal(item, type) {
 
   loadSource(0);       // auto-play first source
   loadSubs();          // subtitles in background
-  loadDirectStreams();  // load torrentio stream list
+
+  // loadDirectStreams needs imdb_id — if not fetched yet, wait and retry
+  if (cur.imdb_id) {
+    loadDirectStreams();
+  } else {
+    // Poll until imdb_id is available (fetched above async)
+    const waitForImdb = setInterval(() => {
+      if (cur.imdb_id) {
+        clearInterval(waitForImdb);
+        loadDirectStreams();
+      }
+    }, 300);
+    // Give up after 5s
+    setTimeout(() => clearInterval(waitForImdb), 5000);
+  }
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
