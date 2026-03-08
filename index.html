@@ -621,16 +621,12 @@ function loadSource(i) {
   const title = cur.title || cur.name || "";
   const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
 
-  playUrl(url);
-
-  // If a stream row is already selected, keep it active and update its name bar with new source
+  // If a stream row is active, re-click it so name+link update for the new source
   const activeRow = document.querySelector(".stream-row.active");
   if (activeRow) {
-    const streamTitle = activeRow.querySelector(".stream-name")?.textContent || "";
-    const streamMeta  = activeRow.querySelector(".stream-seeds")?.textContent || "";
-    const streamSize  = activeRow.querySelector(".stream-size")?.textContent  || "";
-    setNameBar(streamTitle, "▶ " + src.name + (streamMeta ? "  " + streamMeta : "") + (streamSize ? "  " + streamSize : ""));
+    activeRow.click();
   } else {
+    playUrl(url);
     setNameBar(title + ep, "▶ " + src.name);
   }
 
