@@ -535,28 +535,26 @@ footer{
 <footer><strong>CineVault</strong> · Free streaming · For entertainment only</footer>
 
 <script>
-// ── FIX: $ helper must be defined FIRST before anything else uses it ──
 const $ = id => document.getElementById(id);
 
 // ── CONFIG ──────────────────────────────────────────────────────
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
+// VidSrc removed. Sources use TMDB id or IMDB id.
 const SOURCES = [
-  { name:"VidSrc",      useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                    tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
-  { name:"VidSrc.me",   useImdb:true,  movie:id=>`https://vidsrc.me/embed/movie?imdb=${id}`,               tv:(id,s,e)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name:"AutoEmbed",   useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                  tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
-  { name:"EmbedSu",     useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                     tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name:"2Embed",      useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                      tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name:"SuperEmbed",  useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,           tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name:"SmashyStream",useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,               tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
-  { name:"MoviesAPI",   useImdb:false, movie:id=>`https://moviesapi.club/movie/${id}`,                     tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}` },
-  { name:"RiveStream",  useImdb:true,  movie:id=>`https://rivestream.live/embed?type=movie&id=${id}`,      tv:(id,s,e)=>`https://rivestream.live/embed?type=tv&id=${id}&season=${s}&episode=${e}` },
-  { name:"NontonGo",    useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,        tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name:"AutoEmbed",    useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                  tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
+  { name:"EmbedSu",      useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                     tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name:"2Embed",       useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                      tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"SuperEmbed",   useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,           tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name:"SmashyStream", useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,               tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name:"MoviesAPI",    useImdb:false, movie:id=>`https://moviesapi.club/movie/${id}`,                     tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}` },
+  { name:"RiveStream",   useImdb:true,  movie:id=>`https://rivestream.live/embed?type=movie&id=${id}`,      tv:(id,s,e)=>`https://rivestream.live/embed?type=tv&id=${id}&season=${s}&episode=${e}` },
+  { name:"NontonGo",     useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,        tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
-let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null, curStreams = [];
+let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null;
 
 // ── UTILS ───────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -575,32 +573,90 @@ async function tmdb(path, params={}) {
   return r.json();
 }
 
-// ── TORRENTIO STREAMS ────────────────────────────────────────────
+// ── QUALITY BADGE ────────────────────────────────────────────────
+function qClass(name) {
+  if (/4k|2160/i.test(name))  return ["4K",   "sq-4k"];
+  if (/1080/i.test(name))     return ["1080p", "sq-1080"];
+  if (/720/i.test(name))      return ["720p",  "sq-720"];
+  if (/480/i.test(name))      return ["480p",  "sq-480"];
+  return ["SD", "sq-sd"];
+}
+
+// ── NOW PLAYING BOX ──────────────────────────────────────────────
+function setNameBar(title, sub) {
+  $("stream-name-text").textContent   = title || "";
+  $("stream-name-source").textContent = sub   || "";
+  $("stream-name-bar").classList.add("on");
+}
+
+// ── PLAYER ──────────────────────────────────────────────────────
+function playUrl(url) {
+  $("pph").classList.add("hidden");
+  $("pframe").src = "";
+  setTimeout(() => { $("pframe").src = url; }, 150);
+}
+
+// ── SOURCES ─────────────────────────────────────────────────────
+function buildSources() {
+  const wrap = $("srcbns");
+  wrap.innerHTML = "";
+  SOURCES.forEach((src, i) => {
+    const b = document.createElement("button");
+    b.className = "cbtn" + (i === srcIdx ? " on" : "");
+    b.textContent = src.name;
+    b.onclick = () => loadSource(i);
+    wrap.appendChild(b);
+  });
+}
+
+function loadSource(i) {
+  srcIdx = i;
+  const src = SOURCES[i];
+  if (!src || !cur) return;
+
+  // Highlight selected source button
+  document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
+  // Clear stream row selection (stream list is just metadata, source drives playback)
+  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+
+  const isMovie = cur.mediaType === "movie";
+  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("❌ No ID — try another source"); return; }
+
+  const url   = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  const title = cur.title || cur.name || "";
+  const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
+
+  playUrl(url);
+  setNameBar(title + ep, "▶ " + src.name);
+  toast("▶ " + src.name);
+
+  // Reload stream list for new source context
+  loadDirectStreams();
+}
+
+// ── TORRENTIO STREAM LIST ────────────────────────────────────────
 async function fetchStreams(imdbId, type, s, e) {
   try {
     const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
     const r = await fetch(`https://torrentio.strem.fun/stream/${path}.json`);
     const d = await r.json();
-    return (d.streams || []).slice(0, 12);
-  } catch(err) { return []; }
-}
-
-function qClass(name) {
-  if (/4k|2160/i.test(name)) return ["4K","sq-4k"];
-  if (/1080/i.test(name)) return ["1080p","sq-1080"];
-  if (/720/i.test(name)) return ["720p","sq-720"];
-  if (/480/i.test(name)) return ["480p","sq-480"];
-  return ["SD","sq-sd"];
+    return (d.streams || []).slice(0, 15);
+  } catch { return []; }
 }
 
 function buildStreamPicker(streams) {
   const wrap = $("streambns");
   wrap.innerHTML = "";
   $("stream-loading").style.display = "none";
-  $("stream-picker").style.display = streams.length ? "block" : "none";
-  if (!streams.length) return;
 
-  streams.forEach((s, idx) => {
+  if (!streams.length) {
+    $("stream-picker").style.display = "none";
+    return;
+  }
+  $("stream-picker").style.display = "block";
+
+  streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
     const fname = lines[0] || "Unknown";
     const meta  = lines.slice(1).join(" ");
@@ -608,53 +664,43 @@ function buildStreamPicker(streams) {
     const size  = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
     const [ql, qc] = qClass(fname);
     let lang = "";
-    if (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
-    else if (/korean/i.test(fname+meta))  lang = "🇰🇷 ";
+    if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
+    else if (/korean/i.test(fname+meta))   lang = "🇰🇷 ";
     else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
 
     const row = document.createElement("div");
     row.className = "stream-row";
-    row.dataset.idx = idx;
     row.innerHTML =
-      '<div class="stream-row-left">' +
-        '<span class="qlabel ' + qc + '">' + ql + '</span>' +
-        '<span class="stream-name">' + lang + fname + '</span>' +
-      '</div>' +
-      '<div class="stream-row-right">' +
-        (seeds ? '<span class="stream-seeds">👤' + seeds + '</span>' : '') +
-        (size  ? '<span class="stream-size">💾' + size + '</span>' : '') +
-        '<span class="stream-play-btn">▶</span>' +
-      '</div>';
+      `<div class="stream-row-left">` +
+        `<span class="qlabel ${qc}">${ql}</span>` +
+        `<span class="stream-name">${lang}${fname}</span>` +
+      `</div>` +
+      `<div class="stream-row-right">` +
+        (seeds ? `<span class="stream-seeds">👤${seeds}</span>` : "") +
+        (size  ? `<span class="stream-size">💾${size}</span>`  : "") +
+        `<span class="stream-play-btn">▶</span>` +
+      `</div>`;
 
-    row.addEventListener("click", function(e) {
-      e.stopPropagation();
-
-      // 1. Highlight this row
+    row.onclick = () => {
+      // Highlight row
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
 
-      // 2. Update the NOW PLAYING box with full name
+      // Update now-playing box with full filename + quality info
       setNameBar(fname,
-        (ql ? ql : "") +
-        (size  ? "  💾 " + size  : "") +
-        (seeds ? "  👤 " + seeds : "")
+        ql + (size ? "  💾 " + size : "") + (seeds ? "  👤 " + seeds : "")
       );
 
-      // 3. Play through current embed source (VidSrc etc.) — it stays selected
-      //    The source button is NOT touched at all
-      const isMovie = cur.mediaType === "movie";
-      const id = cur.imdb_id || cur.id;
-      if (!id) { toast("❌ No ID found"); return; }
-
+      // Play via current source — clicking a stream just selects quality display
+      // The actual embed source (AutoEmbed etc.) handles the stream
       const src = SOURCES[srcIdx] || SOURCES[0];
+      const isMovie = cur.mediaType === "movie";
+      const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+      if (!id) { toast("❌ No ID"); return; }
       const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-
-      $("pph").classList.add("hidden");
-      $("pframe").src = "";
-      setTimeout(() => { $("pframe").src = url; }, 120);
-
-      toast("▶ " + ql + " — " + fname.slice(0,40));
-    });
+      playUrl(url);
+      toast("▶ " + ql + " — " + fname.slice(0, 38));
+    };
 
     wrap.appendChild(row);
   });
@@ -665,9 +711,9 @@ async function loadDirectStreams() {
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
+  // Clear active row when list reloads
   const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
   const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", curS, curE);
-  curStreams = streams;
   buildStreamPicker(streams);
 }
 
@@ -697,9 +743,9 @@ function skels(el, n=8) {
 // ── HERO ────────────────────────────────────────────────────────
 function setHero(item, type) {
   $("hero-bg").style.backgroundImage = `url(${back(item.backdrop_path)})`;
-  $("htitle").textContent = item.title || item.name;
-  $("hdesc").textContent  = item.overview || "";
-  $("hyear").textContent  = (item.release_date || item.first_air_date || "").slice(0,4);
+  $("htitle").textContent  = item.title || item.name;
+  $("hdesc").textContent   = item.overview || "";
+  $("hyear").textContent   = (item.release_date || item.first_air_date || "").slice(0,4);
   $("hrating").textContent = `⭐ ${item.vote_average?.toFixed(1)||"—"}`;
   $("hplay").onclick = () => openModal(item, type);
   $("hinfo").onclick = () => openModal(item, type);
@@ -714,7 +760,7 @@ async function loadSec(gid, path, params, type, hero=false) {
     g.innerHTML = "";
     if (hero && items.length) setHero(items[0], items[0].media_type || type);
     items.slice(0,12).forEach(it => g.appendChild(makeCard(it, it.media_type || type)));
-  } catch(e) { g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Failed</div>`; }
+  } catch { g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Failed</div>`; }
 }
 
 // ── MODAL ───────────────────────────────────────────────────────
@@ -724,30 +770,29 @@ async function openModal(item, type) {
 
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
-  $("mbg").src = back(item.backdrop_path);
-  $("pframe").src = "";
-  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
+  $("mbg").src            = back(item.backdrop_path);
+  $("pframe").src         = "";
+  $("pph").innerHTML      = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
   $("pph").classList.remove("hidden");
   $("ploader").classList.remove("on");
   $("subbar").classList.remove("on");
   $("file-row").style.display = "none";
   $("stream-name-bar").classList.remove("on");
-  if($("srv-row")) $("srv-row").style.display = "none";
+  if ($("srv-row")) $("srv-row").style.display = "none";
 
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average?.toFixed(1) || "—";
   $("mmeta").innerHTML = `<span>${year}</span><span>•</span><span class="mrating">⭐${rating}</span><span>•</span><span>${type==="movie"?"🎬 Movie":"📺 Series"}</span>`;
 
-  // Fetch IMDB id
+  // Fetch IMDB id for torrentio
   if (!cur.imdb_id) {
     try {
-      const t = (type==="tv"||type==="series") ? "tv" : "movie";
+      const t   = (type==="tv"||type==="series") ? "tv" : "movie";
       const ext = await tmdb(`/${t}/${item.id}/external_ids`);
       cur.imdb_id = ext.imdb_id;
-    } catch(e) {}
+    } catch {}
   }
 
-  // TV controls
   const isTv = type==="tv"||type==="series";
   $("tv-ctrl").style.display = isTv ? "block" : "none";
   if (isTv) await loadSeasons(item.id);
@@ -756,83 +801,32 @@ async function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Auto-play first source immediately
-  loadSource(0);
-
-  // Load subs in background
-  loadSubs();
-  // Load quality streams
-  loadDirectStreams();
-}
-
-// ── SOURCES ─────────────────────────────────────────────────────
-function buildSources() {
-  const wrap = $("srcbns");
-  wrap.innerHTML = "";
-  SOURCES.forEach((src, i) => {
-    const b = document.createElement("button");
-    b.className = "cbtn";
-    b.textContent = src.name;
-    b.onclick = () => loadSource(i);
-    wrap.appendChild(b);
-  });
-}
-
-function setNameBar(title, source) {
-  $("stream-name-text").textContent = title || "";
-  $("stream-name-source").textContent = source || "";
-  $("stream-name-bar").classList.add("on");
-}
-
-function loadSource(i) {
-  srcIdx = i;
-  const src = SOURCES[i];
-  if (!src) return;
-
-  // Keep source button highlighted (do NOT deselect when torrent row clicked)
-  document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===i));
-  // Deselect any torrent stream row since we are now using an embed source
-  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-
-  const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ ID not found, try another source"); return; }
-
-  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-  const title = cur.title || cur.name || "";
-  const epLabel = isMovie ? "" : " · S" + curS + " E" + curE;
-
-  // Show player
-  $("pph").classList.add("hidden");
-  $("pframe").src = "";
-  setTimeout(() => { $("pframe").src = url; }, 120);
-
-  // Update name bar: title on first line, source on second line
-  setNameBar(title + epLabel, "Source: " + src.name);
-  toast("▶ " + src.name);
+  loadSource(0);       // auto-play first source
+  loadSubs();          // subtitles in background
+  loadDirectStreams();  // stream quality list
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
 async function loadSeasons(tvId) {
   try {
     const d = await tmdb(`/tv/${tvId}`);
-    const seasons = (d.seasons||[]).filter(s=>s.season_number>0);
+    const seasons = (d.seasons||[]).filter(s => s.season_number > 0);
     const wrap = $("sbns"); wrap.innerHTML = "";
     seasons.forEach(s => {
       const b = document.createElement("button");
       b.className = "cbtn" + (s.season_number===1?" on":"");
       b.textContent = `S${s.season_number}`;
       b.onclick = async () => {
-        document.querySelectorAll("#sbns .cbtn").forEach(x=>x.classList.remove("on"));
+        document.querySelectorAll("#sbns .cbtn").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
-        if(srcIdx >= 0 && document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
+        loadSource(srcIdx);
       };
       wrap.appendChild(b);
     });
     await loadEps(tvId, 1);
-  } catch(e) {}
+  } catch {}
 }
 
 async function loadEps(tvId, s) {
@@ -845,15 +839,15 @@ async function loadEps(tvId, s) {
       b.textContent = ep.episode_number;
       b.title = ep.name;
       b.onclick = () => {
-        document.querySelectorAll(".epbtn").forEach(x=>x.classList.remove("on"));
+        document.querySelectorAll(".epbtn").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         curE = ep.episode_number;
-        if(document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
+        loadSource(srcIdx);
         loadDirectStreams();
       };
       wrap.appendChild(b);
     });
-  } catch(e) {}
+  } catch {}
 }
 
 // ── SUBTITLES ───────────────────────────────────────────────────
@@ -883,7 +877,7 @@ async function loadSubs() {
       });
     });
     $("subbar").classList.add("on");
-  } catch(e) {}
+  } catch {}
 }
 
 function applySub() {
@@ -893,16 +887,16 @@ function applySub() {
   toast("Subtitle file opened — use with VLC");
 }
 
-// ── CLOSE ───────────────────────────────────────────────────────
+// ── CLOSE MODAL ─────────────────────────────────────────────────
 $("mclose").onclick = closeModal;
-$("modal").onclick = e => { if(e.target===$("modal")) closeModal(); };
+$("modal").onclick = e => { if (e.target===$("modal")) closeModal(); };
 function closeModal() {
   $("modal").classList.remove("on");
   $("pframe").src = "";
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">🎬</div><div>Tap a source below to play</div>';
+  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Select a source to play</div>`;
   $("stream-name-bar").classList.remove("on");
-  $("stream-name-text").textContent = "";
+  $("stream-name-text").textContent   = "";
   $("stream-name-source").textContent = "";
   document.body.style.overflow = "";
 }
@@ -911,9 +905,7 @@ function closeModal() {
 const searchInput = $("sq");
 searchInput.addEventListener("input", handleSearch);
 searchInput.addEventListener("keydown", e => { if(e.key==="Enter") { e.target.blur(); handleSearch(e); } });
-searchInput.addEventListener("focus", () => {
-  if(searchInput.value.trim()) showSearch(searchInput.value.trim());
-});
+searchInput.addEventListener("focus",  () => { if(searchInput.value.trim()) showSearch(searchInput.value.trim()); });
 
 function handleSearch(e) {
   const q = e.target.value.trim();
@@ -924,8 +916,10 @@ function handleSearch(e) {
 }
 
 function clearSearch() {
-  searchInput.value = ""; $("search-clear").style.display = "none";
-  hideSearch(); searchInput.focus();
+  searchInput.value = "";
+  $("search-clear").style.display = "none";
+  hideSearch();
+  searchInput.focus();
 }
 
 function showSearch(q) {
@@ -943,10 +937,10 @@ function hideSearch() {
 
 async function doSearch(q) {
   $("stitle").textContent = `"${q}"`;
-  const g = $("sgrid"); skels(g,6);
+  const g = $("sgrid"); skels(g, 6);
   try {
     const d = await tmdb("/search/multi", { query: q });
-    const items = (d.results||[]).filter(i=>i.media_type!=="person");
+    const items = (d.results||[]).filter(i => i.media_type!=="person");
     g.innerHTML = "";
     if (!items.length) {
       g.innerHTML = `<div class="sempty"><div class="sempty-icon">🎬</div>No results for "${q}"</div>`;
@@ -956,7 +950,7 @@ async function doSearch(q) {
     $("main").style.display = "none";
     $("hero").style.display = "none";
     items.slice(0,20).forEach(it => g.appendChild(makeCard(it, it.media_type||"movie")));
-  } catch(e) {
+  } catch {
     g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Search failed</div>`;
   }
 }
@@ -964,17 +958,16 @@ async function doSearch(q) {
 // ── TABS ────────────────────────────────────────────────────────
 document.querySelectorAll(".tab").forEach(tab => {
   tab.onclick = async () => {
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
     tab.classList.add("on");
     clearSearch();
     const c = tab.dataset.c;
     const secs = document.querySelectorAll("#main .sec");
-    secs.forEach(s=>s.style.display="none");
-
+    secs.forEach(s => s.style.display="none");
     const show = id => { document.querySelector(`#${id}`)?.closest(".sec")?.style?.setProperty("display","block"); };
 
     if (c==="home") {
-      secs.forEach(s=>s.style.display="block");
+      secs.forEach(s => s.style.display="block");
       $("hero").style.display="flex";
     } else if (c==="movies") {
       $("hero").style.display="flex";
@@ -995,19 +988,17 @@ document.querySelectorAll(".tab").forEach(tab => {
 });
 
 // ── PWA SERVICE WORKER ──────────────────────────────────────────
-// FIX: fixed missing leading slash on second cache path
 if ("serviceWorker" in navigator) {
   const swCode = `
-const CACHE = "cv-v1";
-const SHELL = ["/cinevault/","/cinevault/index.html"];
-self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));
-self.addEventListener("fetch", e => {
-  if (e.request.url.includes("tmdb") || e.request.url.includes("vidsrc") || e.request.url.includes("opensubtitles")) return;
+const CACHE="cv-v2";
+const SHELL=["/cinevault/","/cinevault/index.html"];
+self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));
+self.addEventListener("fetch",e=>{
+  if(e.request.url.includes("tmdb")||e.request.url.includes("opensubtitles")||e.request.url.includes("torrentio"))return;
   e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
 });`;
-  const blob = new Blob([swCode], { type: "application/javascript" });
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl).catch(()=>{});
+  const blob = new Blob([swCode], { type:"application/javascript" });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
 }
 
 // ── INIT ────────────────────────────────────────────────────────
