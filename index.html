@@ -630,46 +630,122 @@ function buildSources() {
   });
 }
 
-// Build server list for current source into stream picker
-function buildServerList() {
-  const src     = SOURCES[srcIdx];
-  const wrap    = $("streambns");
-  const isMovie = cur.mediaType === "movie";
+// ── TORRENTIO STREAM LIST ────────────────────────────────────────
+async function fetchStreams(imdbId, type, s, e) {
+  try {
+    const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
+    const r = await fetch(`https://torrentio.strem.fun/stream/${path}.json`);
+    const d = await r.json();
+    return (d.streams || []).slice(0, 15);
+  } catch { return []; }
+}
+
+function qClass(name) {
+  if (/4k|2160/i.test(name))  return ["4K",   "sq-4k"];
+  if (/1080/i.test(name))     return ["1080p", "sq-1080"];
+  if (/720/i.test(name))      return ["720p",  "sq-720"];
+  if (/480/i.test(name))      return ["480p",  "sq-480"];
+  return ["SD", "sq-sd"];
+}
+
+// Rebuild stream rows using current srcIdx — called on load AND on source change
+function buildStreamPicker(streams) {
+  const wrap = $("streambns");
   wrap.innerHTML = "";
   $("stream-loading").style.display = "none";
-  $("stream-picker").style.display  = "block";
-  // Update label
-  const label = $("stream-picker").querySelector(".clabel");
-  if (label) label.textContent = "🎬 " + src.name.toUpperCase() + " SERVERS";
+  if (!streams.length) { $("stream-picker").style.display = "none"; return; }
+  $("stream-picker").style.display = "block";
 
-  src.servers.forEach((srv, i) => {
-    const id  = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-    const url = id ? (isMovie ? srv.movie(id) : srv.tv(id, curS, curE)) : "";
+  const label = $("stream-picker").querySelector(".clabel");
+  if (label) label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
+
+  streams.forEach((s) => {
+    const lines = (s.title || s.name || "").split("\n");
+    const fname = lines[0] || "Unknown";
+    const meta  = lines.slice(1).join(" ");
+    const seeds = (meta.match(/👤\s*(\d+)/) || [])[1] || "";
+    const size  = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
+    const [ql, qc] = qClass(fname);
+    let lang = "";
+    if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
+    else if (/korean/i.test(fname+meta))   lang = "🇰🇷 ";
+    else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
 
     const row = document.createElement("div");
-    row.className = "stream-row" + (i === 0 ? " active" : "");
+    row.className = "stream-row";
     row.innerHTML =
       `<div class="stream-row-left">` +
-        `<span class="qlabel sq-1080">S${i+1}</span>` +
-        `<span class="stream-name">${srv.name}</span>` +
+        `<span class="qlabel ${qc}">${ql}</span>` +
+        `<span class="stream-name">${lang}${fname}</span>` +
       `</div>` +
       `<div class="stream-row-right">` +
+        (seeds ? `<span class="stream-seeds">👤${seeds}</span>` : "") +
+        (size  ? `<span class="stream-size">💾${size}</span>`  : "") +
         `<span class="stream-play-btn">▶</span>` +
       `</div>`;
 
-    row.onclick = () => {
-      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-      row.classList.add("active");
-      const title = cur.title || cur.name || "";
-      const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
-      setNameBar(srv.name, "▶ " + src.name + " · " + (isMovie ? "Movie" : ep));
-      if (!url) { toast("❌ No ID yet"); return; }
-      playUrl(url);
-      toast("▶ " + srv.name);
-    };
+    // Store stream data on the row element for re-use when source changes
+    row._fname = fname;
+    row._ql    = ql;
+    row._size  = size;
+    row._seeds = seeds;
 
+    row.onclick = () => playStream(row);
     wrap.appendChild(row);
   });
+}
+
+// Play a stream row using CURRENT source (reads srcIdx at call time)
+function playStream(row) {
+  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+  row.classList.add("active");
+  const src     = SOURCES[srcIdx];
+  const isMovie = cur.mediaType === "movie";
+  const id      = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("❌ No ID"); return; }
+  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  playUrl(url);
+  setNameBar(
+    row._fname,
+    "▶ " + src.name + (row._size ? "  💾" + row._size : "") + (row._seeds ? "  👤" + row._seeds : "")
+  );
+  toast("▶ " + src.name + " · " + row._ql);
+}
+
+// Load streams from Torrentio — only fetches once per title/episode
+let _cachedStreams = [], _cacheKey = "";
+async function loadDirectStreams() {
+  if (!cur || !cur.imdb_id) return;
+  $("stream-picker").style.display = "block";
+  $("stream-loading").style.display = "block";
+  $("streambns").innerHTML = "";
+
+  const snapS = curS, snapE = curE;
+  const isTv  = cur.mediaType === "tv" || cur.mediaType === "series";
+  const key   = cur.imdb_id + "|" + snapS + "|" + snapE;
+
+  // Use cached result if same title+episode
+  if (key === _cacheKey && _cachedStreams.length) {
+    buildStreamPicker(_cachedStreams);
+    return;
+  }
+
+  const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
+  if (snapS === curS && snapE === curE) {
+    _cachedStreams = streams;
+    _cacheKey = key;
+    buildStreamPicker(streams);
+  }
+}
+
+// Called when source changes — rebuilds list label + re-plays active row with new source
+function onSourceChange() {
+  // Update stream list label
+  const label = $("stream-picker")?.querySelector(".clabel");
+  if (label) label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
+  // If a row is active, replay it via new source
+  const activeRow = document.querySelector(".stream-row.active");
+  if (activeRow) playStream(activeRow);
 }
 
 function loadSource(i) {
@@ -677,29 +753,23 @@ function loadSource(i) {
   const src = SOURCES[i];
   if (!src || !cur) return;
 
-  // Highlight selected source button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
-  // Build this source's server list in stream picker
-  buildServerList();
-
-  // Auto-play first server of this source
   const isMovie = cur.mediaType === "movie";
   const id  = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("❌ No ID — try another source"); return; }
-  const srv = src.servers[0];
-  const url = isMovie ? srv.movie(id) : srv.tv(id, curS, curE);
+
+  const url   = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const title = cur.title || cur.name || "";
   const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
 
   playUrl(url);
-  setNameBar(srv.name, "▶ " + src.name + (isMovie ? "" : ep));
-  toast("▶ " + src.name + " · " + srv.name);
+  setNameBar(title + ep, "▶ " + src.name);
+  toast("▶ " + src.name);
+
+  // Update stream list for new source
+  onSourceChange();
 }
-
-// Torrentio removed — using per-source server list instead
-
-// buildStreamPicker + loadDirectStreams replaced by buildServerList
 
 // ── CARDS ───────────────────────────────────────────────────────
 function makeCard(item, type) {
@@ -751,6 +821,7 @@ async function loadSec(gid, path, params, type, hero=false) {
 async function openModal(item, type) {
   cur = { ...item, mediaType: type };
   curS = 1; curE = 1; srcIdx = 0;
+  _cachedStreams = []; _cacheKey = "";
 
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
@@ -787,7 +858,7 @@ async function openModal(item, type) {
 
   loadSource(0);       // auto-play first source
   loadSubs();          // subtitles in background
-  buildServerList();  // show this source's servers
+  loadDirectStreams();  // load torrentio stream list
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
@@ -806,6 +877,7 @@ async function loadSeasons(tvId) {
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
         loadSource(srcIdx);
+        loadDirectStreams();
       };
       wrap.appendChild(b);
     });
@@ -827,6 +899,7 @@ async function loadEps(tvId, s) {
         b.classList.add("on");
         curE = ep.episode_number;
         loadSource(srcIdx);
+        loadDirectStreams();
       };
       wrap.appendChild(b);
     });
