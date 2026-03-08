@@ -541,41 +541,19 @@ const $ = id => document.getElementById(id);
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
-// Sources — each with multiple servers shown in stream list
 const SOURCES = [
-  {
-    name: "2Embed", useImdb: true,
-    servers: [
-      { name:"2Embed S1", movie:id=>`https://www.2embed.cc/embed/${id}`,         tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-      { name:"2Embed S2", movie:id=>`https://2embed.org/embed/movie/${id}`,      tv:(id,s,e)=>`https://2embed.org/embed/tv/${id}/${s}/${e}` },
-      { name:"2Embed S3", movie:id=>`https://www.2embed.skin/embed/${id}`,       tv:(id,s,e)=>`https://www.2embed.skin/embedtv/${id}&s=${s}&e=${e}` },
-    ]
-  },
-  {
-    name: "MultiEmbed", useImdb: false,
-    servers: [
-      { name:"Multi S1",  movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                  tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-      { name:"Multi S2",  movie:id=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv:(id,s,e)=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-    ]
-  },
-  {
-    name: "VidLink", useImdb: false,
-    servers: [
-      { name:"VidLink S1", movie:id=>`https://vidlink.pro/movie/${id}`,               tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
-      { name:"VidLink S2", movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true`, tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true` },
-    ]
-  },
-  {
-    name: "Smashy", useImdb: false,
-    servers: [
-      { name:"Smashy S1", movie:id=>`https://player.smashy.stream/movie/${id}`,  tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
-      { name:"Smashy S2", movie:id=>`https://smashy.stream/embed/${id}`,         tv:(id,s,e)=>`https://smashy.stream/embed/${id}?s=${s}&e=${e}` },
-    ]
-  },
+  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true`,               tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true` },
+  { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,               tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                           tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,                   tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                        tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
+  { name:"EmbedSu",    useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                         tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name:"AutoEmbed",  useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                      tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
+  { name:"NontonGo",   useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,            tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
-let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null;
+let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null, _cachedStreams = [], _cacheKey = "";
 
 // ── UTILS ───────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -614,8 +592,10 @@ function setNameBar(title, sub) {
 function playUrl(url) {
   $("pph").classList.add("hidden");
   const f = $("pframe");
-  f.src = "about:blank";
-  setTimeout(() => { f.src = url; }, 80);
+  // Force full reload
+  f.removeAttribute("src");
+  void f.offsetHeight;
+  f.src = url;
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -625,7 +605,6 @@ function buildSources() {
   SOURCES.forEach((src, i) => {
     const b = document.createElement("button");
     b.className = "cbtn" + (i === srcIdx ? " on" : "");
-    b.dataset.i = i;
     b.textContent = src.name;
     b.onclick = () => loadSource(i);
     wrap.appendChild(b);
@@ -700,35 +679,18 @@ function buildStreamPicker(streams) {
   });
 }
 
-// Play stream row — uses current embed source, auto-selects first if none chosen
+// Tap a stream row → just highlight it (quality info only, source plays)
 function playStream(row) {
   document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
   row.classList.add("active");
-
-  // Auto-select first source if none selected yet
-  if (!document.querySelector("#srcbns .cbtn.on")) {
-    srcIdx = 0;
-    document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===0));
+  toast("✓ Selected: " + row._ql + (row._seeds ? "  👤" + row._seeds : ""));
+  // If a source already active, reload it so user sees something
+  if (srcIdx >= 0 && document.querySelector("#srcbns .cbtn.on")) {
+    loadSource(srcIdx);
   }
-
-  const src = SOURCES[srcIdx];
-  if (!src || !cur) return;
-
-  const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ No ID — tap a source button first"); return; }
-
-  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-  playUrl(url);
-  setNameBar(
-    row._fname,
-    "▶ " + src.name + (row._size ? "  💾" + row._size : "") + (row._seeds ? "  👤" + row._seeds : "")
-  );
-  toast("▶ " + row._ql + " · " + src.name);
 }
 
 // Load streams from Torrentio — only fetches once per title/episode
-let _cachedStreams = [], _cacheKey = "";
 async function loadDirectStreams() {
   if (!cur) return;
 
@@ -779,35 +741,19 @@ async function loadDirectStreams() {
   }
 }
 
-// Called when source changes — re-plays if a stream row was active
-function onSourceChange() {
-  const activeRow = document.querySelector(".stream-row.active");
-  if (activeRow && activeRow._fname) {
-    // Re-play with new source
-    playStream(activeRow);
-  }
-}
+
 
 function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src || !cur) return;
-
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
-
   const isMovie = cur.mediaType === "movie";
-  // Always fallback to tmdb id — never block on missing imdb
-  const id  = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ No ID"); return; }
-
-  const url   = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-  const title = cur.title || cur.name || "";
-  const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
-
+  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("⏳ Still loading ID…"); return; }
+  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
-  setNameBar(title + ep, "▶ " + src.name);
   toast("▶ " + src.name);
-  onSourceChange();
 }
 
 // ── CARDS ───────────────────────────────────────────────────────
@@ -888,20 +834,25 @@ function openModal(item, type) {
   // Reset player — wait for user to tap a source
   $("pframe").src = "";
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Tap a source above to play</div>`;
+  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading...</div>`;
+
+  // Auto-play source 0 immediately with TMDB id
+  loadSource(0);
 
   // Load everything async in background
   (async () => {
-    // Fetch IMDB id first (needed for most sources + streams)
+    // Fetch IMDB id
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
+        // Reload if current source needs imdb
+        if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
       } catch {}
     }
     // Load seasons for TV
     if (isTv) await loadSeasons(item.id);
-    // Now load streams (imdb_id is ready)
+    // Load streams and subs
     loadDirectStreams();
     loadSubs();
   })();
