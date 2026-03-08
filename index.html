@@ -461,14 +461,15 @@ footer{
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
-// Sources ordered by reliability — will try each until one loads
 const SOURCES = [
-  { name:"VidSrc",    movie: id=>`https://vidsrc.to/embed/movie/${id}`,      tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}`,    useImdb:true },
-  { name:"VidSrc.me", movie: id=>`https://vidsrc.me/embed/movie?imdb=${id}`, tv:(id,s,e)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}`, useImdb:true },
-  { name:"EmbedSu",   movie: id=>`https://embed.su/embed/movie/${id}`,       tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}`,      useImdb:true },
-  { name:"2Embed",    movie: id=>`https://www.2embed.cc/embed/${id}`,        tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,useImdb:true },
-  { name:"SuperEmbed",movie: id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`, tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`, useImdb:false },
-  { name:"MoviesAPI", movie: id=>`https://moviesapi.club/movie/${id}`,       tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}`,      useImdb:false },
+  { name:"VidSrc",     movie: id=>`https://vidsrc.to/embed/movie/${id}`,             tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}`,            useImdb:true },
+  { name:"VidSrc.me",  movie: id=>`https://vidsrc.me/embed/movie?imdb=${id}`,        tv:(id,s,e)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}`, useImdb:true },
+  { name:"AutoEmbed",  movie: id=>`https://autoembed.cc/movie/imdb/${id}`,           tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}`,          useImdb:true },
+  { name:"EmbedSu",    movie: id=>`https://embed.su/embed/movie/${id}`,              tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}`,             useImdb:true },
+  { name:"2Embed",     movie: id=>`https://www.2embed.cc/embed/${id}`,               tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,     useImdb:true },
+  { name:"SmashyStream",movie:id=>`https://player.smashy.stream/movie/${id}`,        tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`,  useImdb:false,useTmdb:true },
+  { name:"SuperEmbed", movie: id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,   tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`, useImdb:false },
+  { name:"MoviesAPI",  movie: id=>`https://moviesapi.club/movie/${id}`,              tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}`,             useImdb:false },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
@@ -577,7 +578,7 @@ async function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   // Auto-play first source
-  setTimeout(() => playSource(0), 300);
+  setTimeout(() => loadSource(0), 400);
 
   // Load subs in background
   loadSubs();
@@ -595,44 +596,58 @@ function buildSources() {
     b.className = "cbtn" + (i===0?" on":"");
     b.textContent = src.name;
     b.dataset.i = i;
-    b.onclick = () => { srcIdx = i; playSource(i); };
+    b.onclick = () => { srcIdx = i; loadSource(i); };
     wrap.appendChild(b);
   });
 }
 
-function playSource(i) {
+function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
-  if (!src) return;
+  if (!src) { toast("No more sources"); return; }
 
-  // Update active button
   document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===i));
 
   const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("ID not found, trying next…"); if(i+1<SOURCES.length) setTimeout(()=>playSource(i+1),800); return; }
+  // Pick correct ID
+  let id;
+  if (src.useTmdb) id = cur.id;
+  else if (src.useImdb) id = cur.imdb_id || cur.id;
+  else id = cur.id;
+
+  if (!id) {
+    toast("ID missing, trying next…");
+    setTimeout(() => loadSource(i+1), 500);
+    return;
+  }
 
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
 
+  // Reset player UI
   $("pph").style.display = "none";
   $("ploader").classList.add("on");
   const frame = $("pframe");
-  frame.style.display = "block";
 
-  // Timeout fallback — if iframe doesn't load in 8s, try next
-  const timeout = setTimeout(() => {
-    if (srcIdx === i) { // still on this source
-      toast(`${src.name} slow, trying next…`);
-      if (i+1 < SOURCES.length) playSource(i+1);
-    }
-  }, 8000);
+  // Completely rebuild iframe to avoid caching/stale state
+  const newFrame = frame.cloneNode(false);
+  newFrame.id = "pframe";
+  newFrame.style.display = "block";
+  newFrame.style.width = "100%";
+  newFrame.style.height = "100%";
+  newFrame.style.border = "none";
+  newFrame.setAttribute("allowfullscreen","");
+  newFrame.setAttribute("allow","autoplay; fullscreen; picture-in-picture; encrypted-media");
+  frame.parentNode.replaceChild(newFrame, frame);
 
-  frame.onload = () => {
-    clearTimeout(timeout);
+  // Short delay then load
+  setTimeout(() => {
     $("ploader").classList.remove("on");
-  };
+    newFrame.src = url;
+  }, 200);
 
-  frame.src = url;
+  // Update download link
+  const title = cur.title || cur.name || "";
+  $("dlbtn").href = `https://thepiratebay.org/search.php?q=${encodeURIComponent(title)}`;
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
@@ -650,7 +665,7 @@ async function loadSeasons(tvId) {
         b.classList.add("on");
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
-        playSource(srcIdx);
+        loadSource(srcIdx);
       };
       wrap.appendChild(b);
     });
@@ -671,7 +686,7 @@ async function loadEps(tvId, s) {
         document.querySelectorAll(".epbtn").forEach(x=>x.classList.remove("on"));
         b.classList.add("on");
         curE = ep.episode_number;
-        playSource(srcIdx);
+        loadSource(srcIdx);
       };
       wrap.appendChild(b);
     });
