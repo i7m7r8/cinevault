@@ -541,11 +541,12 @@ const $ = id => document.getElementById(id);
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
-// Sources
+// Sources — 2Embed + MultiEmbed confirmed working
 const SOURCES = [
-  { name:"2Embed",  useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,         tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name:"VidLink", useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}`,            tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
-  { name:"Smashy",  useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,  tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,              tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,   tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}`,                 tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}` },
+  { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,        tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
@@ -674,14 +675,24 @@ function buildStreamPicker(streams) {
       `</div>`;
 
     row.onclick = () => {
-      // Just highlight + show quality info in NOW PLAYING box
-      // Embed sources (buttons above) are independent — they serve their own stream
+      // Highlight this row
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
+
+      // Update NOW PLAYING box with this stream's info
       setNameBar(fname,
         ql + (size ? "  💾 " + size : "") + (seeds ? "  👤 " + seeds : "")
       );
-      toast("ℹ️ " + ql + " available — use source buttons above to play");
+
+      // Play using CURRENT srcIdx (read at click time, not build time)
+      // This means changing source button then clicking a stream row works correctly
+      const src     = SOURCES[srcIdx] || SOURCES[0];
+      const isMovie = cur.mediaType === "movie";
+      const id      = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+      if (!id) { toast("❌ No ID"); return; }
+      const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+      playUrl(url);
+      toast("▶ " + src.name + " · " + ql);
     };
 
     wrap.appendChild(row);
