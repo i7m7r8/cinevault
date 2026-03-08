@@ -542,14 +542,14 @@ const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
-  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true`,               tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true` },
-  { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,               tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                           tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,                   tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
-  { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                        tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
-  { name:"EmbedSu",    useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                         tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name:"AutoEmbed",  useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                      tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
-  { name:"NontonGo",   useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,            tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,  tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
+  { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                     tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                               tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
+  { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,                         tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name:"EmbedSu",    useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                               tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name:"AutoEmbed",  useImdb:true,  movie:id=>`https://autoembed.cc/movie/imdb/${id}`,                            tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
+  { name:"NontonGo",   useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,                  tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
@@ -641,7 +641,7 @@ function buildStreamPicker(streams) {
   $("stream-picker").style.display = "block";
 
   const label = $("stream-picker").querySelector(".clabel");
-  if (label) label.textContent = "📊 AVAILABLE STREAMS";
+  if (label) label.textContent = "📊 STREAMS — " + SOURCES[srcIdx].name.toUpperCase();
 
   streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
@@ -747,10 +747,18 @@ function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src || !cur) return;
+
+  // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
+
+  // Update stream list label dynamically
+  const lbl = $("stream-picker").querySelector(".clabel");
+  if (lbl) lbl.textContent = "📊 STREAMS — " + src.name.toUpperCase();
+
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ Still loading ID…"); return; }
+
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
