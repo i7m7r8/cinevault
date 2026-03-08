@@ -612,8 +612,6 @@ function loadSource(i) {
 
   // Highlight selected source button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
-  // Clear stream row selection (stream list is just metadata, source drives playback)
-  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
 
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
@@ -624,7 +622,18 @@ function loadSource(i) {
   const ep    = isMovie ? "" : ` · S${curS} E${curE}`;
 
   playUrl(url);
-  setNameBar(title + ep, "▶ " + src.name);
+
+  // If a stream row is already selected, keep it active and update its name bar with new source
+  const activeRow = document.querySelector(".stream-row.active");
+  if (activeRow) {
+    const streamTitle = activeRow.querySelector(".stream-name")?.textContent || "";
+    const streamMeta  = activeRow.querySelector(".stream-seeds")?.textContent || "";
+    const streamSize  = activeRow.querySelector(".stream-size")?.textContent  || "";
+    setNameBar(streamTitle, "▶ " + src.name + (streamMeta ? "  " + streamMeta : "") + (streamSize ? "  " + streamSize : ""));
+  } else {
+    setNameBar(title + ep, "▶ " + src.name);
+  }
+
   toast("▶ " + src.name);
 }
 
