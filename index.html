@@ -501,6 +501,9 @@ footer{
 
       <div class="pwrap" id="pwrap">
         <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
+        <div id="sub-overlay" style="display:none;position:absolute;bottom:8%;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;width:90%;text-align:center">
+          <span id="sub-text" style="background:rgba(0,0,0,0.75);color:#fff;font-size:15px;font-weight:600;padding:4px 10px;border-radius:6px;line-height:1.6;white-space:pre-line;text-shadow:1px 1px 2px #000"></span>
+        </div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
         <iframe id="pframe" style="position:relative;z-index:1" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" referrerpolicy="no-referrer"></iframe>
       </div>
@@ -538,6 +541,8 @@ footer{
           <option value="ko">Korean</option>
           <option value="zh">Chinese</option>
         </select>
+        <button onclick="startSubSync()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">▶ Sync</button>
+        <button onclick="stopSub()" style="background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">✕</button>
       </div>
 
     </div>
@@ -946,29 +951,118 @@ async function loadEps(tvId, s) {
 }
 
 // ── SUBTITLES ───────────────────────────────────────────────────
-function loadSubs() {} // no-op
+function loadSubs() {}
 
-function applySubLang() {
-  const lang = $("subsel").value;
-  if (!cur) return;
+let _subCues = [], _subTimer = null, _subStart = null;
 
-  // Switch to VidLink
-  const vidLinkIdx = SOURCES.findIndex(s => s.name === "VidLink");
-  srcIdx = vidLinkIdx >= 0 ? vidLinkIdx : srcIdx;
-  document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===srcIdx));
-
-  const isMovie = cur.mediaType === "movie";
-  const id = cur.id;
-  let url = isMovie
-    ? `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`
-    : `https://vidlink.pro/tv/${id}/${curS}/${curE}?autoplay=true&primaryColor=e8173a`;
-
-  // VidLink multiSub param enables their built-in subtitle selector UI
-  if (lang) url += `&multiSub=true&defaultSubLanguage=${lang}`;
-
-  playUrl(url);
-  toast(lang ? `🔤 ${lang.toUpperCase()} — pick from player CC menu` : "🔤 Subtitle off");
+function parseSRT(text) {
+  const cues = [];
+  const blocks = text.trim().split(/\n\s*\n/);
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    if (lines.length < 2) continue;
+    const timeMatch = lines.find(l => l.includes("-->"));
+    if (!timeMatch) continue;
+    const [startStr, endStr] = timeMatch.split("-->").map(s => s.trim());
+    const toSec = t => {
+      const m = t.match(/(\d+):(\d+):(\d+)[,\.](\d+)/);
+      if (!m) return 0;
+      return +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000;
+    };
+    const textLines = lines.slice(lines.indexOf(timeMatch)+1).join("\n").replace(/<[^>]+>/g,"");
+    if (textLines.trim()) cues.push({ start: toSec(startStr), end: toSec(endStr), text: textLines.trim() });
+  }
+  return cues.sort((a,b) => a.start - b.start);
 }
+
+function tickSub() {
+  if (!_subStart || !_subCues.length) return;
+  const elapsed = (Date.now() - _subStart) / 1000;
+  const cue = _subCues.find(c => elapsed >= c.start && elapsed <= c.end);
+  const el = $("sub-text");
+  if (cue) { el.textContent = cue.text; $("sub-overlay").style.display = "block"; }
+  else { el.textContent = ""; }
+}
+
+function stopSub() {
+  clearInterval(_subTimer);
+  _subTimer = null;
+  _subCues = [];
+  $("sub-overlay").style.display = "none";
+  $("subsel").value = "";
+  toast("🔤 Subtitle off");
+}
+
+async function startSubSync() {
+  const lang = $("subsel").value;
+  if (!lang) { toast("Select a language first"); return; }
+  if (!cur?.imdb_id) { toast("⏳ Wait for title to load"); return; }
+
+  toast("⏳ Fetching subtitle…");
+  try {
+    const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
+    const imdbNum = cur.imdb_id.replace("tt","");
+    let url = `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbNum}&languages=${lang}&per_page=3`;
+    if (isTv) url += `&season_number=${curS}&episode_number=${curE}`;
+
+    // Try direct fetch first (CORS may work on some networks)
+    let data;
+    try {
+      const r = await fetch(url, { headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa" } });
+      data = await r.json();
+    } catch {
+      const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+      data = await r.json();
+    }
+
+    const fileId = data?.data?.[0]?.attributes?.files?.[0]?.file_id;
+    if (!fileId) { toast("❌ No subtitle found for " + lang.toUpperCase()); return; }
+
+    // Get download link
+    let dlData;
+    try {
+      const r2 = await fetch("https://api.opensubtitles.com/api/v1/download", {
+        method: "POST",
+        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: fileId })
+      });
+      dlData = await r2.json();
+    } catch {
+      const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent("https://api.opensubtitles.com/api/v1/download")}`, {
+        method: "POST",
+        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: fileId })
+      });
+      dlData = await r2.json();
+    }
+
+    if (!dlData?.link) { toast("❌ Could not get subtitle file"); return; }
+
+    // Download SRT file
+    let srtText;
+    try {
+      const r3 = await fetch(dlData.link);
+      srtText = await r3.text();
+    } catch {
+      const r3 = await fetch(`https://corsproxy.io/?${encodeURIComponent(dlData.link)}`);
+      srtText = await r3.text();
+    }
+
+    _subCues = parseSRT(srtText);
+    if (!_subCues.length) { toast("❌ Could not parse subtitle file"); return; }
+
+    clearInterval(_subTimer);
+    _subStart = Date.now();
+    _subTimer = setInterval(tickSub, 250);
+    $("sub-overlay").style.display = "block";
+    toast(`🔤 ${lang.toUpperCase()} subtitle synced — ${_subCues.length} cues`);
+  } catch(e) {
+    console.log("sub error", e);
+    toast("❌ Subtitle failed — try another language");
+  }
+}
+
+function applySubLang() {}  // handled by startSubSync button
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
 $("mclose").onclick = closeModal;
