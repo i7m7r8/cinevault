@@ -738,14 +738,21 @@ async function loadDirectStreams() {
   }
 }
 
-// Called when source changes — rebuilds list label + re-plays active row with new source
+// Called when source changes — updates label + name bar, re-plays active row
 function onSourceChange() {
-  // Update stream list label
   const label = $("stream-picker")?.querySelector(".clabel");
-  if (label) label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
-  // If a row is active, replay it via new source
+  if (label && $("stream-picker").style.display !== "none") {
+    label.textContent = "📊 STREAMS — via " + SOURCES[srcIdx].name;
+  }
   const activeRow = document.querySelector(".stream-row.active");
-  if (activeRow) playStream(activeRow);
+  if (activeRow && activeRow._fname) {
+    // Update name bar only — don't reload player
+    const src = SOURCES[srcIdx];
+    setNameBar(
+      activeRow._fname,
+      "▶ " + src.name + (activeRow._size ? "  💾" + activeRow._size : "") + (activeRow._seeds ? "  👤" + activeRow._seeds : "")
+    );
+  }
 }
 
 function loadSource(i) {
@@ -856,23 +863,9 @@ async function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  loadSource(0);       // auto-play first source
-  loadSubs();          // subtitles in background
-
-  // loadDirectStreams needs imdb_id — if not fetched yet, wait and retry
-  if (cur.imdb_id) {
-    loadDirectStreams();
-  } else {
-    // Poll until imdb_id is available (fetched above async)
-    const waitForImdb = setInterval(() => {
-      if (cur.imdb_id) {
-        clearInterval(waitForImdb);
-        loadDirectStreams();
-      }
-    }, 300);
-    // Give up after 5s
-    setTimeout(() => clearInterval(waitForImdb), 5000);
-  }
+  loadSource(0);        // auto-play first source
+  loadSubs();           // subtitles in background
+  loadDirectStreams();   // torrentio stream list — imdb_id already awaited above
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
