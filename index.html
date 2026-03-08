@@ -541,8 +541,10 @@ footer{
           <option value="ko">Korean</option>
           <option value="zh">Chinese</option>
         </select>
-        <button onclick="startSubSync()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">▶ Sync</button>
-        <button onclick="stopSub()" style="background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">✕</button>
+        <button onclick="startSubSync()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">▶ Fetch</button>
+        <button onclick="shiftSub(-0.5)" style="background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer" title="Subtitle -0.5s">-0.5s</button>
+        <button onclick="shiftSub(0.5)" style="background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer" title="Subtitle +0.5s">+0.5s</button>
+        <button onclick="stopSub()" style="background:var(--s2);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">✕ Off</button>
       </div>
 
     </div>
@@ -613,6 +615,8 @@ function playUrl(url) {
   f.removeAttribute("src");
   void f.offsetHeight;
   f.src = url;
+  // Mark video start time for subtitle sync
+  markVideoStart();
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -965,26 +969,35 @@ async function loadEps(tvId, s) {
 
 // ── SUBTITLES ───────────────────────────────────────────────────
 function loadSubs() {}
-let _subCues = [], _subTimer = null, _subStart = null;
+let _subCues = [], _subTimer = null, _subStart = null, _subOffset = 0;
 
 function parseSRT(text) {
   const cues = [];
+  // Handle gzip decoded text or plain text
   const blocks = text.replace(/\r/g,"").trim().split(/\n\s*\n/);
   for (const block of blocks) {
     const lines = block.trim().split("\n");
     const timeMatch = lines.find(l => l.includes("-->"));
     if (!timeMatch) continue;
     const [s1, s2] = timeMatch.split("-->").map(s => s.trim());
-    const toSec = t => { const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/); return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : 0; };
-    const txt = lines.slice(lines.indexOf(timeMatch)+1).join("\n").replace(/<[^>]+>/g,"").trim();
+    const toSec = t => {
+      const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+      return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : 0;
+    };
+    const txt = lines.slice(lines.indexOf(timeMatch)+1).join("\n")
+      .replace(/<[^>]+>/g,"").trim();
     if (txt) cues.push({ start: toSec(s1), end: toSec(s2), text: txt });
   }
   return cues.sort((a,b) => a.start - b.start);
 }
 
+// _subStart = timestamp when video started playing (set when source loads)
+// _subOffset = manual offset adjustment in seconds
+let _videoStartTime = null;
+
 function tickSub() {
-  if (!_subStart || !_subCues.length) return;
-  const t = (Date.now() - _subStart) / 1000;
+  if (!_videoStartTime || !_subCues.length) return;
+  const t = (Date.now() - _videoStartTime) / 1000 + _subOffset;
   const cue = _subCues.find(c => t >= c.start && t <= c.end);
   const el = $("sub-text");
   if (cue) { el.textContent = cue.text; $("sub-overlay").style.display = "block"; }
@@ -993,9 +1006,15 @@ function tickSub() {
 
 function stopSub() {
   clearInterval(_subTimer); _subTimer = null; _subCues = [];
+  _videoStartTime = null; _subOffset = 0;
   $("sub-overlay").style.display = "none";
   $("subsel").value = "";
   toast("🔤 Subtitle off");
+}
+
+// Call this whenever video starts playing so sync is correct
+function markVideoStart() {
+  _videoStartTime = Date.now();
 }
 
 async function startSubSync() {
@@ -1005,50 +1024,63 @@ async function startSubSync() {
   toast("⏳ Fetching subtitle…");
   try {
     const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-
-    // OpenSubtitles REST API — confirmed working, returns direct .srt links
     const langMap = {en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
     const osLang = langMap[lang] || "eng";
-    const imdbNum = cur.imdb_id.replace("tt", "");
+    const imdbNum = cur.imdb_id.replace("tt","");
 
-    // Build search URL — for TV include season+episode
     let searchUrl = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${osLang}`;
     if (isTv) searchUrl += `/season-${curS}/episode-${curE}`;
 
-    const r = await fetch(searchUrl, {
-      headers: { "X-User-Agent": "TemporaryUserAgent" }
-    });
-    if (!r.ok) throw new Error("OpenSubtitles error " + r.status);
+    const r = await fetch(searchUrl, { headers: { "X-User-Agent": "TemporaryUserAgent" } });
+    if (!r.ok) throw new Error("OpenSubtitles " + r.status);
     const subs = await r.json();
-    if (!Array.isArray(subs) || !subs.length) {
-      toast("❌ No " + lang.toUpperCase() + " subtitle found");
-      return;
-    }
+    if (!Array.isArray(subs) || !subs.length) { toast("❌ No " + lang.toUpperCase() + " subtitle"); return; }
 
-    // Pick first .srt result
-    const sub = subs.find(s => s.SubFormat === "srt") || subs[0];
-    const srtUrl = sub.SubDownloadLink || "";
+    // Pick .srt format, prefer smaller file (episode-specific)
+    const sub = subs.find(s => s.SubFormat === "srt" && s.SubActualCD === "1") 
+              || subs.find(s => s.SubFormat === "srt") 
+              || subs[0];
+
+    const srtUrl = (sub.SubDownloadLink || "").replace(".gz","");
     if (!srtUrl) { toast("❌ No download link"); return; }
 
-    // Fetch SRT directly — opensubtitles allows cross-origin
-    const r2 = await fetch(srtUrl.replace(".gz",""));
-    if (!r2.ok) throw new Error("Download failed");
-    const srtText = await r2.text();
+    // Try direct fetch first (CORS allowed by opensubtitles)
+    let srtText = "";
+    try {
+      const r2 = await fetch(srtUrl);
+      if (r2.ok) srtText = await r2.text();
+    } catch {}
 
-    if (!srtText.includes("-->")) { toast("❌ Invalid subtitle file"); return; }
+    // Fallback: try without .gz in case URL changed
+    if (!srtText || !srtText.includes("-->")) {
+      try {
+        const r3 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(srtUrl));
+        if (r3.ok) srtText = await r3.text();
+      } catch {}
+    }
+
+    if (!srtText || !srtText.includes("-->")) { toast("❌ Could not download subtitle"); return; }
 
     _subCues = parseSRT(srtText);
     if (!_subCues.length) { toast("❌ Could not parse subtitle"); return; }
 
+    // Start timer — sync to when video started playing
     clearInterval(_subTimer);
-    _subStart = Date.now();
-    _subTimer = setInterval(tickSub, 250);
+    _subOffset = 0;
+    if (!_videoStartTime) _videoStartTime = Date.now(); // fallback
+    _subTimer = setInterval(tickSub, 100);
     $("sub-overlay").style.display = "block";
-    toast(`🔤 ${lang.toUpperCase()} · ${_subCues.length} cues loaded ✅`);
+    toast(`🔤 ${lang.toUpperCase()} · ${_subCues.length} cues ✅`);
   } catch(e) {
     console.error("sub err", e);
-    toast("❌ Subtitle failed: " + e.message);
+    toast("❌ Sub failed: " + e.message);
   }
+}
+
+// Adjust subtitle timing manually (+ = delay, - = advance)
+function shiftSub(sec) {
+  _subOffset += sec;
+  toast("⏱ Sub offset: " + (_subOffset > 0 ? "+" : "") + _subOffset.toFixed(1) + "s");
 }
 
 function applySubLang() {}
