@@ -426,6 +426,11 @@ footer{
         <div class="cbtns" id="srcbns"></div>
       </div>
 
+      <div class="crow" id="srv-row" style="display:none">
+        <span class="clabel">Server</span>
+        <div class="cbtns" id="srvbns"></div>
+      </div>
+
       <div class="pwrap" id="pwrap">
         <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Trying best source…</div></div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
@@ -450,14 +455,54 @@ const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
-  { name:"VidSrc",     movie: id=>`https://vidsrc.to/embed/movie/${id}`,             tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}`,            useImdb:true },
-  { name:"VidSrc.me",  movie: id=>`https://vidsrc.me/embed/movie?imdb=${id}`,        tv:(id,s,e)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}`, useImdb:true },
-  { name:"AutoEmbed",  movie: id=>`https://autoembed.cc/movie/imdb/${id}`,           tv:(id,s,e)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}`,          useImdb:true },
-  { name:"EmbedSu",    movie: id=>`https://embed.su/embed/movie/${id}`,              tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}`,             useImdb:true },
-  { name:"2Embed",     movie: id=>`https://www.2embed.cc/embed/${id}`,               tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,     useImdb:true },
-  { name:"SmashyStream",movie:id=>`https://player.smashy.stream/movie/${id}`,        tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`,  useImdb:false,useTmdb:true },
-  { name:"SuperEmbed", movie: id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,   tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`, useImdb:false },
-  { name:"MoviesAPI",  movie: id=>`https://moviesapi.club/movie/${id}`,              tv:(id,s,e)=>`https://moviesapi.club/tv/${id}-${s}-${e}`,             useImdb:false },
+  {
+    name:"VidSrc", useImdb:true,
+    movie: (id,srv)=>`https://vidsrc.to/embed/movie/${id}`,
+    tv:    (id,s,e,srv)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"VidSrc.me", useImdb:true,
+    movie: (id,srv)=>`https://vidsrc.me/embed/movie?imdb=${id}&ds_langs=en`,
+    tv:    (id,s,e,srv)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}&ds_langs=en`,
+    servers: ["Default"]
+  },
+  {
+    name:"AutoEmbed", useImdb:true,
+    movie: (id,srv)=>`https://autoembed.cc/movie/imdb/${id}`,
+    tv:    (id,s,e,srv)=>`https://autoembed.cc/tv/imdb/${id}-${s}-${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"EmbedSu", useImdb:true,
+    movie: (id,srv)=>`https://embed.su/embed/movie/${id}`,
+    tv:    (id,s,e,srv)=>`https://embed.su/embed/tv/${id}/${s}/${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"2Embed", useImdb:true,
+    movie: (id,srv)=>`https://www.2embed.cc/embed/${id}`,
+    tv:    (id,s,e,srv)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"SmashyStream", useImdb:false, useTmdb:true,
+    movie: (id,srv)=>`https://player.smashy.stream/movie/${id}`,
+    tv:    (id,s,e,srv)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"SuperEmbed", useImdb:false,
+    movie: (id,srv)=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    tv:    (id,s,e,srv)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
+    servers: ["Default"]
+  },
+  {
+    name:"MoviesAPI", useImdb:false,
+    movie: (id,srv)=>`https://moviesapi.club/movie/${id}`,
+    tv:    (id,s,e,srv)=>`https://moviesapi.club/tv/${id}-${s}-${e}`,
+    servers: ["Default"]
+  },
 ];
 
 // ── STATE ───────────────────────────────────────────────────────
@@ -579,35 +624,58 @@ function buildSources() {
     const b = document.createElement("button");
     b.className = "cbtn";
     b.textContent = src.name;
-    b.onclick = () => loadSource(i);
+    b.onclick = () => selectSource(i);
     wrap.appendChild(b);
   });
 }
 
-function loadSource(i) {
+function selectSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src) return;
-
-  // Mark active
   document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===i));
 
+  // Build server buttons if more than 1
+  const srvRow = $("srv-row");
+  const srvWrap = $("srvbns");
+  srvWrap.innerHTML = "";
+  if (src.servers && src.servers.length > 1) {
+    srvRow.style.display = "flex";
+    src.servers.forEach((srv, si) => {
+      const b = document.createElement("button");
+      b.className = "cbtn" + (si===0?" on":"");
+      b.textContent = srv;
+      b.onclick = () => {
+        document.querySelectorAll("#srvbns .cbtn").forEach(x=>x.classList.remove("on"));
+        b.classList.add("on");
+        loadSource(i, si);
+      };
+      srvWrap.appendChild(b);
+    });
+  } else {
+    srvRow.style.display = "none";
+  }
+  loadSource(i, 0);
+}
+
+function loadSource(i, srvIdx=0) {
+  const src = SOURCES[i];
+  if (!src) return;
   const isMovie = cur.mediaType === "movie";
   let id;
   if (src.useTmdb) id = cur.id;
   else if (src.useImdb) id = cur.imdb_id || cur.id;
   else id = cur.id;
-
   if (!id) { toast("ID not found"); return; }
 
-  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  const srv = (src.servers||["Default"])[srvIdx] || "Default";
+  const url = isMovie ? src.movie(id, srv) : src.tv(id, curS, curE, srv);
 
-  // Hide placeholder, show iframe with new src
   $("pph").style.display = "none";
   const frame = $("pframe");
   frame.style.display = "block";
   frame.src = url;
-  toast("Loading " + src.name + "…");
+  toast("▶ " + src.name + (src.servers?.length > 1 ? " · " + srv : ""));
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
@@ -625,7 +693,7 @@ async function loadSeasons(tvId) {
         b.classList.add("on");
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
-        if(srcIdx >= 0 && document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
+        if(srcIdx >= 0 && document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx, 0);
       };
       wrap.appendChild(b);
     });
@@ -646,7 +714,7 @@ async function loadEps(tvId, s) {
         document.querySelectorAll(".epbtn").forEach(x=>x.classList.remove("on"));
         b.classList.add("on");
         curE = ep.episode_number;
-        if(document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
+        if(document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx, 0);
       };
       wrap.appendChild(b);
     });
