@@ -320,18 +320,7 @@ a{text-decoration:none;color:inherit}
   border:none;font-size:12px;font-weight:600;
 }
 
-/* DL */
-.dlbtn{
-  display:none;align-items:center;gap:5px;
-  padding:8px 14px;border-radius:8px;
-  background:var(--s2);color:var(--text);
-  border:1px solid var(--border);
-  font-size:12px;font-weight:600;
-  margin-top:10px;width:fit-content;
-  transition:border-color .2s;
-}
-.dlbtn.on{display:flex}
-.dlbtn:active{transform:scale(.97)}
+
 
 /* SEARCH PAGE */
 #spage{display:none;padding:14px}
@@ -448,7 +437,6 @@ footer{
         <button class="subbtn" onclick="applySub()">Apply</button>
       </div>
 
-      <a class="dlbtn" id="dlbtn" href="#" target="_blank">⬇ Download Torrent</a>
     </div>
   </div>
 </div>
@@ -550,10 +538,9 @@ async function openModal(item, type) {
   $("pframe").src = "";
   $("pframe").style.display = "none";
   $("pph").style.display = "flex";
-  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Trying best source…</div>`;
+  $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Tap a source below to play</div>`;
   $("ploader").classList.remove("on");
   $("subbar").classList.remove("on");
-  $("dlbtn").classList.remove("on");
 
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average?.toFixed(1) || "—";
@@ -577,15 +564,12 @@ async function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Auto-play first source
-  setTimeout(() => loadSource(0), 400);
+
 
   // Load subs in background
   loadSubs();
 
   // Download link
-  $("dlbtn").href = `https://thepiratebay.org/search.php?q=${encodeURIComponent(item.title||item.name||"")}`;
-  $("dlbtn").classList.add("on");
 }
 
 // ── SOURCES ─────────────────────────────────────────────────────
@@ -593,10 +577,9 @@ function buildSources() {
   const wrap = $("srcbns"); wrap.innerHTML = "";
   SOURCES.forEach((src, i) => {
     const b = document.createElement("button");
-    b.className = "cbtn" + (i===0?" on":"");
+    b.className = "cbtn";
     b.textContent = src.name;
-    b.dataset.i = i;
-    b.onclick = () => { srcIdx = i; loadSource(i); };
+    b.onclick = () => loadSource(i);
     wrap.appendChild(b);
   });
 }
@@ -604,50 +587,27 @@ function buildSources() {
 function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
-  if (!src) { toast("No more sources"); return; }
+  if (!src) return;
 
+  // Mark active
   document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===i));
 
   const isMovie = cur.mediaType === "movie";
-  // Pick correct ID
   let id;
   if (src.useTmdb) id = cur.id;
   else if (src.useImdb) id = cur.imdb_id || cur.id;
   else id = cur.id;
 
-  if (!id) {
-    toast("ID missing, trying next…");
-    setTimeout(() => loadSource(i+1), 500);
-    return;
-  }
+  if (!id) { toast("ID not found"); return; }
 
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
 
-  // Reset player UI
+  // Hide placeholder, show iframe with new src
   $("pph").style.display = "none";
-  $("ploader").classList.add("on");
   const frame = $("pframe");
-
-  // Completely rebuild iframe to avoid caching/stale state
-  const newFrame = frame.cloneNode(false);
-  newFrame.id = "pframe";
-  newFrame.style.display = "block";
-  newFrame.style.width = "100%";
-  newFrame.style.height = "100%";
-  newFrame.style.border = "none";
-  newFrame.setAttribute("allowfullscreen","");
-  newFrame.setAttribute("allow","autoplay; fullscreen; picture-in-picture; encrypted-media");
-  frame.parentNode.replaceChild(newFrame, frame);
-
-  // Short delay then load
-  setTimeout(() => {
-    $("ploader").classList.remove("on");
-    newFrame.src = url;
-  }, 200);
-
-  // Update download link
-  const title = cur.title || cur.name || "";
-  $("dlbtn").href = `https://thepiratebay.org/search.php?q=${encodeURIComponent(title)}`;
+  frame.style.display = "block";
+  frame.src = url;
+  toast("Loading " + src.name + "…");
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
@@ -665,7 +625,7 @@ async function loadSeasons(tvId) {
         b.classList.add("on");
         curS = s.season_number; curE = 1;
         await loadEps(tvId, curS);
-        loadSource(srcIdx);
+        if(srcIdx >= 0 && document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
       };
       wrap.appendChild(b);
     });
@@ -686,7 +646,7 @@ async function loadEps(tvId, s) {
         document.querySelectorAll(".epbtn").forEach(x=>x.classList.remove("on"));
         b.classList.add("on");
         curE = ep.episode_number;
-        loadSource(srcIdx);
+        if(document.querySelector('#srcbns .cbtn.on')) loadSource(srcIdx);
       };
       wrap.appendChild(b);
     });
