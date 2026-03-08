@@ -284,30 +284,30 @@ a{text-decoration:none;color:inherit}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
 
-/* STREAM NAME BAR below player */
+/* ── NOW PLAYING BOX ──────────────────────────── */
 #stream-name-bar{
-  display:none;margin-top:10px;
+  display:none;
+  margin-top:10px;
   background:var(--s2);
-  border:1.5px solid var(--accent);
-  border-radius:10px;
-  padding:10px 14px;
-  font-size:12px;color:var(--text);
-  line-height:1.6;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  box-shadow:0 2px 12px rgba(232,23,58,0.15);
+  border:2px solid var(--accent);
+  border-radius:12px;
+  padding:12px 16px;
+  box-shadow:0 0 16px rgba(232,23,58,0.2);
 }
 #stream-name-bar.on{display:block}
 #stream-name-bar .snb-label{
-  color:var(--accent);font-size:10px;font-weight:800;
-  text-transform:uppercase;letter-spacing:1px;
-  display:flex;align-items:center;gap:4px;margin-bottom:5px;
+  font-size:10px;font-weight:800;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--accent);
+  margin-bottom:6px;display:flex;align-items:center;gap:5px;
 }
 #stream-name-bar .snb-title{
-  font-size:12px;font-weight:500;color:var(--text);
+  font-size:12px;font-weight:600;color:var(--text);
+  word-break:break-word;overflow-wrap:anywhere;line-height:1.5;
+  margin-bottom:4px;
 }
 #stream-name-bar .snb-source{
-  margin-top:3px;font-size:11px;color:var(--muted);
+  font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;
 }
 .ploader{
   display:none;position:absolute;inset:0;
@@ -497,13 +497,13 @@ footer{
       <div class="pwrap" id="pwrap">
         <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
-        <iframe id="pframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation"></iframe>
+        <iframe id="pframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" referrerpolicy="no-referrer"></iframe>
       </div>
       <div id="stream-name-bar">
-  <div class="snb-label">▶ Now Playing</div>
-  <div class="snb-title" id="stream-name-text"></div>
-  <div class="snb-source" id="stream-name-source"></div>
-</div>
+        <div class="snb-label">▶ Now Playing</div>
+        <div class="snb-title" id="stream-name-text"></div>
+        <div class="snb-source" id="stream-name-source"></div>
+      </div>
 
       <!-- Quality/File selector -->
       <div class="crow" id="file-row" style="display:none;margin-top:10px">
@@ -622,28 +622,29 @@ function buildStreamPicker(streams) {
       '</div>';
 
     row.onclick = () => {
-      // Highlight this row as active
+      // Mark this row active — do NOT touch source buttons
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
-      // DO NOT deselect source buttons — source stays selected
 
       const hash = (s.infoHash || "").toLowerCase();
       const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
 
       if (!hash) { toast("❌ No hash for this stream"); return; }
 
-      // Best working torrent embed: webtor.io (widely supported, no signup)
-      const embedUrl = "https://webtor.io/embed?magnet=" +
-        encodeURIComponent("magnet:?xt=urn:btih:" + hash) +
-        "&file-index=" + fi + "&controls=true&auto=true";
+      // Build magnet link
+      const magnet = "magnet:?xt=urn:btih:" + hash +
+        "&dn=" + encodeURIComponent(fname) +
+        "&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337" +
+        "&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969";
 
-      $("pph").classList.add("hidden");
-      $("pframe").src = "";
-      setTimeout(() => { $("pframe").src = embedUrl; }, 150);
+      // Open AllDebrid / Real-Debrid / direct magnet in new tab
+      // Using seedr.cc embed which supports magnet-to-stream
+      const playerUrl = "https://www.seedr.cc/?magnet=" + encodeURIComponent(magnet);
+      window.open(playerUrl, "_blank");
 
-      // Show FULL filename + quality in name bar
-      setNameBar(fname, ql + (size ? "  💾 " + size : "") + (seeds !== "?" ? "  👤 " + seeds : ""));
-      toast("▶ " + ql + " — " + fname.slice(0, 40));
+      // Update name bar with FULL filename + meta
+      setNameBar(fname, ql + (size ? "  💾 " + size : "") + (seeds && seeds !== "?" ? "  👤 " + seeds : ""));
+      toast("▶ Opening " + ql + " stream…");
     };
     wrap.appendChild(row);
   });
