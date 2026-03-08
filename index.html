@@ -633,7 +633,10 @@ function buildSources() {
 async function fetchStreams(imdbId, type, s, e) {
   try {
     const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
-    const r = await fetch(`https://torrentio.strem.fun/stream/${path}.json`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const r = await fetch(`https://torrentio.strem.fun/stream/${path}.json`, { signal: controller.signal });
+    clearTimeout(timer);
     const d = await r.json();
     return (d.streams || []).slice(0, 15);
   } catch { return []; }
@@ -721,7 +724,16 @@ async function loadDirectStreams() {
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
 
-  // If no imdb_id, show message and stop
+  // If no imdb_id yet, wait up to 5s for it (fetched async in background)
+  if (!cur.imdb_id) {
+    let waited = 0;
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        waited += 200;
+        if (cur.imdb_id || waited >= 5000) { clearInterval(check); resolve(); }
+      }, 200);
+    });
+  }
   if (!cur.imdb_id) {
     $("stream-loading").textContent = "⚠️ No IMDB ID — streams unavailable";
     return;
@@ -842,18 +854,17 @@ async function loadSec(gid, path, params, type, hero=false) {
 }
 
 // ── MODAL ───────────────────────────────────────────────────────
-async function openModal(item, type) {
+function openModal(item, type) {
   cur = { ...item, mediaType: type };
   curS = 1; curE = 1; srcIdx = 0;
   _cachedStreams = []; _cacheKey = "";
 
-  // Reset UI
+  const isTv = type === "tv" || type === "series";
+
+  // Reset UI immediately
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
   $("mbg").src            = back(item.backdrop_path);
-  $("pframe").src = "";
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
   $("subbar").classList.remove("on");
   $("file-row").style.display = "none";
   $("stream-name-bar").classList.remove("on");
@@ -861,34 +872,48 @@ async function openModal(item, type) {
   $("stream-loading").style.display = "block";
   $("stream-loading").textContent = "🔄 Loading streams…";
   $("streambns").innerHTML = "";
+  $("tv-ctrl").style.display = isTv ? "block" : "none";
 
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average?.toFixed(1) || "—";
   $("mmeta").innerHTML = `<span>${year}</span><span>•</span><span class="mrating">⭐${rating}</span><span>•</span><span>${type==="movie"?"🎬 Movie":"📺 Series"}</span>`;
 
-  const isTv = type==="tv" || type==="series";
-  $("tv-ctrl").style.display = isTv ? "block" : "none";
-  if (isTv) await loadSeasons(item.id);
-
   buildSources();
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Step 1: Fetch IMDB id (needed for 2Embed + Torrentio)
-  if (!cur.imdb_id) {
-    try {
-      const t   = isTv ? "tv" : "movie";
-      const ext = await tmdb(`/${t}/${item.id}/external_ids`);
-      cur.imdb_id = ext.imdb_id;
-    } catch {}
-  }
+  // Play immediately using TMDB id (no waiting)
+  $("pframe").src = "";
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading…</div>`;
 
-  // Step 2: Play video
-  loadSource(0);
+  const src0 = SOURCES[0];
+  const id0  = src0.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  const url0 = isTv ? src0.tv(id0, 1, 1) : src0.movie(id0);
+  $("pph").classList.add("hidden");
+  $("pframe").src = url0;
+  setNameBar((item.title || item.name) + (isTv ? " · S1 E1" : ""), "▶ " + src0.name);
+  $("srcbns").querySelectorAll(".cbtn").forEach((b,j) => b.classList.toggle("on", j===0));
 
-  // Step 3: Load stream list + subs in background
-  loadDirectStreams();
-  loadSubs();
+  // Load everything else async in background
+  (async () => {
+    // Fetch IMDB id
+    if (!cur.imdb_id) {
+      try {
+        const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
+        cur.imdb_id = ext.imdb_id;
+        // Reload source 0 if it needs imdb
+        if (src0.useImdb) {
+          $("pframe").src = isTv ? src0.tv(cur.imdb_id, curS, curE) : src0.movie(cur.imdb_id);
+        }
+      } catch {}
+    }
+    // Load seasons for TV
+    if (isTv) await loadSeasons(item.id);
+    // Load streams and subs
+    loadDirectStreams();
+    loadSubs();
+  })();
 }
 
 // ── SEASONS / EPISODES ──────────────────────────────────────────
