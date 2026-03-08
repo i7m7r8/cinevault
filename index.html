@@ -795,8 +795,12 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
 
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (!id) { toast("❌ No ID yet"); return; }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
+  const title = cur.title || cur.name || "";
+  const ep = isMovie ? "" : ` · S${curS} E${curE}`;
   playUrl(url);
+  setNameBar(title + ep, "▶ " + src.name);
   toast("▶ " + src.name);
 }
 
@@ -876,13 +880,22 @@ function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Reset player — wait for user to tap a source
+  // Reset player
   $("pframe").src = "";
   $("pph").classList.remove("hidden");
   $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading...</div>`;
 
-  // Auto-play source 0 immediately with TMDB id
-  loadSource(0);
+  // Auto-play source 0 — uses TMDB id as fallback if imdb not ready
+  // For useImdb sources, imdb_id will be fetched async below and source reloaded
+  srcIdx = 0;
+  const src0 = SOURCES[0];
+  const id0 = src0.useImdb ? (cur.imdb_id || cur.id) : cur.id;
+  if (id0) {
+    const url0 = isTv ? src0.tv(id0, 1, 1) : src0.movie(id0);
+    playUrl(url0);
+    setNameBar((item.title||item.name) + (isTv?" · S1 E1":""), "▶ " + src0.name);
+    document.querySelectorAll("#srcbns .cbtn").forEach((b,j)=>b.classList.toggle("on",j===0));
+  }
 
   // Load everything async in background
   (async () => {
@@ -1017,9 +1030,8 @@ async function startSubSync() {
     const srtUrl = sub.SubDownloadLink || "";
     if (!srtUrl) { toast("❌ No download link"); return; }
 
-    // Fetch SRT via CORS proxy (direct fetch blocked by browser)
-    const proxy = "https://api.allorigins.win/raw?url=";
-    const r2 = await fetch(proxy + encodeURIComponent(srtUrl));
+    // Fetch SRT directly — opensubtitles allows cross-origin
+    const r2 = await fetch(srtUrl.replace(".gz",""));
     if (!r2.ok) throw new Error("Download failed");
     const srtText = await r2.text();
 
