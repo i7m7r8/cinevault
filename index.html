@@ -963,46 +963,30 @@ async function loadSubs() {
     if (!imdb) return;
     const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
 
-    // Try subdl.com — free, no auth needed
-    let url = `https://subdl.com/api/v1/?api_key=&imdb_id=${imdb}&language=all&subs_per_page=20&type=${isTv?"tv":"movie"}`;
-    if (isTv) url += `&season_number=${curS}&episode_number=${curE}`;
+    // Use OpenSubtitles REST API via allorigins proxy (CORS-safe on mobile)
+    const osUrl = `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdb.replace("tt","")}&${isTv?`season_number=${curS}&episode_number=${curE}&`:""}languages=en,hi,ar,fr,es,de,pt,it,ja,ko&per_page=30`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(osUrl)}`;
 
-    const r = await fetch(url);
-    const data = await r.json();
-    const subs = data.subtitles || [];
+    const r = await fetch(proxyUrl);
+    const d = await r.json();
+    const items = (d.data || []);
 
-    if (!subs.length) {
-      // Fallback: opensubtitles.com REST API (no auth for basic search)
-      const r2 = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdb.replace('tt','')}&${isTv?`season_number=${curS}&episode_number=${curE}&`:''}languages=en,hi,ar,fr,es&per_page=20`, {
-        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" }
-      });
-      const d2 = await r2.json();
-      const items = d2.data || [];
-      if (!items.length) return;
-
-      const sel = $("subsel");
-      sel.innerHTML = `<option value="">🔤 Select subtitle</option>`;
-      items.slice(0,20).forEach(it => {
-        const attr = it.attributes || {};
-        const lang = attr.language || "?";
-        const name = (attr.release || attr.files?.[0]?.file_name || "").slice(0,45);
-        const fileId = attr.files?.[0]?.file_id;
-        if (!fileId) return;
-        const opt = document.createElement("option");
-        opt.value = "oscom:" + fileId;
-        opt.textContent = `${lang.toUpperCase()} — ${name}`;
-        sel.appendChild(opt);
-      });
-      $("subbar").classList.add("on");
+    if (!items.length) {
+      $("subbar").classList.remove("on");
       return;
     }
 
     const sel = $("subsel");
     sel.innerHTML = `<option value="">🔤 Select subtitle</option>`;
-    subs.slice(0,20).forEach(s => {
+    items.slice(0, 25).forEach(it => {
+      const attr = it.attributes || {};
+      const lang = (attr.language || "?").toUpperCase();
+      const name = (attr.release || attr.files?.[0]?.file_name || "").slice(0, 45);
+      const fileId = attr.files?.[0]?.file_id;
+      if (!fileId) return;
       const opt = document.createElement("option");
-      opt.value = "subdl:" + (s.url || "");
-      opt.textContent = `${(s.language||"?").toUpperCase()} — ${(s.release_name||"").slice(0,45)}`;
+      opt.value = "os:" + fileId;
+      opt.textContent = `${lang} — ${name}`;
       sel.appendChild(opt);
     });
     $("subbar").classList.add("on");
@@ -1013,24 +997,21 @@ async function applySub() {
   const val = $("subsel").value;
   if (!val) return toast("No subtitle selected");
 
-  if (val.startsWith("subdl:")) {
-    const path = val.replace("subdl:", "");
-    // subdl provides zip download links — open directly
-    const dlUrl = path.startsWith("http") ? path : "https://subdl.com" + path;
-    window.open(dlUrl, "_blank");
-    toast("📥 Subtitle downloading…");
-
-  } else if (val.startsWith("oscom:")) {
-    const fileId = val.replace("oscom:", "");
+  if (val.startsWith("os:")) {
+    const fileId = val.replace("os:", "");
     try {
-      const r = await fetch("https://api.opensubtitles.com/api/v1/download", {
+      toast("⏳ Getting subtitle link…");
+      // Request download link via proxy
+      const body = JSON.stringify({ file_id: parseInt(fileId) });
+      const proxyReq = `https://api.allorigins.win/raw?url=${encodeURIComponent("https://api.opensubtitles.com/api/v1/download")}`;
+      const r = await fetch(proxyReq, {
         method: "POST",
         headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
-        body: JSON.stringify({ file_id: parseInt(fileId) })
+        body
       });
       const d = await r.json();
       if (d.link) { window.open(d.link, "_blank"); toast("📥 Subtitle downloading…"); }
-      else toast("❌ Download limit reached");
+      else toast("❌ Limit reached — try another");
     } catch { toast("❌ Subtitle fetch failed"); }
   }
 }
