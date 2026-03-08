@@ -967,12 +967,20 @@ async function loadEps(tvId, s) {
 
 // ── SUBTITLES ───────────────────────────────────────────────────
 function loadSubs() {
-  // Auto-fetch English subtitle in background after IMDB id available
-  setTimeout(async () => {
-    if (cur?.imdb_id) {
+  // Auto-fetch English — wait for imdb_id then fetch
+  const snapId = cur?.id;
+  const attempt = async () => {
+    let waited = 0;
+    while (!cur?.imdb_id && waited < 8000) {
+      await new Promise(r => setTimeout(r, 300));
+      waited += 300;
+    }
+    // Make sure we're still on same title
+    if (cur?.id === snapId && cur?.imdb_id) {
       await fetchSub("en", true);
     }
-  }, 1500);
+  };
+  attempt();
 }
 let _subCues = [], _subTimer = null, _subStart = null, _subOffset = 0;
 
@@ -1022,29 +1030,6 @@ function markVideoStart() {
   _videoStartTime = Date.now();
 }
 
-// CORS proxies to try in order
-const PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://cors-anywhere.herokuapp.com/${url}`,
-];
-
-async function fetchWithProxy(url) {
-  // Try direct first
-  try {
-    const r = await fetch(url);
-    if (r.ok) return r;
-  } catch {}
-  // Try proxies
-  for (const proxy of PROXIES) {
-    try {
-      const r = await fetch(proxy(url));
-      if (r.ok) return r;
-    } catch {}
-  }
-  throw new Error("All fetch attempts failed");
-}
-
 async function decompressGzip(buffer) {
   try {
     const ds = new DecompressionStream("gzip");
@@ -1075,8 +1060,7 @@ async function fetchSub(lang, silent=false) {
     const osLang = langMap[lang] || "eng";
     const imdbNum = cur.imdb_id.replace("tt","");
 
-    // Search WITHOUT season/episode in path — that causes redirect to broken URL
-    // Filter by episode from results instead
+    // Direct fetch — confirmed working via curl
     const searchUrl = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${osLang}`;
     const r = await fetch(searchUrl, { headers: { "X-User-Agent": "TemporaryUserAgent" } });
     if (!r.ok) throw new Error("Search failed " + r.status);
@@ -1086,10 +1070,10 @@ async function fetchSub(lang, silent=false) {
       return;
     }
 
-    // For TV: try to find matching season+episode, fallback to any .srt
+    // For TV: match S01E01 pattern in filename
     let sub;
     if (isTv) {
-      const epStr = `S${String(curS).padStart(2,"0")}E${String(curE).padStart(2,"0")}`;
+      const epStr = "S" + String(curS).padStart(2,"0") + "E" + String(curE).padStart(2,"0");
       sub = subs.find(s => s.SubFormat==="srt" && (s.SubFileName||"").toUpperCase().includes(epStr))
           || subs.find(s => s.SubFormat==="srt")
           || subs[0];
@@ -1100,18 +1084,18 @@ async function fetchSub(lang, silent=false) {
     const gzUrl = sub.SubDownloadLink || "";
     if (!gzUrl) { if (!silent) toast("❌ No download link"); return; }
 
-    // Download .gz directly — opensubtitles allows CORS on dl subdomain
+    // Download .gz — dl.opensubtitles.org has access-control-allow-origin: *
     const r2 = await fetch(gzUrl);
     if (!r2.ok) throw new Error("Download failed " + r2.status);
     const buf = await r2.arrayBuffer();
 
-    // Decompress gzip
+    // Decompress gzip using browser built-in
     let srtText = await decompressGzip(buf);
     if (!srtText || !srtText.includes("-->")) {
       srtText = new TextDecoder().decode(buf);
     }
     if (!srtText || !srtText.includes("-->")) {
-      if (!silent) toast("❌ Could not read subtitle");
+      if (!silent) toast("❌ Bad subtitle file");
       return;
     }
 
@@ -1124,10 +1108,10 @@ async function fetchSub(lang, silent=false) {
     _subTimer = setInterval(tickSub, 100);
     $("sub-overlay").style.display = "block";
     $("subsel").value = lang;
-    toast(`🔤 ${lang.toUpperCase()} · ${sub.SubFileName || ""} ✅`);
+    toast("🔤 " + (sub.SubFileName || lang.toUpperCase()) + " ✅");
   } catch(e) {
     console.error("sub err", e);
-    if (!silent) toast("❌ Sub failed: " + e.message);
+    if (!silent) toast("❌ Sub: " + e.message);
   }
 }
 
