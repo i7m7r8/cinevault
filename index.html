@@ -351,6 +351,42 @@ footer{
 @supports(padding-bottom:env(safe-area-inset-bottom)){
   footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 }
+
+/* ── STREAM LIST ─────────────────────────────── */
+.stream-row {
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;margin-bottom:6px;
+  background:var(--s2);border:1px solid var(--border);
+  border-radius:9px;cursor:pointer;transition:all .15s;
+}
+.stream-row:hover,.stream-row.active {
+  border-color:var(--accent);background:var(--accent-dim);
+}
+.stream-row:active { transform:scale(.98); }
+.stream-row-left { display:flex;align-items:center;gap:7px;min-width:0;flex:1; }
+.stream-row-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
+.sq {
+  font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;
+  flex-shrink:0;text-transform:uppercase;letter-spacing:.5px;
+}
+.sq-4k   { background:#a855f7;color:#fff; }
+.sq-1080 { background:var(--accent);color:#fff; }
+.sq-720  { background:#3b82f6;color:#fff; }
+.sq-480,.sq-sd { background:var(--s3);color:var(--muted); }
+.stream-name {
+  font-size:11px;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--text);flex:1;min-width:0;
+}
+.stream-seeds { font-size:10px;color:var(--green);font-weight:700;flex-shrink:0; }
+.stream-size  { font-size:10px;color:var(--muted);flex-shrink:0; }
+.stream-play-btn {
+  width:26px;height:26px;border-radius:50%;flex-shrink:0;
+  background:var(--s3);color:var(--text);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;transition:all .15s;
+}
+.stream-row.active .stream-play-btn { background:var(--accent);border-color:var(--accent);color:#fff; }
 </style>
 </head>
 <body>
@@ -444,7 +480,7 @@ footer{
       </div>
 
       <div id="stream-picker" style="display:none;margin-top:14px">
-        <div class="clabel" style="margin-bottom:8px">🎬 Available Streams</div>
+        <div class="clabel" style="margin-bottom:8px">🎬 AVAILABLE STREAMS</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
@@ -507,46 +543,44 @@ function streamLabel(s) {
   return q + lang + (seeds ? " " + seeds + "s" : "");
 }
 
+function qClass(name) {
+  if (/4k|2160/i.test(name)) return ["4K","sq-4k"];
+  if (/1080/i.test(name)) return ["1080p","sq-1080"];
+  if (/720/i.test(name)) return ["720p","sq-720"];
+  if (/480/i.test(name)) return ["480p","sq-480"];
+  return ["SD","sq-sd"];
+}
+
 function buildStreamPicker(streams) {
   const wrap = $("streambns");
   wrap.innerHTML = "";
-  $("stream-picker").style.display = streams.length ? "block" : "none";
   $("stream-loading").style.display = "none";
+  $("stream-picker").style.display = streams.length ? "block" : "none";
   if (!streams.length) return;
 
-  streams.forEach((s, i) => {
-    // Parse full name and meta from title
-    const lines   = (s.title || s.name || "").split("\n");
-    const fname   = lines[0] || "Unknown";
-    const meta    = lines[1] || "";
-    const seedsM  = meta.match(/[👤]\s*(\d+)/);
-    const sizeM   = meta.match(/[💾]\s*([\d.]+ \w+)/);
-    const seeds   = seedsM ? seedsM[1] : "?";
-    const size    = sizeM  ? sizeM[1]  : "";
-
-    let q = "SD";
-    if (/4k|2160p/i.test(fname)) q = "4K";
-    else if (/1080p/i.test(fname)) q = "1080p";
-    else if (/720p/i.test(fname)) q = "720p";
-    else if (/480p/i.test(fname)) q = "480p";
-
+  streams.forEach((s) => {
+    const lines  = (s.title || s.name || "").split("\n");
+    const fname  = lines[0] || "Unknown";
+    const meta   = lines[1] || lines[2] || "";
+    const seeds  = (meta.match(/[👤]\s*(\d+)/) || [])[1] || "?";
+    const size   = (meta.match(/[💾]\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
+    const [ql, qc] = qClass(fname);
     let lang = "";
-    if (/hindi/i.test(fname+meta)) lang = "🇮🇳";
-    else if (/korean/i.test(fname+meta)) lang = "🇰🇷";
-    else if (/japanese|anime/i.test(fname+meta)) lang = "🇯🇵";
+    if (/hindi/i.test(fname+meta)) lang = "🇮🇳 ";
+    else if (/korean/i.test(fname+meta)) lang = "🇰🇷 ";
+    else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
 
     const row = document.createElement("div");
     row.className = "stream-row";
     row.innerHTML =
       '<div class="stream-row-left">' +
-        '<span class="stream-q ' + q.toLowerCase() + '">' + q + '</span>' +
-        (lang ? '<span class="stream-lang">' + lang + '</span>' : '') +
-        '<span class="stream-name">' + fname + '</span>' +
+        '<span class="sq ' + qc + '">' + ql + '</span>' +
+        '<span class="stream-name">' + lang + fname + '</span>' +
       '</div>' +
       '<div class="stream-row-right">' +
         '<span class="stream-seeds">👤' + seeds + '</span>' +
-        (size ? '<span class="stream-size">💾' + size + '</span>' : '') +
-        '<span class="stream-play">▶</span>' +
+        (size ? '<span class="stream-size"> 💾' + size + '</span>' : '') +
+        '<span class="stream-play-btn">▶</span>' +
       '</div>';
 
     row.onclick = () => {
@@ -554,12 +588,20 @@ function buildStreamPicker(streams) {
       row.classList.add("active");
       document.querySelectorAll("#srcbns .cbtn").forEach(x => x.classList.remove("on"));
       if (s.infoHash) {
-        const mag = "magnet:?xt=urn:btih:" + s.infoHash + "&dn=" + encodeURIComponent(fname);
-        const fi  = s.fileIdx !== undefined ? "&file=" + s.fileIdx : "";
+        // Use vidsrc torrent player (works on mobile)
+        const hash = s.infoHash.toLowerCase();
+        const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
+        // Use debrid-like embed via torrent — best mobile option
+        const mag  = "magnet:?xt=urn:btih:" + hash + "&dn=" + encodeURIComponent(fname);
+        // Try embed.io torrent player
+        const url  = "https://iframe.mediadelivery.net/play/" + hash + "/" + fi +
+                     "?token=" + hash;
+        // Fallback: open magnet directly
         $("pph").style.display = "none";
         $("pframe").style.display = "block";
-        $("pframe").src = "https://www.webtor.io/player?magnet=" + encodeURIComponent(mag) + fi;
-        toast("▶ " + q + " " + fname.slice(0,30) + "…");
+        // Use torrent.stream embed
+        $("pframe").src = "https://www.torrent.stream/embed?infohash=" + hash + "&fileIndex=" + fi;
+        toast("▶ " + ql + " — " + fname.slice(0, 35));
       }
     };
     wrap.appendChild(row);
