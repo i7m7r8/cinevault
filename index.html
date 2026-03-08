@@ -517,7 +517,7 @@ footer{
       </div>
 
       <div id="stream-picker" style="display:block;margin-top:14px">
-        <div class="clabel" style="margin-bottom:8px">📊 STREAM QUALITY INFO</div>
+        <div class="clabel" id="stream-label" style="margin-bottom:8px">📊 AVAILABLE STREAMS</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
@@ -542,9 +542,9 @@ const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
+  { name:"2Embed",     useImdb:false, movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
   { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,  tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                     tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
   { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                               tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
   { name:"Smashy",     useImdb:false, movie:id=>`https://player.smashy.stream/movie/${id}`,                         tv:(id,s,e)=>`https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
   { name:"EmbedSu",    useImdb:true,  movie:id=>`https://embed.su/embed/movie/${id}`,                               tv:(id,s,e)=>`https://embed.su/embed/tv/${id}/${s}/${e}` },
@@ -640,7 +640,7 @@ function buildStreamPicker(streams) {
   if (!streams.length) { $("stream-picker").style.display = "none"; return; }
   $("stream-picker").style.display = "block";
 
-  const label = $("stream-picker").querySelector(".clabel");
+  const label = $("stream-label");
   if (label) label.textContent = "📊 STREAMS — " + SOURCES[srcIdx].name.toUpperCase();
 
   streams.forEach((s) => {
@@ -752,7 +752,7 @@ function loadSource(i) {
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
   // Update stream list label dynamically
-  const lbl = $("stream-picker").querySelector(".clabel");
+  const lbl = $("stream-label");
   if (lbl) lbl.textContent = "📊 STREAMS — " + src.name.toUpperCase();
 
   const isMovie = cur.mediaType === "movie";
@@ -854,8 +854,10 @@ function openModal(item, type) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
-        // Reload if current source needs imdb
-        if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
+        // Reload current source with correct imdb id if it needs it
+        if (SOURCES[srcIdx]?.useImdb) {
+          loadSource(srcIdx);
+        }
       } catch {}
     }
     // Load seasons for TV
