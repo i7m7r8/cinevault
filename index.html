@@ -952,42 +952,34 @@ async function loadEps(tvId, s) {
 
 // ── SUBTITLES ───────────────────────────────────────────────────
 function loadSubs() {}
-
 let _subCues = [], _subTimer = null, _subStart = null;
 
 function parseSRT(text) {
   const cues = [];
-  const blocks = text.trim().split(/\n\s*\n/);
+  const blocks = text.replace(/\r/g,"").trim().split(/\n\s*\n/);
   for (const block of blocks) {
     const lines = block.trim().split("\n");
-    if (lines.length < 2) continue;
     const timeMatch = lines.find(l => l.includes("-->"));
     if (!timeMatch) continue;
-    const [startStr, endStr] = timeMatch.split("-->").map(s => s.trim());
-    const toSec = t => {
-      const m = t.match(/(\d+):(\d+):(\d+)[,\.](\d+)/);
-      if (!m) return 0;
-      return +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000;
-    };
-    const textLines = lines.slice(lines.indexOf(timeMatch)+1).join("\n").replace(/<[^>]+>/g,"");
-    if (textLines.trim()) cues.push({ start: toSec(startStr), end: toSec(endStr), text: textLines.trim() });
+    const [s1, s2] = timeMatch.split("-->").map(s => s.trim());
+    const toSec = t => { const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/); return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : 0; };
+    const txt = lines.slice(lines.indexOf(timeMatch)+1).join("\n").replace(/<[^>]+>/g,"").trim();
+    if (txt) cues.push({ start: toSec(s1), end: toSec(s2), text: txt });
   }
   return cues.sort((a,b) => a.start - b.start);
 }
 
 function tickSub() {
   if (!_subStart || !_subCues.length) return;
-  const elapsed = (Date.now() - _subStart) / 1000;
-  const cue = _subCues.find(c => elapsed >= c.start && elapsed <= c.end);
+  const t = (Date.now() - _subStart) / 1000;
+  const cue = _subCues.find(c => t >= c.start && t <= c.end);
   const el = $("sub-text");
   if (cue) { el.textContent = cue.text; $("sub-overlay").style.display = "block"; }
   else { el.textContent = ""; }
 }
 
 function stopSub() {
-  clearInterval(_subTimer);
-  _subTimer = null;
-  _subCues = [];
+  clearInterval(_subTimer); _subTimer = null; _subCues = [];
   $("sub-overlay").style.display = "none";
   $("subsel").value = "";
   toast("🔤 Subtitle off");
@@ -996,73 +988,43 @@ function stopSub() {
 async function startSubSync() {
   const lang = $("subsel").value;
   if (!lang) { toast("Select a language first"); return; }
-  if (!cur?.imdb_id) { toast("⏳ Wait for title to load"); return; }
-
+  if (!cur?.imdb_id) { toast("⏳ Still loading…"); return; }
   toast("⏳ Fetching subtitle…");
   try {
     const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-    const imdbNum = cur.imdb_id.replace("tt","");
-    let url = `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbNum}&languages=${lang}&per_page=3`;
-    if (isTv) url += `&season_number=${curS}&episode_number=${curE}`;
+    const langMap = {en:"EN",hi:"HI",ar:"AR",fr:"FR",es:"ES",de:"DE",pt:"PT",it:"IT",ja:"JA",ko:"KO",zh:"ZH"};
+    const sdlLang = langMap[lang] || lang.toUpperCase();
+    let apiUrl = `https://subdl.com/api/v1/?api_key=&imdb_id=${cur.imdb_id}&language=${sdlLang}&subs_per_page=5&type=${isTv?"tv":"movie"}`;
+    if (isTv) apiUrl += `&season_number=${curS}&episode_number=${curE}`;
 
-    // Try direct fetch first (CORS may work on some networks)
-    let data;
-    try {
-      const r = await fetch(url, { headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa" } });
-      data = await r.json();
-    } catch {
-      const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-      data = await r.json();
-    }
+    const r = await fetch(apiUrl);
+    if (!r.ok) throw new Error("subdl fetch failed");
+    const d = await r.json();
+    const subs = d.subtitles || [];
+    if (!subs.length) { toast("❌ No subtitle for " + lang.toUpperCase()); return; }
 
-    const fileId = data?.data?.[0]?.attributes?.files?.[0]?.file_id;
-    if (!fileId) { toast("❌ No subtitle found for " + lang.toUpperCase()); return; }
+    // Prefer direct .srt over .zip
+    const sub = subs.find(s => (s.url||"").endsWith(".srt")) || subs[0];
+    const rawUrl = (sub.url||"").startsWith("http") ? sub.url : "https://subdl.com" + sub.url;
 
-    // Get download link
-    let dlData;
-    try {
-      const r2 = await fetch("https://api.opensubtitles.com/api/v1/download", {
-        method: "POST",
-        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
-        body: JSON.stringify({ file_id: fileId })
-      });
-      dlData = await r2.json();
-    } catch {
-      const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent("https://api.opensubtitles.com/api/v1/download")}`, {
-        method: "POST",
-        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
-        body: JSON.stringify({ file_id: fileId })
-      });
-      dlData = await r2.json();
-    }
-
-    if (!dlData?.link) { toast("❌ Could not get subtitle file"); return; }
-
-    // Download SRT file
-    let srtText;
-    try {
-      const r3 = await fetch(dlData.link);
-      srtText = await r3.text();
-    } catch {
-      const r3 = await fetch(`https://corsproxy.io/?${encodeURIComponent(dlData.link)}`);
-      srtText = await r3.text();
-    }
+    const r2 = await fetch(rawUrl);
+    const srtText = await r2.text();
+    if (!srtText.includes("-->")) { toast("❌ File is zipped — no direct .srt available"); return; }
 
     _subCues = parseSRT(srtText);
-    if (!_subCues.length) { toast("❌ Could not parse subtitle file"); return; }
-
+    if (!_subCues.length) { toast("❌ Could not parse subtitle"); return; }
     clearInterval(_subTimer);
     _subStart = Date.now();
     _subTimer = setInterval(tickSub, 250);
     $("sub-overlay").style.display = "block";
-    toast(`🔤 ${lang.toUpperCase()} subtitle synced — ${_subCues.length} cues`);
+    toast(`🔤 ${lang.toUpperCase()} · ${_subCues.length} cues loaded`);
   } catch(e) {
-    console.log("sub error", e);
-    toast("❌ Subtitle failed — try another language");
+    console.log("sub err", e);
+    toast("❌ Subtitle failed — " + e.message);
   }
 }
 
-function applySubLang() {}  // handled by startSubSync button
+function applySubLang() {}
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
 $("mclose").onclick = closeModal;
