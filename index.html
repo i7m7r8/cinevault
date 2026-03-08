@@ -680,23 +680,34 @@ function buildStreamPicker(streams) {
         `<span class="stream-play-btn">▶</span>` +
       `</div>`;
 
-    // Store stream data on the row element for re-use when source changes
-    row._fname = fname;
-    row._ql    = ql;
-    row._size  = size;
-    row._seeds = seeds;
+    // Store stream data
+    row._fname   = fname;
+    row._ql      = ql;
+    row._size    = size;
+    row._seeds   = seeds;
+    row._hash    = s.infoHash  || "";
+    row._fileIdx = s.fileIdx !== undefined ? s.fileIdx : 0;
 
     row.onclick = () => playStream(row);
     wrap.appendChild(row);
   });
 }
 
-// Tap stream row → highlight it and show full name
+// Tap stream row → highlight quality, play current embed source
 function playStream(row) {
   document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
   row.classList.add("active");
-  // Show full torrent name in toast
-  toast(row._fname.slice(0, 60));
+
+  // Auto-select first source if none selected
+  if (srcIdx < 0 || !document.querySelector("#srcbns .cbtn.on")) {
+    loadSource(0);
+    toast("▶ " + row._ql + " · " + SOURCES[0].name);
+    return;
+  }
+
+  // Play current source
+  loadSource(srcIdx);
+  toast("▶ " + row._ql + " · " + SOURCES[srcIdx].name);
 }
 
 // Load streams from Torrentio — only fetches once per title/episode
