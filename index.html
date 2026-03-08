@@ -556,7 +556,7 @@ footer{
 const $ = id => document.getElementById(id);
 
 // ── CONFIG ──────────────────────────────────────────────────────
-const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
+const API = "https://cinevault-api.imrannn68d-de2.workers.dev";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
@@ -584,8 +584,8 @@ function toast(msg, ms=2200) {
 
 // ── TMDB ────────────────────────────────────────────────────────
 async function tmdb(path, params={}) {
-  const q = new URLSearchParams({ api_key: TMDB_KEY, ...params });
-  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
+  const q = new URLSearchParams(params);
+  const r = await fetch(`${API}${path}?${q}`);
   if (!r.ok) throw new Error("TMDB " + r.status);
   return r.json();
 }
@@ -633,12 +633,11 @@ function buildSources() {
 // ── TORRENTIO STREAM LIST ────────────────────────────────────────
 async function fetchStreams(imdbId, type, s, e) {
   const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
-  // Try multiple endpoints — torrentio blocks direct browser requests sometimes
+  // Route through CineVault worker API (fallback to direct)
+  const workerStreams = type === "movie" ? `${API}/streams/${imdbId}` : `${API}/streams/${imdbId}/${s}/${e}`;
   const endpoints = [
+    workerStreams,
     `https://torrentio.strem.fun/stream/${path}.json`,
-    `https://torrentio.strem.fun/sort=qualitysize%7Cqualityfilter=other,scr,cam,unknown/stream/${path}.json`,
-    `https://cors-anywhere.herokuapp.com/https://torrentio.strem.fun/stream/${path}.json`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent("https://torrentio.strem.fun/stream/" + path + ".json")}`,
   ];
   for (const url of endpoints) {
     try {
@@ -1060,9 +1059,9 @@ async function fetchSub(lang, silent=false) {
     const osLang = langMap[lang] || "eng";
     const imdbNum = cur.imdb_id.replace("tt","");
 
-    // Direct fetch — confirmed working via curl
-    const searchUrl = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${osLang}`;
-    const r = await fetch(searchUrl, { headers: { "X-User-Agent": "TemporaryUserAgent" } });
+    // Route through CineVault worker API
+    const searchUrl = `${API}/subtitles/${cur.imdb_id}?lang=${osLang}`;
+    const r = await fetch(searchUrl);
     if (!r.ok) throw new Error("Search failed " + r.status);
     const subs = await r.json();
     if (!Array.isArray(subs) || !subs.length) {
@@ -1074,14 +1073,14 @@ async function fetchSub(lang, silent=false) {
     let sub;
     if (isTv) {
       const epStr = "S" + String(curS).padStart(2,"0") + "E" + String(curE).padStart(2,"0");
-      sub = subs.find(s => s.SubFormat==="srt" && (s.SubFileName||"").toUpperCase().includes(epStr))
-          || subs.find(s => s.SubFormat==="srt")
+      sub = subs.find(s => s.format==="srt" && (s.name||"").toUpperCase().includes(epStr))
+          || subs.find(s => s.format==="srt")
           || subs[0];
     } else {
-      sub = subs.find(s => s.SubFormat==="srt") || subs[0];
+      sub = subs.find(s => s.format==="srt") || subs[0];
     }
 
-    const gzUrl = sub.SubDownloadLink || "";
+    const gzUrl = sub.url || "";
     if (!gzUrl) { if (!silent) toast("❌ No download link"); return; }
 
     // Download .gz — dl.opensubtitles.org has access-control-allow-origin: *
@@ -1232,7 +1231,7 @@ const CACHE="cv-v2";
 const SHELL=["/cinevault/","/cinevault/index.html"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));
 self.addEventListener("fetch",e=>{
-  if(e.request.url.includes("tmdb")||e.request.url.includes("opensubtitles")||e.request.url.includes("torrentio"))return;
+  if(e.request.url.includes("tmdb")||e.request.url.includes("opensubtitles")||e.request.url.includes("torrentio")||e.request.url.includes("workers.dev"))return;
   e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
 });`;
   const blob = new Blob([swCode], { type:"application/javascript" });
