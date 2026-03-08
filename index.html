@@ -286,13 +286,18 @@ a{text-decoration:none;color:inherit}
 
 /* STREAM NAME BAR below player */
 #stream-name-bar{
-  margin-top:8px;padding:8px 12px;
-  background:var(--s2);border:1px solid var(--border);border-radius:8px;
-  font-size:11px;color:var(--text);line-height:1.5;
-  display:none;word-break:break-all;
+  margin-top:8px;padding:10px 14px;
+  background:var(--s2);border:1px solid var(--accent);border-radius:10px;
+  font-size:12px;color:var(--text);line-height:1.6;
+  display:none;word-break:break-word;overflow-wrap:anywhere;
+  box-shadow:0 0 0 1px var(--accent-dim);
 }
 #stream-name-bar.on{display:block}
-#stream-name-bar strong{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+#stream-name-bar strong{
+  color:var(--accent);font-size:10px;text-transform:uppercase;
+  letter-spacing:1px;display:flex;align-items:center;gap:5px;
+  margin-bottom:4px;font-weight:800;
+}
 .ploader{
   display:none;position:absolute;inset:0;
   background:rgba(0,0,0,.6);
@@ -604,17 +609,23 @@ function buildStreamPicker(streams) {
     row.onclick = () => {
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
+      // Deselect embed source buttons when a torrent stream is chosen
       document.querySelectorAll("#srcbns .cbtn").forEach(x => x.classList.remove("on"));
-      if (s.infoHash) {
-        const hash = s.infoHash.toLowerCase();
-        const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
-        $("pph").classList.add("hidden");
-        $("pframe").src = "https://www.torrent.stream/embed?infohash=" + hash + "&fileIndex=" + fi;
-        // Show full filename in name bar
-        $("stream-name-text").textContent = fname;
-        $("stream-name-bar").classList.add("on");
-        toast("▶ " + ql + " — " + fname.slice(0, 35));
-      }
+
+      const hash = (s.infoHash || "").toLowerCase();
+      const fi   = s.fileIdx !== undefined ? s.fileIdx : 0;
+
+      // Use vidsrc.xyz torrent embed — most reliable cross-device player
+      const embedUrl = "https://vidsrc.xyz/embed/torrent?hash=" + hash + "&fileIndex=" + fi;
+
+      $("pph").classList.add("hidden");
+      $("pframe").src = "";
+      setTimeout(() => { $("pframe").src = embedUrl; }, 120);
+
+      // Show FULL filename in name bar (not truncated)
+      setNameBar(fname);
+
+      toast("▶ " + ql + " — " + fname.slice(0, 40));
     };
     wrap.appendChild(row);
   });
@@ -738,13 +749,19 @@ function buildSources() {
   });
 }
 
+function setNameBar(text) {
+  $("stream-name-text").textContent = text;
+  $("stream-name-bar").classList.add("on");
+}
+
 function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src) return;
 
-  // Highlight active source
+  // Highlight active source button, deselect torrent stream rows
   document.querySelectorAll("#srcbns .cbtn").forEach((b,j) => b.classList.toggle("on", j===i));
+  document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
 
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
@@ -753,14 +770,14 @@ function loadSource(i) {
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const title = cur.title || cur.name || "";
 
-  // Show player
+  // Show player, hide placeholder
   $("pph").classList.add("hidden");
   $("pframe").src = "";
-  setTimeout(() => { $("pframe").src = url; }, 100);
+  setTimeout(() => { $("pframe").src = url; }, 120);
 
-  // Show stream name bar below player
-  $("stream-name-text").textContent = title + (isMovie ? "" : ` · S${curS} E${curE}`) + "  [" + src.name + "]";
-  $("stream-name-bar").classList.add("on");
+  // Dynamically update name bar whenever source changes
+  const epLabel = isMovie ? "" : " · S" + curS + " E" + curE;
+  setNameBar(title + epLabel + "  [" + src.name + "]");
 
   toast("▶ " + src.name);
 }
