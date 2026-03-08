@@ -542,7 +542,7 @@ const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
-  { name:"2Embed",     useImdb:true,  movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name:"2Embed",     useImdb:false, movie:id=>`https://www.2embed.cc/embed/${id}`,                                 tv:(id,s,e)=>`https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
   { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,  tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name:"MultiEmbed", useImdb:false, movie:id=>`https://multiembed.mov/?video_id=${id}&tmdb=1`,                     tv:(id,s,e)=>`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
   { name:"VidSrc",     useImdb:true,  movie:id=>`https://vidsrc.to/embed/movie/${id}`,                               tv:(id,s,e)=>`https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
@@ -793,6 +793,11 @@ function loadSource(i) {
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   playUrl(url);
   toast("▶ " + src.name);
+
+  // Reload stream rows so they reflect current context
+  _cachedStreams = [];
+  _cacheKey = "";
+  loadDirectStreams();
 }
 
 // ── CARDS ───────────────────────────────────────────────────────
