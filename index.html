@@ -641,7 +641,7 @@ function buildStreamPicker(streams) {
   $("stream-picker").style.display = "block";
 
   const label = $("stream-label");
-  if (label) label.textContent = "📊 STREAMS — " + SOURCES[srcIdx].name.toUpperCase();
+  if (label) label.innerHTML = '📊 STREAMS &nbsp;<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;vertical-align:middle">' + SOURCES[srcIdx].name + '</span>';
 
   streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
@@ -751,9 +751,9 @@ function loadSource(i) {
   // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
 
-  // Update stream list label dynamically
+  // Update stream section header to show active source
   const lbl = $("stream-label");
-  if (lbl) lbl.textContent = "📊 STREAMS — " + src.name.toUpperCase();
+  if (lbl) lbl.innerHTML = '📊 STREAMS &nbsp;<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;vertical-align:middle">' + src.name + '</span>';
 
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
@@ -828,6 +828,7 @@ function openModal(item, type) {
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("stream-loading").textContent = "🔄 Loading streams…";
+  const lbl0 = $("stream-label"); if(lbl0) lbl0.textContent = "📊 STREAMS";
   $("streambns").innerHTML = "";
   $("tv-ctrl").style.display = isTv ? "block" : "none";
 
