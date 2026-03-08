@@ -938,36 +938,78 @@ async function loadSubs() {
   try {
     const imdb = cur?.imdb_id || "";
     if (!imdb) return;
-    const id = imdb.replace("tt","");
-    const r = await fetch(`https://rest.opensubtitles.org/search/imdbid-${id}/sublanguageid-all`, {
-      headers: { "X-User-Agent": "TemporaryUserAgent" }
-    });
+    const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
+
+    // Try subdl.com — free, no auth needed
+    let url = `https://subdl.com/api/v1/?api_key=&imdb_id=${imdb}&language=all&subs_per_page=20&type=${isTv?"tv":"movie"}`;
+    if (isTv) url += `&season_number=${curS}&episode_number=${curE}`;
+
+    const r = await fetch(url);
     const data = await r.json();
-    if (!Array.isArray(data)||!data.length) return;
-    const sel = $("subsel");
-    sel.innerHTML = `<option value="">🔤 No subtitle</option>`;
-    const langs = {};
-    data.forEach(s => {
-      if (!langs[s.LanguageName]) langs[s.LanguageName] = [];
-      langs[s.LanguageName].push(s);
-    });
-    Object.entries(langs).slice(0,12).forEach(([lang, subs]) => {
-      subs.slice(0,3).forEach(s => {
+    const subs = data.subtitles || [];
+
+    if (!subs.length) {
+      // Fallback: opensubtitles.com REST API (no auth for basic search)
+      const r2 = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdb.replace('tt','')}&${isTv?`season_number=${curS}&episode_number=${curE}&`:''}languages=en,hi,ar,fr,es&per_page=20`, {
+        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" }
+      });
+      const d2 = await r2.json();
+      const items = d2.data || [];
+      if (!items.length) return;
+
+      const sel = $("subsel");
+      sel.innerHTML = `<option value="">🔤 Select subtitle</option>`;
+      items.slice(0,20).forEach(it => {
+        const attr = it.attributes || {};
+        const lang = attr.language || "?";
+        const name = (attr.release || attr.files?.[0]?.file_name || "").slice(0,45);
+        const fileId = attr.files?.[0]?.file_id;
+        if (!fileId) return;
         const opt = document.createElement("option");
-        opt.value = s.SubDownloadLink||"";
-        opt.textContent = `${lang} — ${(s.MovieReleaseName||s.SubFileName||"").slice(0,40)}`;
+        opt.value = "oscom:" + fileId;
+        opt.textContent = `${lang.toUpperCase()} — ${name}`;
         sel.appendChild(opt);
       });
+      $("subbar").classList.add("on");
+      return;
+    }
+
+    const sel = $("subsel");
+    sel.innerHTML = `<option value="">🔤 Select subtitle</option>`;
+    subs.slice(0,20).forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = "subdl:" + (s.url || "");
+      opt.textContent = `${(s.language||"?").toUpperCase()} — ${(s.release_name||"").slice(0,45)}`;
+      sel.appendChild(opt);
     });
     $("subbar").classList.add("on");
-  } catch {}
+  } catch(e) { console.log("subs error", e); }
 }
 
-function applySub() {
-  const url = $("subsel").value;
-  if (!url) return toast("No subtitle selected");
-  window.open(url.replace(".gz",""), "_blank");
-  toast("Subtitle file opened — use with VLC");
+async function applySub() {
+  const val = $("subsel").value;
+  if (!val) return toast("No subtitle selected");
+
+  if (val.startsWith("subdl:")) {
+    const path = val.replace("subdl:", "");
+    // subdl provides zip download links — open directly
+    const dlUrl = path.startsWith("http") ? path : "https://subdl.com" + path;
+    window.open(dlUrl, "_blank");
+    toast("📥 Subtitle downloading…");
+
+  } else if (val.startsWith("oscom:")) {
+    const fileId = val.replace("oscom:", "");
+    try {
+      const r = await fetch("https://api.opensubtitles.com/api/v1/download", {
+        method: "POST",
+        headers: { "Api-Key": "uyBLgxMmRlhVRHMYBDOEAIr3JSKQqHVa", "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: parseInt(fileId) })
+      });
+      const d = await r.json();
+      if (d.link) { window.open(d.link, "_blank"); toast("📥 Subtitle downloading…"); }
+      else toast("❌ Download limit reached");
+    } catch { toast("❌ Subtitle fetch failed"); }
+  }
 }
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
