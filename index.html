@@ -15,35 +15,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- WebTorrent -->
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
-<!-- Plyr FOSS player -->
-<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
-<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+<!-- Video.js FOSS player (official WebTorrent-compatible player) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
-/* Plyr overrides — make it fill the pwrap and match CineVault theme */
-.pwrap .plyr {
+/* Video.js overrides — fill pwrap, CineVault accent colour */
+.pwrap .video-js {
   position:absolute;inset:0;width:100%!important;height:100%!important;
-  border-radius:0;
 }
-.pwrap .plyr video {
-  position:absolute;inset:0;width:100%!important;height:100%!important;object-fit:contain;
+.video-js .vjs-big-play-button {
+  background:rgba(232,23,58,0.85);border:2px solid #e8173a;
+  border-radius:50%;width:60px;height:60px;line-height:60px;
+  top:50%;left:50%;transform:translate(-50%,-50%);margin:0;
+  transition:transform .15s;
 }
-.plyr__control--overlaid {
-  background: rgba(232,23,58,0.9) !important;
+.video-js .vjs-big-play-button:hover { transform:translate(-50%,-50%) scale(1.1); }
+.video-js .vjs-control-bar {
+  background:linear-gradient(transparent,rgba(0,0,0,0.8));
+  height:42px;padding:0 6px;
 }
-.plyr--full-ui input[type=range] {
-  color: #e8173a !important;
-}
-.plyr__controls {
-  background: linear-gradient(transparent, rgba(0,0,0,0.75)) !important;
-}
-.plyr__control:hover, .plyr__control[aria-expanded=true] {
-  background: #e8173a !important;
-}
-/* Sub overlay must sit above Plyr controls (z-index 10 is Plyr controls) */
-#sub-overlay {
-  z-index: 30 !important;
-  bottom: 72px !important; /* above Plyr control bar */
-}
+.video-js .vjs-play-progress,
+.video-js .vjs-volume-level { background:#e8173a; }
+.video-js .vjs-slider { background:rgba(255,255,255,0.2); }
+.vjs-menu-button-popup .vjs-menu { bottom:2.5em; }
+/* Subtitles rendered by Video.js inside the player */
+.video-js .vjs-text-track-display { pointer-events:none; }
+.video-js .vjs-subtitles-button .vjs-icon-placeholder:before,
+.video-js .vjs-captions-button .vjs-icon-placeholder:before { font-size:1.6em; }
 </style>
 <style>
 /* (Keep all your existing CSS – it's unchanged) */
@@ -585,7 +583,7 @@ const SOURCES = [
 // ── STATE ────────────────────────────────────────────────────────
 let cur = null, curS = 1, curE = 1, srcIdx = 0;
 let searchTimer = null, _cachedStreams = [], _cacheKey = "";
-let webtorrentClient = null, currentVideo = null, plyrInstance = null;
+let webtorrentClient = null, currentVideo = null, vjsPlayer = null;
 
 // ── UTILS ────────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -648,9 +646,10 @@ function showIframe(url, nameLabel) {
 
 function stopVideo() {
   clearSubs();
-  if (plyrInstance) { try { plyrInstance.destroy(); } catch(e){} plyrInstance = null; }
+  if (vjsPlayer) { try { vjsPlayer.dispose(); } catch(e){} vjsPlayer = null; }
   if (currentVideo) { try { currentVideo.pause(); currentVideo.remove(); } catch(e){} currentVideo = null; }
-  document.querySelectorAll(".plyr").forEach(el => { try { el.remove(); } catch(e){} });
+  // Clean up any leftover vjs wrappers
+  document.querySelectorAll(".video-js").forEach(el => { try { el.remove(); } catch(e){} });
 }
 
 function setNameBar(label) {
@@ -708,20 +707,53 @@ async function playTorrent(infoHash, fileIdx, title) {
   clearPlayer();
   const pwrap = $("pwrap");
 
-  // ── Start subtitle fetch immediately — parallel to torrent connecting ──
+  // ── Start subtitle fetch immediately, parallel to torrent ──
   const subPromise = cur?.imdb_id
     ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(() => [])
     : Promise.resolve([]);
 
-  // ── Create video element ──
-  const video = document.createElement("video");
-  video.id = "torrent-video";
-  video.crossOrigin = "anonymous";
-  video.playsInline = true;
-  video.controls = true; // native controls until Plyr wraps it
-  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;display:block";
-  pwrap.appendChild(video);
-  currentVideo = video;
+  // ── Create Video.js player element ──
+  // Video.js needs a <video> with class="video-js" in the DOM before init
+  const vid = document.createElement("video");
+  vid.id = "vjs-torrent-" + Date.now(); // unique id each time
+  vid.className = "video-js vjs-default-skin";
+  vid.setAttribute("playsinline", "");
+  vid.setAttribute("crossorigin", "anonymous");
+  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+  pwrap.appendChild(vid);
+
+  // ── Init Video.js ──
+  vjsPlayer = videojs(vid.id, {
+    controls: true,
+    autoplay: true,
+    preload: "auto",
+    fluid: false,
+    responsive: false,
+    fill: true,
+    playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+    controlBar: {
+      children: [
+        "playToggle",
+        "skipBackward",
+        "skipForward",
+        "volumePanel",
+        "currentTimeDisplay",
+        "timeDivider",
+        "durationDisplay",
+        "progressControl",
+        "playbackRateMenuButton",
+        "subsCapsButton",
+        "fullscreenToggle",
+      ],
+      skipButtons: { backward: 10, forward: 10 },
+    },
+  });
+
+  // Video.js wraps the <video> — inner element is vid.id + "_html5_api"
+  // WebTorrent's renderTo needs the actual <video> element inside the vjs wrapper
+  const innerVideo = document.getElementById(vid.id + "_html5_api") || vid;
+  currentVideo = innerVideo;
+
   $("pph").classList.add("hidden");
   setNameBar(title + " — Torrent");
   toast("⏳ Connecting to peers…");
@@ -753,48 +785,28 @@ async function playTorrent(infoHash, fileIdx, title) {
       const file = vids[Math.min(fileIdx, vids.length - 1)];
       toast("🎬 " + file.name.slice(0, 40));
 
-      // ── Step 1: WebTorrent sets video.src to a streaming blob URL ──
-      file.renderTo(video, { autoplay: true }, async err => {
+      // WebTorrent renders into the inner <video> element (not the vjs wrapper div)
+      file.renderTo(innerVideo, { autoplay: true }, async err => {
         if (err) { toast("❌ Playback error"); return; }
 
-        // ── Step 2: Wait for subs (likely already done by now) ──
+        // Await subs — parallel fetch almost certainly done by now
         const cues = await subPromise;
-        const vttBlobUrl = cues.length ? buildVTTBlobUrl(cues) : null;
-
-        // ── Step 3: Inject <track> child into video BEFORE Plyr wraps it ──
-        // Plyr reads existing <track> elements during init and wires up its CC button
-        if (vttBlobUrl) {
-          const track = document.createElement("track");
-          track.kind    = "captions";
-          track.label   = "English";
-          track.srclang = "en";
-          track.src     = vttBlobUrl;
-          track.default = true;
-          video.appendChild(track);
+        if (cues.length) {
+          const vttUrl = buildVTTBlobUrl(cues);
+          // Add via Video.js API — appears in the CC/Subtitles menu button
+          vjsPlayer.addRemoteTextTrack({
+            kind: "subtitles",
+            label: "English",
+            srclang: "en",
+            src: vttUrl,
+            default: true,
+          }, false);
+          toast("▶ Playing · 🔤 EN subs active");
+        } else {
+          toast("▶ Playing · pick language below");
         }
 
-        // ── Step 4: Init Plyr — wraps the video, reads <track>, builds CC button ──
-        try {
-          plyrInstance = new Plyr(video, {
-            controls: ["play-large","play","rewind","fast-forward","progress",
-                       "current-time","duration","mute","volume",
-                       "captions","settings","pip","fullscreen"],
-            settings: ["captions","speed"],
-            speed:    { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-            captions: { active: !!vttBlobUrl, update: true },
-            tooltips: { controls: true, seek: true },
-            fullscreen:{ enabled: true, fallback: true, iosNative: true },
-          });
-          currentVideo = plyrInstance.media || video;
-        } catch(e) {
-          console.warn("Plyr init failed:", e);
-          currentVideo = video;
-        }
-
-        // ── Step 5: Show sub language switcher below player ──
         showSubLangBar("en", cues.length > 0);
-        if (cues.length) toast("▶ Playing · 🔤 EN subs active");
-        else             toast("▶ Playing · select language below for subs");
       });
     });
   } catch(err) {
@@ -1049,102 +1061,82 @@ function closeModal() {
 }
 
 // ── SUBTITLE SYSTEM ─────────────────────────────────────────────────
-// Plyr handles all sync natively via its <track> / TextTrack engine.
-// Offset buttons shift cue timestamps on the live TextTrack directly.
+// Video.js handles all sync natively via its TextTrack engine.
+// addRemoteTextTrack() adds tracks to the CC/Subtitles menu button.
 let _subOffset = 0;
 
-// Build a WebVTT blob URL from cue array — Plyr / browsers accept this as a <track src>
 function buildVTTBlobUrl(cues) {
-  const pad  = (n, w=2) => String(n).padStart(w, "0");
-  const hms  = s => `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad((s%60).toFixed(3),6)}`;
+  const pad = (n,w=2) => String(Math.floor(n)).padStart(w,"0");
+  const hms = s => `${pad(s/3600)}:${pad((s%3600)/60)}:${pad(s%60)}.${String(Math.round((s%1)*1000)).padStart(3,"0")}`;
   const body = cues.map((c,i) => `${i+1}\n${hms(c.start)} --> ${hms(c.end)}\n${c.text}`).join("\n\n");
-  return URL.createObjectURL(new Blob(["WEBVTT\n\n" + body], { type: "text/vtt" }));
+  return URL.createObjectURL(new Blob(["WEBVTT\n\n"+body], {type:"text/vtt"}));
 }
 
-// Hot-swap: load a new language and inject into the running Plyr player
 async function switchSubLang(lang) {
-  if (!cur?.imdb_id) { toast("No IMDb ID"); return; }
-  toast("🔤 Fetching " + lang.toUpperCase() + "…");
+  if (!cur?.imdb_id || !vjsPlayer) { toast("No player active"); return; }
+  const names = {en:"English",hi:"Hindi",ar:"Arabic",fr:"French",es:"Spanish",
+                 de:"German",pt:"Portuguese",it:"Italian",ja:"Japanese",ko:"Korean",zh:"Chinese"};
+  toast("🔤 Fetching " + (names[lang]||lang) + "…");
   try {
     const cues = await fetchSubCues(cur.imdb_id, curS, curE, lang);
-    if (!cues.length) { toast("⚠️ No subs for " + lang.toUpperCase()); return; }
-    const blobUrl = buildVTTBlobUrl(cues);
-    const vid = currentVideo;
-    if (!vid) return;
-
-    // Remove old tracks
-    Array.from(vid.querySelectorAll("track")).forEach(t => t.remove());
-
-    // Add new track
-    const track = document.createElement("track");
-    track.kind    = "captions";
-    track.label   = lang.toUpperCase();
-    track.srclang = lang;
-    track.src     = blobUrl;
-    track.default = true;
-    vid.appendChild(track);
-
-    // Force Plyr to rescan tracks and activate captions
-    if (plyrInstance) {
-      try {
-        plyrInstance.captions.active = false;
-        setTimeout(() => { if (plyrInstance) { plyrInstance.captions.active = true; } }, 80);
-      } catch(e) {}
-    } else {
-      if (vid.textTracks[0]) vid.textTracks[0].mode = "showing";
+    if (!cues.length) { toast("⚠️ No subs found"); return; }
+    const vttUrl = buildVTTBlobUrl(cues);
+    // Remove existing remote tracks for this lang
+    const existing = vjsPlayer.remoteTextTracks();
+    for (let i = existing.length - 1; i >= 0; i--) {
+      if (existing[i].language === lang) vjsPlayer.removeRemoteTextTrack(existing[i]);
     }
+    vjsPlayer.addRemoteTextTrack({
+      kind: "subtitles", label: names[lang]||lang.toUpperCase(),
+      srclang: lang, src: vttUrl, default: true,
+    }, false);
     _subOffset = 0;
-    toast("🔤 " + lang.toUpperCase() + " subs loaded");
+    toast("🔤 " + (names[lang]||lang) + " subtitles active");
   } catch(e) { toast("⚠️ Subtitle error"); console.error(e); }
 }
 
-// Offset: shift live TextTrack cue timestamps — Plyr re-renders at new times
 function offsetSubtitles(seconds) {
-  const vid = currentVideo;
-  if (!vid) return;
+  // Shift cues on all active TextTracks
+  if (!currentVideo) return;
   _subOffset += seconds;
-  for (let ti = 0; ti < vid.textTracks.length; ti++) {
-    const tt = vid.textTracks[ti];
+  for (let i = 0; i < currentVideo.textTracks.length; i++) {
+    const tt = currentVideo.textTracks[i];
     if (!tt.cues) continue;
-    for (let ci = 0; ci < tt.cues.length; ci++) {
-      tt.cues[ci].startTime += seconds;
-      tt.cues[ci].endTime   += seconds;
+    for (let j = 0; j < tt.cues.length; j++) {
+      tt.cues[j].startTime += seconds;
+      tt.cues[j].endTime   += seconds;
     }
   }
-  toast(`Sub ${_subOffset >= 0 ? "+" : ""}${_subOffset.toFixed(1)}s`);
+  toast(`Sub ${_subOffset>=0?"+":""}${_subOffset.toFixed(1)}s`);
 }
 
-// Pure data fetch — returns Promise<cue[]>
 async function fetchSubCues(imdbId, season, episode, lang) {
   const langMap = {en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",
                    pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
-  const imdbNum = imdbId.replace("tt","");
-  let url = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${langMap[lang]||"eng"}`;
+  const num = imdbId.replace("tt","");
+  let url = `https://rest.opensubtitles.org/search/imdbid-${num}/sublanguageid-${langMap[lang]||"eng"}`;
   if (season)  url += `/season-${season}`;
   if (episode) url += `/episode-${episode}`;
-  const r = await fetch(url, { headers:{ "X-User-Agent":"TemporaryUserAgent" } });
+  const r = await fetch(url, {headers:{"X-User-Agent":"TemporaryUserAgent"}});
   if (!r.ok) return [];
   const subs = await r.json();
-  if (!Array.isArray(subs) || !subs.length) return [];
-  const epStr = season ? "S"+String(season).padStart(2,"0")+"E"+String(episode).padStart(2,"0") : "";
-  const sub = epStr
-    ? (subs.find(s=>s.SubFormat==="srt"&&(s.SubFileName||"").toUpperCase().includes(epStr))
-       ||subs.find(s=>s.SubFormat==="srt")||subs[0])
-    : (subs.find(s=>s.SubFormat==="srt")||subs[0]);
+  if (!Array.isArray(subs)||!subs.length) return [];
+  const ep = season?"S"+String(season).padStart(2,"0")+"E"+String(episode).padStart(2,"0"):"";
+  const sub = ep
+    ?(subs.find(s=>s.SubFormat==="srt"&&(s.SubFileName||"").toUpperCase().includes(ep))
+      ||subs.find(s=>s.SubFormat==="srt")||subs[0])
+    :(subs.find(s=>s.SubFormat==="srt")||subs[0]);
   if (!sub?.SubDownloadLink) return [];
-  const txt = await downloadAndDecompress(sub.SubDownloadLink);
-  return parseSRT(txt||"");
+  return parseSRT(await downloadAndDecompress(sub.SubDownloadLink)||"");
 }
 
 async function downloadAndDecompress(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("failed");
+  const r = await fetch(url); if (!r.ok) throw new Error("failed");
   const buf = await r.arrayBuffer();
   try {
-    const ds = new DecompressionStream("gzip");
-    const w  = ds.writable.getWriter();
-    w.write(new Uint8Array(buf)); w.close();
-    const chunks=[]; const rd=ds.readable.getReader();
+    const ds=new DecompressionStream("gzip"),w=ds.writable.getWriter();
+    w.write(new Uint8Array(buf));w.close();
+    const chunks=[],rd=ds.readable.getReader();
     for(;;){const{done,value}=await rd.read();if(done)break;chunks.push(value);}
     const out=new Uint8Array(chunks.reduce((n,c)=>n+c.length,0));
     let p=0;chunks.forEach(ch=>{out.set(ch,p);p+=ch.length;});
@@ -1156,69 +1148,50 @@ function parseSRT(text) {
   const cues=[];
   for (const block of text.replace(/\r/g,"").trim().split(/\n\s*\n/)) {
     const lines=block.trim().split("\n");
-    const tl=lines.find(l=>l.includes("-->"));
-    if (!tl) continue;
-    const [s1,s2]=tl.split("-->").map(s=>s.trim());
+    const tl=lines.find(l=>l.includes("-->"));if(!tl)continue;
+    const[s1,s2]=tl.split("-->").map(s=>s.trim());
     const toSec=t=>{const m=t.match(/(\d+):(\d+):(\d+)[,.](\d+)/);return m?+m[1]*3600+ +m[2]*60+ +m[3]+ +m[4]/1000:0;};
     const txt=lines.slice(lines.indexOf(tl)+1).join("\n").replace(/<[^>]+>/g,"").replace(/\{[^}]+\}/g,"").trim();
-    if (txt) cues.push({start:toSec(s1),end:toSec(s2),text:txt});
+    if(txt)cues.push({start:toSec(s1),end:toSec(s2),text:txt});
   }
   return cues.sort((a,b)=>a.start-b.start);
 }
 
-// Language bar rendered below the player during torrent playback
-function showSubLangBar(activeLang, subsLoaded) {
-  let bar = $("sub-lang-bar");
-  if (bar) bar.remove();
-  bar = document.createElement("div");
-  bar.id = "sub-lang-bar";
-  bar.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;padding:8px 12px;background:var(--s2);border-radius:10px;border:1px solid var(--border)";
-
-  const lbl = document.createElement("span");
-  lbl.style.cssText = "font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;flex-shrink:0";
-  lbl.textContent = "🔤 Subs";
-  bar.appendChild(lbl);
-
-  const LANGS = [{c:"en",n:"EN"},{c:"hi",n:"HI"},{c:"ar",n:"AR"},{c:"fr",n:"FR"},
-                 {c:"es",n:"ES"},{c:"de",n:"DE"},{c:"pt",n:"PT"},{c:"ja",n:"JA"},{c:"ko",n:"KO"},{c:"zh",n:"ZH"}];
-  LANGS.forEach(({c,n}) => {
-    const btn = document.createElement("button");
-    btn.className = "cbtn" + (c === activeLang && subsLoaded ? " on" : "");
-    btn.textContent = n;
-    btn.style.cssText = "padding:3px 8px;font-size:10px";
-    btn.onclick = () => {
-      bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));
-      btn.classList.add("on");
-      switchSubLang(c);
-    };
+// Language bar shown below player during torrent playback
+function showSubLangBar(activeLang, loaded) {
+  let bar = $("sub-lang-bar"); if(bar) bar.remove();
+  bar = document.createElement("div"); bar.id="sub-lang-bar";
+  bar.style.cssText="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;padding:8px 12px;background:var(--s2);border-radius:10px;border:1px solid var(--border)";
+  const lbl=document.createElement("span");
+  lbl.style.cssText="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;flex-shrink:0";
+  lbl.textContent="🔤 Subs"; bar.appendChild(lbl);
+  [{c:"en",n:"EN"},{c:"hi",n:"HI"},{c:"ar",n:"AR"},{c:"fr",n:"FR"},{c:"es",n:"ES"},
+   {c:"de",n:"DE"},{c:"pt",n:"PT"},{c:"ja",n:"JA"},{c:"ko",n:"KO"},{c:"zh",n:"ZH"}
+  ].forEach(({c,n})=>{
+    const btn=document.createElement("button");
+    btn.className="cbtn"+(c===activeLang&&loaded?" on":"");
+    btn.textContent=n; btn.style.cssText="padding:3px 8px;font-size:10px";
+    btn.onclick=()=>{bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));btn.classList.add("on");switchSubLang(c);};
     bar.appendChild(btn);
   });
-
-  const spacer = document.createElement("span"); spacer.style.flex="1"; bar.appendChild(spacer);
-
-  // Offset & off buttons
+  const sp=document.createElement("span");sp.style.flex="1";bar.appendChild(sp);
   [{t:"−0.5s",v:-0.5},{t:"+0.5s",v:0.5},{t:"✕ Off",v:null}].forEach(({t,v})=>{
-    const btn=document.createElement("button");
-    btn.className="cbtn"; btn.textContent=t;
+    const btn=document.createElement("button");btn.className="cbtn";btn.textContent=t;
     btn.style.cssText="padding:3px 8px;font-size:10px";
     btn.onclick=()=>{
-      if (v===null) {
-        if(plyrInstance){try{plyrInstance.captions.active=false;}catch(e){}}
-        if(currentVideo){for(let i=0;i<currentVideo.textTracks.length;i++)currentVideo.textTracks[i].mode="disabled";}
-        bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));
-        toast("🔤 Subs off");
-      } else { offsetSubtitles(v); }
+      if(v===null){
+        if(vjsPlayer){const tts=vjsPlayer.textTracks();for(let i=0;i<tts.length;i++)tts[i].mode="disabled";}
+        bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));toast("🔤 Subs off");
+      } else offsetSubtitles(v);
     };
     bar.appendChild(btn);
   });
-
-  $("player-outer").insertAdjacentElement("afterend", bar);
+  $("player-outer").insertAdjacentElement("afterend",bar);
 }
 
 function clearSubs() {
-  _subOffset = 0;
-  const bar = $("sub-lang-bar");
-  if (bar) bar.remove();
+  _subOffset=0;
+  const bar=$("sub-lang-bar");if(bar)bar.remove();
 }
 
 
