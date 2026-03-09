@@ -355,18 +355,44 @@ function playWebtor(infoHash, fileIdx, title) {
   clearPlayer();
   $("pph").classList.add("hidden");
   setNameBar(title + " — Webtor");
+  toast("🌀 Webtor loading…");
 
   const pwrap = $("pwrap");
-  const magnet = encodeURIComponent(`magnet:?xt=urn:btih:${infoHash}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce`);
-  const iframe = document.createElement("iframe");
-  iframe.id = "pframe";
-  iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; encrypted-media";
-  iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none;";
-  iframe.src = `https://webtor.io/embed?magnet=${magnet}&file-index=${fileIdx || 0}&lang=en`;
-  iframe.onerror = () => toast("⚠️ Webtor iframe failed – try another source");
-  pwrap.appendChild(iframe);
-  toast("🌀 Webtor starting…");
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=wss://tracker.btorrent.xyz&tr=wss://tracker.openwebtorrent.com`;
+
+  // Webtor embed-sdk-js: place a <video> tag with magnet as src,
+  // SDK replaces it with their full cloud-powered player
+  const video = document.createElement("video");
+  video.id = "webtor-video";
+  video.controls = true;
+  video.setAttribute("src", magnet);
+  video.setAttribute("data-file-index", String(fileIdx || 0));
+  video.setAttribute("data-title", title);
+  video.setAttribute("width", "100%");
+  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+  pwrap.appendChild(video);
+
+  // Load Webtor embed SDK — it auto-detects the video tag and replaces it
+  if(!window.__webtorSdkLoaded){
+    window.__webtorSdkLoaded = true;
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js";
+    s.charset = "utf-8";
+    s.async = true;
+    s.onerror = () => {
+      toast("⚠️ Webtor SDK failed — trying embed source…");
+      loadSource(0);
+    };
+    document.head.appendChild(s);
+  } else {
+    // SDK already loaded — manually trigger it for new video element
+    // Re-inject script to re-scan DOM
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js";
+    s.charset = "utf-8";
+    s.async = true;
+    document.head.appendChild(s);
+  }
 }
 
 // ── VIDEO.JS FOR DIRECT STREAMS (MP4/HLS) ──────────────────────
