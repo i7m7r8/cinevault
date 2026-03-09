@@ -835,53 +835,17 @@ function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   (async () => {
-    // TPB torrent card — search Eporner by title for a real playable embed
-    if (item._isTpb) {
+    // Eporner card — play embed directly
+    if (item._isEporner) {
       $("stream-picker").style.display = "none";
       $("srcbns").innerHTML = "";
-      $("pph").classList.remove("hidden");
-      $("pph").innerHTML = '<div class="pph-icon">🔍</div><div>Searching Eporner…</div>';
-      try {
-        const eProxy = `${API}/proxy?url=${encodeURIComponent("https://www.eporner.com/api/v2/video/search/?query=" + encodeURIComponent(item.title) + "&per_page=5&thumbsize=medium&format=json")}`;
-        const er = await fetch(eProxy, { signal: AbortSignal.timeout(10000) });
-        const ed = await er.json();
-        const videos = ed?.videos || [];
-        if (videos.length) {
-          // Show top results as selectable rows
-          $("pph").classList.add("hidden");
-          $("stream-picker").style.display = "block";
-          $("stream-loading").style.display = "none";
-          $("streambns").innerHTML = "";
-          const lbl = $("stream-label");
-          if (lbl) lbl.textContent = "🎬 EPORNER RESULTS — tap to play";
-          videos.forEach((v, i) => {
-            const row = document.createElement("div");
-            row.className = "stream-row" + (i === 0 ? " active" : "");
-            row.innerHTML =
-              `<div class="stream-row-left">` +
-              `<span class="qlabel" style="background:#e11d48;color:#fff">EP</span>` +
-              `<span class="stream-name">${v.title || v.id}</span></div>` +
-              `<div class="stream-row-right"><span class="stream-play-btn">▶</span></div>`;
-            row.onclick = () => {
-              document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-              row.classList.add("active");
-              playEpornerEmbed(v.embed, v.title || item.title);
-            };
-            $("streambns").appendChild(row);
-            if (i === 0) playEpornerEmbed(v.embed, v.title || item.title);
-          });
-        } else {
-          $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No Eporner match found.<br><small>Try searching on Eporner directly.</small></div>';
-        }
-      } catch (e) {
-        $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>Eporner search failed.</div>';
-      }
+      playAdultEmbed(item._embedUrl, item.title);
       return;
     }
     // MAL/Jikan anime card
     if (item._isAnime) {
       if (item._tmdbId) { cur.id = item._tmdbId; cur.imdb_id = null; buildSources(); loadSource(0); }
-      else { $("stream-loading").textContent = "⚠️ No embed source found"; }
+      else { $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No embed source found</div>'; }
       return;
     }
     // Normal TMDB card
@@ -962,69 +926,54 @@ searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) show
 
 function clearSearch() { searchInput.value = ""; $("search-clear").style.display = "none"; hideSearch(); }
 
-// ── EPORNER EMBED PLAYER ───────────────────────────────────────
-function playEpornerEmbed(embedUrl, title) {
+// ══════════════════════════════════════════════════════════════
+// ADULT EMBED PLAYER
+// Plays any iframe embed (Eporner, xVideos, xHamster, RedTube…)
+// ══════════════════════════════════════════════════════════════
+function playAdultEmbed(embedUrl, title) {
   clearPlayer();
   $("pph").classList.add("hidden");
-  setNameBar(title + " — Eporner");
+  setNameBar((title || "Adult Video") + " — Adult Player");
   const pwrap = $("pwrap");
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.src = embedUrl;
   iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; encrypted-media";
+  iframe.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture";
   iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
   pwrap.appendChild(iframe);
-  toast("▶ Eporner");
+  toast("▶ Playing…");
 }
 
-// ── MULTI-SOURCE ADULT SEARCH ──────────────────────────────────
-async function _searchTmdbAdult(q) {
-  const [multi, movies] = await Promise.allSettled([
-    tmdb("/search/multi",  { query: q, include_adult: "true" }),
-    tmdb("/search/movie",  { query: q, include_adult: "true" }),
-  ]);
-  const seen = new Set(), items = [];
-  const add = (list, fb) => { for (const it of list) { if (it.media_type === "person" || seen.has(it.id)) continue; seen.add(it.id); it._sourceType = it.media_type || fb; items.push(it); } };
-  if (multi.status  === "fulfilled") add(multi.value.results  || [], "movie");
-  if (movies.status === "fulfilled") add(movies.value.results || [], "movie");
-  return items;
-}
-
-async function _searchJikanHentai(q) {
-  try {
-    const r = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&genres=12&sfw=false&limit=10`);
-    if (!r.ok) return [];
-    const d = await r.json();
-    return (d.data || []).map(a => ({
-      id: "mal_" + a.mal_id, _isAnime: true, _sourceType: "anime",
-      title: a.title_english || a.title, name: a.title_english || a.title,
-      media_type: "tv", poster_path: null,
-      _posterUrl: a.images?.jpg?.large_image_url || null,
-      overview: a.synopsis || "", vote_average: a.score || 0,
-      first_air_date: a.aired?.from || "", adult: true,
-    }));
-  } catch { return []; }
-}
+// ══════════════════════════════════════════════════════════════
+// MULTI-SOURCE ADULT SEARCH
+// Source 1: Eporner official free API  — embed URL per video ✅
+// Source 2: TMDB include_adult=true    — mainstream + adult films
+// Source 3: Jikan (MAL) hentai genre   — anime genre 12
+// ══════════════════════════════════════════════════════════════
 
 async function _searchEporner(q) {
-  // Eporner official free API — returns embed URL per video, no key needed
+  // Official Eporner API — free, no key, returns embed URL directly
+  // Docs: https://github.com/eporner/API
   try {
-    const proxy = `${API}/proxy?url=${encodeURIComponent("https://www.eporner.com/api/v2/video/search/?query=" + encodeURIComponent(q) + "&per_page=12&thumbsize=big&format=json")}`;
-    const r = await fetch(proxy, { signal: AbortSignal.timeout(10000) });
+    const url = "https://www.eporner.com/api/v2/video/search/" +
+      "?query=" + encodeURIComponent(q) +
+      "&per_page=20&thumbsize=big&format=json&lp=en";
+    const proxy = `${API}/proxy?url=${encodeURIComponent(url)}`;
+    const r = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
     if (!r.ok) return [];
     const d = await r.json();
     return (d.videos || []).map(v => ({
       id: "ep_" + v.id,
       _isEporner: true,
       _sourceType: "movie",
-      _embedUrl: v.embed,
+      _embedUrl: v.embed,           // e.g. https://www.eporner.com/embed/XXXX/
       title: v.title || v.id,
       name:  v.title || v.id,
       media_type: "movie",
       poster_path: null,
-      _posterUrl: v.thumbs?.[0]?.src || v.default_thumb?.src || null,
-      overview: `⏱ ${v.length_min || "?"}min · 👁 ${v.views || 0} views`,
+      _posterUrl: v.thumbs?.[2]?.src || v.thumbs?.[0]?.src || v.default_thumb?.src || null,
+      overview: `⏱ ${v.length_min || "?"}min · 👁 ${Number(v.views||0).toLocaleString()} views · ⭐ ${v.rate || "?"}`,
       vote_average: parseFloat(v.rate) || 0,
       release_date: v.added || "",
       adult: true,
@@ -1032,63 +981,93 @@ async function _searchEporner(q) {
   } catch { return []; }
 }
 
-async function _searchApibayAdult(q) {
-  const proxy = u => `${API}/proxy?url=${encodeURIComponent(u)}`;
-  const [r500, r506] = await Promise.all(
-    ["500","506"].map(cat =>
-      fetch(proxy(`https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=${cat}`), { signal: AbortSignal.timeout(10000) })
-        .then(r => r.ok ? r.json() : []).catch(() => [])
-    )
-  );
+async function _searchTmdbAdult(q) {
+  const [multi, movies] = await Promise.allSettled([
+    tmdb("/search/multi",  { query: q, include_adult: "true" }),
+    tmdb("/search/movie",  { query: q, include_adult: "true" }),
+  ]);
   const seen = new Set(), items = [];
-  for (const t of [...(Array.isArray(r500)?r500:[]), ...(Array.isArray(r506)?r506:[])]) {
-    if (!t.info_hash || t.info_hash === "0000000000000000000000000000000000000000" || seen.has(t.info_hash)) continue;
-    seen.add(t.info_hash);
-    const sizeMB = t.size ? Math.round(t.size/1024/1024) : 0;
-    const sizeStr = sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB";
-    items.push({
-      id: "tpb_"+t.id, _isTpb: true, _sourceType: "movie",
-      _infoHash: t.info_hash, _seeders: +t.seeders||0, _sizeStr: sizeStr,
-      title: t.name, name: t.name, media_type: "movie",
-      poster_path: null, _posterUrl: null,
-      overview: `👤 ${t.seeders||0} seeders · 💾 ${sizeStr}`,
-      vote_average: 0, release_date: "", adult: true,
-    });
-  }
-  items.sort((a,b) => b._seeders - a._seeders);
-  return items.slice(0, 15);
+  const add = (list, fb) => {
+    for (const it of list) {
+      if (it.media_type === "person" || seen.has(it.id)) continue;
+      seen.add(it.id); it._sourceType = it.media_type || fb; items.push(it);
+    }
+  };
+  if (multi.status  === "fulfilled") add(multi.value.results  || [], "movie");
+  if (movies.status === "fulfilled") add(movies.value.results || [], "movie");
+  return items;
+}
+
+async function _searchJikanHentai(q) {
+  try {
+    const r = await fetch(
+      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&genres=12&sfw=false&limit=10`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.data || []).map(a => ({
+      id: "mal_" + a.mal_id,
+      _isAnime: true,
+      _sourceType: "anime",
+      title: a.title_english || a.title,
+      name:  a.title_english || a.title,
+      media_type: "tv",
+      poster_path: null,
+      _posterUrl: a.images?.jpg?.large_image_url || null,
+      overview: a.synopsis || "",
+      vote_average: a.score || 0,
+      first_air_date: a.aired?.from || "",
+      adult: true,
+    }));
+  } catch { return []; }
+}
+
+function _addBadge(card, text, color) {
+  card.style.position = "relative";
+  const b = document.createElement("div");
+  b.style.cssText = `position:absolute;top:6px;left:6px;background:${color};color:#fff;` +
+    `font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;z-index:2;letter-spacing:.5px`;
+  b.textContent = text;
+  card.appendChild(b);
 }
 
 function showSearch(q) {
-  $("main").style.display = "none"; $("hero").style.display = "none"; $("spage").classList.add("on");
+  $("main").style.display = "none";
+  $("hero").style.display = "none";
+  $("spage").classList.add("on");
   $("stitle").textContent = `"${q}"`;
-  const g = $("sgrid"); skels(g, 12);
-  Promise.allSettled([_searchTmdbAdult(q), _searchJikanHentai(q), _searchEporner(q), _searchApibayAdult(q)])
-    .then(([tRes, jRes, eRes, aRes]) => {
-      const all = [
-        ...(tRes.status==="fulfilled" ? tRes.value : []),
-        ...(jRes.status==="fulfilled" ? jRes.value : []),
-        ...(eRes.status==="fulfilled" ? eRes.value : []),
-        ...(aRes.status==="fulfilled" ? aRes.value : []),
-      ];
-      g.innerHTML = "";
-      if (!all.length) { g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
-      all.slice(0, 50).forEach(it => {
-        const card = makeCard(it, it._sourceType || it.media_type || "movie");
-        if (it._posterUrl && !it.poster_path) { const img = card.querySelector(".cposter"); if (img) img.src = it._posterUrl; }
-        let badge = null, badgeColor = null;
-        if (it._isTpb)     { badge = "TPB";    badgeColor = "#7c3aed"; }
-        if (it._isAnime)   { badge = "HENTAI"; badgeColor = "#ec4899"; }
-        if (it._isEporner) { badge = "EP";     badgeColor = "#e11d48"; }
-        if (badge) {
-          card.style.position = "relative";
-          const b = document.createElement("div");
-          b.style.cssText = `position:absolute;top:6px;left:6px;background:${badgeColor};color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;z-index:2`;
-          b.textContent = badge; card.appendChild(b);
-        }
-        g.appendChild(card);
-      });
+  const g = $("sgrid");
+  skels(g, 12);
+
+  Promise.allSettled([
+    _searchEporner(q),
+    _searchTmdbAdult(q),
+    _searchJikanHentai(q),
+  ]).then(([epRes, tmdbRes, malRes]) => {
+    const epItems   = epRes.status   === "fulfilled" ? epRes.value   : [];
+    const tmdbItems = tmdbRes.status === "fulfilled" ? tmdbRes.value : [];
+    const malItems  = malRes.status  === "fulfilled" ? malRes.value  : [];
+
+    // Order: Eporner first (actually plays), then TMDB, then hentai anime
+    const all = [...epItems, ...tmdbItems, ...malItems];
+    g.innerHTML = "";
+    if (!all.length) {
+      g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`;
+      return;
+    }
+    all.slice(0, 60).forEach(it => {
+      const card = makeCard(it, it._sourceType || it.media_type || "movie");
+      // Override poster for non-TMDB items
+      if (it._posterUrl && !it.poster_path) {
+        const img = card.querySelector(".cposter");
+        if (img) img.src = it._posterUrl;
+      }
+      if (it._isEporner) _addBadge(card, "EP",     "#e11d48");
+      if (it._isAnime)   _addBadge(card, "HENTAI", "#ec4899");
+      g.appendChild(card);
     });
+  });
 }
 
 function hideSearch() { $("main").style.display = "block"; $("hero").style.display = "flex"; $("spage").classList.remove("on"); }
