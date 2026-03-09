@@ -15,6 +15,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- WebTorrent -->
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+<!-- Plyr FOSS player -->
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
 <style>
 /* (Keep all your existing CSS – it's unchanged) */
 :root {
@@ -592,6 +595,7 @@ const SOURCES = [
 let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null, _cachedStreams = [], _cacheKey = "";
 let webtorrentClient = null;
 let currentVideo = null;
+let plyrInstance = null;
 
 // ── UTILS ───────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -660,12 +664,15 @@ function playUrl(url) {
   iframe.src = url;
 }
 
-// ── TORRENT PLAYER ──────────────────────────────────────────────
+// ── TORRENT PLAYER (Plyr) ────────────────────────────────────────
+
 async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, sourceName) {
   if (!webtorrentClient) webtorrentClient = new WebTorrent();
   const magnet = buildMagnetLink(infoHash);
   $("pph").classList.add("hidden");
   const pwrap = $("pwrap");
+  // Destroy previous Plyr instance
+  if (plyrInstance) { try { plyrInstance.destroy(); } catch(e){} plyrInstance = null; }
   pwrap.innerHTML = '';
   const video = document.createElement('video');
   video.controls = true;
@@ -673,19 +680,24 @@ async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, so
   video.style.width = '100%';
   video.style.height = '100%';
   video.playsInline = true;
+  video.id = 'plyr-video';
   pwrap.appendChild(video);
   currentVideo = video;
+  // Init Plyr
+  plyrInstance = new Plyr(video, {
+    captions: { active: true, update: true, language: 'auto' },
+    controls: ['play-large','play','rewind','fast-forward','progress','current-time','mute','volume','captions','settings','fullscreen'],
+    settings: ['captions','speed','quality'],
+    tooltips: { controls: true, seek: true },
+  });
   updateSubtitleBarVisibility();
   setNameBar(title, "▶ " + sourceName);
   toast("⏳ Starting torrent...");
   webtorrentClient.add(magnet, (torrent) => {
     const file = torrent.files[fileIdx] || torrent.files[0];
     file.renderTo(video, { autoplay: true }, (err) => {
-      if (err) {
-        toast("❌ Playback error");
-        return;
-      }
-      toast("▶ Playing torrent");
+      if (err) { toast("❌ Playback error"); return; }
+      toast("▶ Playing — " + file.name);
       if (imdbId) fetchAndAttachSubs(imdbId, season, episode, 'en', video);
     });
   });
@@ -713,7 +725,8 @@ async function fetchAndAttachSubs(imdbId, season, episode, lang, video) {
     if (!srtText) return;
     const cues = parseSRT(srtText);
     if (!cues.length) return;
-    while (video.textTracks.length) video.removeChild(video.textTracks[0]);
+    // Disable existing tracks (can't remove from read-only textTracks)
+    for (let i = 0; i < video.textTracks.length; i++) video.textTracks[i].mode = 'disabled';
     const track = video.addTextTrack('subtitles', lang.toUpperCase(), lang);
     track.mode = 'showing';
     cues.forEach(c => track.addCue(new VTTCue(c.start, c.end, c.text)));
@@ -805,14 +818,6 @@ async function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   let id;
   if (src.useImdb) {
-    if (!cur.imdb_id) {
-      toast("⏳ Fetching IMDb ID...");
-      let waited = 0;
-      while (!cur.imdb_id && waited < 5000) {
-        await new Promise(r => setTimeout(r, 200));
-        waited += 200;
-      }
-    }
     id = cur.imdb_id || cur.id;
   } else {
     id = cur.id;
@@ -919,15 +924,6 @@ async function loadDirectStreams() {
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
-  if (!cur.imdb_id) {
-    let waited = 0;
-    await new Promise(resolve => {
-      const check = setInterval(() => {
-        waited += 200;
-        if (cur.imdb_id || waited >= 5000) { clearInterval(check); resolve(); }
-      }, 200);
-    });
-  }
   if (!cur.imdb_id) {
     $("stream-loading").textContent = "⚠️ No IMDB ID — streams unavailable";
     return;
@@ -1038,16 +1034,19 @@ function openModal(item, type) {
   $("pph").classList.remove("hidden");
   $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading...</div>`;
   srcIdx = 0;
-  loadSource(0);
   (async () => {
+    // 1. Fetch IMDb ID first (needed by some sources & streams)
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
-        if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
       } catch (e) { console.error("Failed to fetch IMDb ID", e); }
     }
+    // 2. Load seasons/episodes for TV (populates UI before source loads)
     if (isTv) await loadSeasons(item.id);
+    // 3. Now load source (IMDb ID is ready if it exists)
+    loadSource(0);
+    // 4. Load torrent streams (IMDb ID guaranteed resolved)
     loadDirectStreams();
   })();
 }
@@ -1104,11 +1103,12 @@ $("mclose").onclick = closeModal;
 $("modal").onclick = e => { if (e.target===$("modal")) closeModal(); };
 function closeModal() {
   $("modal").classList.remove("on");
-  $("pframe").src = "";
+  const pf = $("pframe"); if (pf) pf.src = "";
   if (currentVideo) {
     currentVideo.pause();
     currentVideo.remove();
     currentVideo = null;
+    if (plyrInstance) { try { plyrInstance.destroy(); } catch(e){} plyrInstance = null; }
     updateSubtitleBarVisibility();
   }
   $("pph").classList.remove("hidden");
