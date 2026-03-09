@@ -350,47 +350,54 @@ function clearPlayer() {
   $("stream-name-bar").classList.remove("on");
 }
 
-// ── WEBTOR IFRAME PLAYER (simplified, no SDK) ──────────────────
+// ── WEBTOR PLAYER (official window.webtor.push API) ────────────
 function playWebtor(infoHash, fileIdx, title) {
   clearPlayer();
   $("pph").classList.add("hidden");
   setNameBar(title + " — Webtor");
-  toast("🌀 Webtor loading…");
 
   const pwrap = $("pwrap");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=wss://tracker.btorrent.xyz&tr=wss://tracker.openwebtorrent.com`;
+  const containerId = "webtor-wrap-" + Date.now();
 
-  // Webtor embed-sdk-js: place a <video> tag with magnet as src,
-  // SDK replaces it with their full cloud-powered player
-  const video = document.createElement("video");
-  video.id = "webtor-video";
-  video.controls = true;
-  video.setAttribute("src", magnet);
-  video.setAttribute("data-file-index", String(fileIdx || 0));
-  video.setAttribute("data-title", title);
-  video.setAttribute("width", "100%");
-  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
-  pwrap.appendChild(video);
+  // Webtor needs a div with a unique id to mount into
+  const wrap = document.createElement("div");
+  wrap.id = containerId;
+  wrap.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+  pwrap.appendChild(wrap);
 
-  // Load Webtor embed SDK — it auto-detects the video tag and replaces it
-  if(!window.__webtorSdkLoaded){
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}`
+    + `&tr=udp://tracker.opentrackr.org:1337/announce`
+    + `&tr=udp://open.stealth.si:80/announce`
+    + `&tr=wss://tracker.btorrent.xyz`
+    + `&tr=wss://tracker.openwebtorrent.com`;
+
+  function launchWebtor() {
+    window.webtor = window.webtor || [];
+    window.webtor.push({
+      id: containerId,
+      magnet: magnet,
+      fileIndex: fileIdx || 0,
+      lang: "en",
+      width: "100%",
+      height: "100%",
+    });
+    toast("🌀 Webtor starting…");
+  }
+
+  // Load SDK once, then push config
+  if (window.__webtorSdkLoaded) {
+    launchWebtor();
+  } else {
     window.__webtorSdkLoaded = true;
     const s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js";
     s.charset = "utf-8";
     s.async = true;
+    s.onload = launchWebtor;
     s.onerror = () => {
-      toast("⚠️ Webtor SDK failed — trying embed source…");
+      toast("⚠️ Webtor SDK failed — switching to embed source…");
       loadSource(0);
     };
-    document.head.appendChild(s);
-  } else {
-    // SDK already loaded — manually trigger it for new video element
-    // Re-inject script to re-scan DOM
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js";
-    s.charset = "utf-8";
-    s.async = true;
     document.head.appendChild(s);
   }
 }
