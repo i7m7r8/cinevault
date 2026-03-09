@@ -838,6 +838,54 @@ function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   (async () => {
+    // ── TPB item: no TMDB id, no embed sources — show magnet info panel
+    if (item._isTpb) {
+      $("stream-loading").style.display = "none";
+      $("stream-picker").style.display = "block";
+      $("streambns").innerHTML = "";
+      const magnet = `magnet:?xt=urn:btih:${item._infoHash}&dn=${encodeURIComponent(item.title)}` +
+        `&tr=udp://tracker.opentrackr.org:1337/announce` +
+        `&tr=udp://open.stealth.si:80/announce`;
+      $("streambns").innerHTML =
+        `<div style="padding:14px;background:var(--s2);border-radius:10px;font-size:.85rem;line-height:1.8;color:var(--text);">` +
+          `<div style="font-weight:700;margin-bottom:6px;color:#a78bfa;">🧲 Torrent Info</div>` +
+          `<div>👤 Seeders: <b>${item._seeders}</b></div>` +
+          `<div>💾 Size: <b>${item._sizeStr}</b></div>` +
+          `<div style="margin-top:10px;">` +
+            `<a href="${magnet}" style="display:inline-block;padding:8px 14px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-size:.82rem;font-weight:600;">` +
+              `🧲 Open Magnet in App` +
+            `</a>` +
+          `</div>` +
+          `<div style="margin-top:8px;font-size:.75rem;color:var(--muted);">Copy hash: <code style="user-select:all;background:var(--s1);padding:2px 6px;border-radius:4px;">${item._infoHash}</code></div>` +
+        `</div>`;
+      // If we enriched a TMDB id during poster lookup, try embed sources too
+      if (item._tmdbId) {
+        cur.id = item._tmdbId;
+        cur.imdb_id = null;
+        buildSources();
+        loadSource(0);
+      } else {
+        // Hide source buttons — they'd play wrong content
+        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px;">No embed sources — use magnet above</div>`;
+      }
+      return;
+    }
+
+    // ── MAL/Jikan item: use _tmdbId if available, else info-only
+    if (item.id && String(item.id).startsWith("mal_")) {
+      if (item._tmdbId) {
+        cur.id = item._tmdbId;
+        cur.imdb_id = null;
+        buildSources();
+        loadSource(0);
+      } else {
+        $("stream-loading").textContent = "⚠️ No embed source — search title manually";
+        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px;">No TMDB match found</div>`;
+      }
+      return;
+    }
+
+    // ── Normal TMDB item
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${item.id}/external_ids`);
