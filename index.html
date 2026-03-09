@@ -300,7 +300,7 @@ const SOURCES = [
 
 let cur=null, curS=1, curE=1, srcIdx=0;
 let searchTimer=null, _cachedStreams=[], _cacheKey="";
-let vjsPlayer=null;
+let webtorrentClient=null, vjsPlayer=null;
 // Active subtitle state
 let _activeCues=[], _activeVttUrl=null, _activeVttObjectUrl=null;
 
@@ -339,7 +339,12 @@ function stopVideo(){
   _activeCues=[]; _activeVttUrl=null;
   if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){} _activeVttObjectUrl=null;}
   if(vjsPlayer){
-    try{ vjsPlayer.dispose(); }catch(e){}
+    try{
+      if(vjsPlayer._torrent&&webtorrentClient){
+        try{webtorrentClient.remove(vjsPlayer._torrent);}catch(e){}
+      }
+      vjsPlayer.dispose();
+    }catch(e){}
     vjsPlayer=null;
   }
   document.querySelectorAll(".video-js,.vjs-hidden").forEach(el=>{try{el.remove();}catch(e){}});
@@ -399,14 +404,112 @@ function loadSource(i){
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-// Instead of WebTorrent peer connections (which fail due to browser NAT/firewall),
-// use Torrentio's server-side HTTP proxy stream URL — it handles the torrent,
-// we get a plain HTTP video stream that Video.js plays directly.
 async function playTorrent(infoHash, fileIdx, title){
-  // Build Torrentio's HTTP proxy URL for this torrent
-  // Format: https://torrentio.strem.fun/{infoHash}/{fileIdx}/stream.mp4
-  const streamUrl = `https://torrentio.strem.fun/${infoHash}/${fileIdx}/stream.mp4`;
-  await playDirectUrl(streamUrl, title, infoHash);
+  if(!window.WebTorrent){
+    toast("❌ WebTorrent not loaded");return;
+  }
+  if(!webtorrentClient) webtorrentClient = new WebTorrent();
+  clearPlayer();
+  const pwrap=$("pwrap");
+
+  // Subs in parallel
+  const subPromise = cur?.imdb_id
+    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
+    : Promise.resolve([]);
+
+  // Build VJS player
+  const vidId = "vjs-cv-" + Date.now();
+  const vid = document.createElement("video");
+  vid.id = vidId;
+  vid.className = "video-js vjs-default-skin";
+  vid.setAttribute("playsinline","");
+  vid.setAttribute("crossorigin","anonymous");
+  vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
+  pwrap.appendChild(vid);
+
+  vjsPlayer = videojs(vidId, {
+    controls:true, autoplay:true, preload:"auto",
+    fluid:false, fill:true,
+    playbackRates:[0.5,0.75,1,1.25,1.5,2],
+    controlBar:{
+      children:["playToggle","skipBackward","skipForward","volumePanel",
+        "currentTimeDisplay","timeDivider","durationDisplay","progressControl",
+        "playbackRateMenuButton","subsCapsButton","pictureInPictureToggle","fullscreenToggle"],
+      skipButtons:{backward:10,forward:10},
+    },
+  });
+
+  const getInnerVideo = () =>
+    document.getElementById(vidId+"_html5_api") || document.getElementById(vidId);
+
+  $("pph").classList.add("hidden");
+  setNameBar(title+" — Torrent");
+  toast("⏳ Connecting to peers…");
+
+  // Extensive tracker list for better peer discovery
+  const trackers = [
+    "wss://tracker.openwebtorrent.com",
+    "wss://tracker.btorrent.xyz",
+    "wss://tracker.fastcast.nz",
+    "wss://tracker.webtorrent.dev",
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://tracker.cyberia.is:6969/announce",
+    "udp://tracker.moeking.me:6969/announce",
+    "udp://tracker.openbittorrent.com:6969/announce",
+    "udp://9.rarbg.com:2810/announce",
+  ];
+
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&tr=${trackers.join("&tr=")}`;
+
+  // Auto-try next stream on timeout
+  const torrentTimeout = setTimeout(()=>{
+    toast("⚠️ Slow peers — trying next stream…");
+    const rows=[...document.querySelectorAll(".stream-row")];
+    const idx=rows.findIndex(r=>r.classList.contains("active"));
+    const next=rows[idx+1];
+    if(next){ setTimeout(()=>next.click(),300); }
+    else {
+      const p=$("pph");
+      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No streams worked. Use a Source button above.</div>';}
+    }
+  }, 30000);
+
+  try{
+    webtorrentClient.add(magnet,{announce:trackers}, torrent=>{
+      clearTimeout(torrentTimeout);
+      vjsPlayer._torrent = torrent.magnetURI || magnet;
+
+      const vids = torrent.files
+        .filter(f=>/\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
+        .sort((a,b)=>b.length-a.length);
+
+      if(!vids.length){
+        toast("❌ No video file in torrent");return;
+      }
+
+      const file = vids[Math.min(fileIdx, vids.length-1)];
+      toast("🎬 "+file.name.slice(0,40));
+
+      file.renderTo(getInnerVideo(),{autoplay:true}, async err=>{
+        if(err){ toast("❌ Playback error"); return; }
+        clearTimeout(torrentTimeout);
+        const cues = await subPromise;
+        if(cues.length){
+          _activeCues=cues;
+          attachSubtitleTrack(vjsPlayer, cues, "en", "English");
+          toast("▶ Playing · 🔤 EN subs active");
+        } else {
+          toast("▶ Playing");
+        }
+      });
+    });
+  }catch(err){
+    clearTimeout(torrentTimeout);
+    toast("❌ Torrent error — try next stream");
+  }
 }
 
 // ── SUBTITLE ENGINE ───────────────────────────────────────────────
@@ -552,26 +655,38 @@ function parseSRT(text){
 async function fetchStreams(imdbId,isTv,s,e){
   const type=isTv?"series":"movie";
   const stremioId=isTv?`${imdbId}:${s}:${e}`:imdbId;
-  const primaryUrl=`${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`;
-  const fallbackUrl=`https://torrentio.strem.fun/stream/${type}/${stremioId}.json`;
-  for(const url of[primaryUrl,fallbackUrl]){
+
+  // Try own addon first (may return direct MP4/M3U8 urls), then Torrentio (infoHash)
+  const sources = [
+    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
+    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
+  ];
+
+  let allStreams = [];
+
+  for(const url of sources){
     try{
       const ctrl=new AbortController();
-      const t=setTimeout(()=>ctrl.abort(),25000);
+      const t=setTimeout(()=>ctrl.abort(), 20000);
       const r=await fetch(url,{signal:ctrl.signal});
       clearTimeout(t);
       if(!r.ok) continue;
       const d=await r.json();
       const streams=Array.isArray(d.streams)?d.streams:[];
-      // Accept both: infoHash torrents AND direct url streams (MP4/M3U8)
-      const real=streams.filter(s=>
-        (s.infoHash&&!/^0+$/.test(s.infoHash)&&s.infoHash.length===40) ||
-        (s.url&&/^https?:\/\//i.test(s.url))
-      );
-      if(real.length) return real.slice(0,15);
+
+      // Separate direct URLs vs infoHash torrents
+      const directStreams = streams.filter(s=>s.url&&/^https?:\/\//i.test(s.url)&&!s.infoHash);
+      const torrentStreams = streams.filter(s=>s.infoHash&&!/^0+$/.test(s.infoHash)&&s.infoHash.length===40);
+
+      // Direct streams are immediately playable — put them first
+      allStreams = [...allStreams, ...directStreams, ...torrentStreams];
+
+      // If we got direct streams from own addon, return immediately — no need for Torrentio
+      if(directStreams.length) break;
     }catch{continue;}
   }
-  return[];
+
+  return allStreams.slice(0,15);
 }
 
 // Play a direct URL (MP4/M3U8/WebM) in Video.js
@@ -668,7 +783,9 @@ function buildStreamPicker(streams, autoPlay=false){
     else if(/japanese/i.test(fname+meta)) lang="🇯🇵 ";
 
     const isDirect=!s.infoHash&&s.url;
-    const typeTag=isDirect?`<span class="qlabel" style="background:#10b981;color:#fff">DIRECT</span>`:"";
+    const typeTag=isDirect
+      ?`<span class="qlabel" style="background:#10b981;color:#fff">DIRECT</span>`
+      :`<span class="qlabel" style="background:#3b82f6;color:#fff">P2P</span>`;
 
     const row=document.createElement("div");
     row.className="stream-row";
