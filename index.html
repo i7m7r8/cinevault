@@ -630,20 +630,30 @@ function qClass(name) {
 }
 
 // ── PLAYER HELPERS ────────────────────────────────────────────────
-// Single function that always creates a fresh iframe with id="pframe"
-function showIframe(url, nameLabel) {
-  // Teardown any active video/plyr
+
+// Remove only the media element (iframe or video) from pwrap.
+// Never wipes pph/sub-overlay — those are permanent DOM nodes.
+function clearPlayer() {
   stopVideo();
   const pwrap = $("pwrap");
-  pwrap.innerHTML = '';
-  const iframe = document.createElement('iframe');
+  if (!pwrap) return;
+  // Remove iframe
+  const iframe = document.getElementById("pframe");
+  if (iframe) iframe.remove();
+  // Remove any leftover video or plyr containers
+  pwrap.querySelectorAll("video, .plyr").forEach(el => el.remove());
+}
+
+function showIframe(url, nameLabel) {
+  clearPlayer();
+  const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
   iframe.referrerPolicy = "no-referrer";
-  iframe.style.cssText = "width:100%;height:100%;border:none;display:block";
+  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;display:block";
   iframe.src = url;
-  pwrap.appendChild(iframe);
+  $("pwrap").appendChild(iframe);
   $("pph").classList.add("hidden");
   setNameBar(nameLabel);
 }
