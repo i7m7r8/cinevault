@@ -323,10 +323,10 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  // Remove any video elements and iframes
+  // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -349,6 +349,7 @@ function clearPlayer() {
   $("pph").innerHTML = '<div class="pph-icon">🎬</div><div>Loading best source…</div>';
   $("stream-name-bar").classList.remove("on");
 }
+
 
 // ── VIDEO.JS FOR DIRECT STREAMS (MP4/HLS) ──────────────────────
 
@@ -585,7 +586,6 @@ async function fetchStreams(imdbId, isTv, s, e) {
       if (!r.ok) continue;
       const d = await r.json();
       const streams = Array.isArray(d.streams) ? d.streams : [];
-      // Only keep direct HTTP streams — no torrents
       const directStreams = streams.filter(s => s.url && /^https?:\/\//i.test(s.url) && !s.infoHash);
       allStreams = [...allStreams, ...directStreams];
       if (directStreams.length) break;
@@ -616,10 +616,10 @@ function buildStreamPicker(streams, autoPlay = false) {
     else if (/korean/i.test(fname + meta)) lang = "🇰🇷 ";
     else if (/japanese/i.test(fname + meta)) lang = "🇯🇵 ";
 
-    const isDirect = !!s.url;
+    const isDirect = !s.infoHash && s.url;
     const typeTag = isDirect
       ? `<span class="qlabel" style="background:#10b981;color:#fff">DIRECT</span>`
-      : `<span class="qlabel" style="background:#6b7280;color:#fff">N/A</span>`;
+      : `<span class="qlabel" style="background:#3b82f6;color:#fff">P2P</span>`;
 
     const row = document.createElement("div");
     row.className = "stream-row";
@@ -645,7 +645,7 @@ function buildStreamPicker(streams, autoPlay = false) {
       if (row._url) {
         playDirectUrl(row._url, title);
       } else {
-        loadSource(0); // fallback to 2Embed
+        loadSource(0);
       }
     };
 
@@ -845,8 +845,8 @@ function openModal(item, type) {
       } catch (e) { console.error("IMDb fetch:", e); }
     }
     if (isTv) await loadSeasons(item.id);
-    loadSource(0); // 2Embed loads immediately as default
-    loadDirectStreams(false); // silently fetch direct streams in background
+    loadSource(0);
+    loadDirectStreams(false);
   })();
 }
 
@@ -915,16 +915,160 @@ searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) show
 
 function clearSearch() { searchInput.value = ""; $("search-clear").style.display = "none"; hideSearch(); }
 
+// ── MULTI-SOURCE ADULT SEARCH ───────────────────────────────────
+// Source 1+2: TMDB /search/multi + /search/movie with include_adult=true
+// Source 3:   Jikan API (MyAnimeList) genres=12 (Hentai) — free, no key
+// Source 4+5: apibay.org cat=500 (adult video) + cat=506 (adult clips/hentai)
+//             via Vercel CORS proxy → results shaped into cards with infoHash
+
+async function _searchTmdbAdult(q) {
+  const [multi, movies] = await Promise.allSettled([
+    tmdb("/search/multi",  { query: q, include_adult: "true" }),
+    tmdb("/search/movie",  { query: q, include_adult: "true" }),
+  ]);
+  const seen = new Set();
+  const items = [];
+  const addItems = (list, fallbackType) => {
+    for (const it of list) {
+      if (it.media_type === "person") continue;
+      if (seen.has(it.id)) continue;
+      seen.add(it.id);
+      it._sourceType = it.media_type || fallbackType;
+      items.push(it);
+    }
+  };
+  if (multi.status  === "fulfilled") addItems(multi.value.results  || [], "movie");
+  if (movies.status === "fulfilled") addItems(movies.value.results || [], "movie");
+  return items;
+}
+
+async function _searchJikanHentai(q) {
+  const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&genres=12&sfw=false&limit=10`;
+  const r = await fetch(url);
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.data || []).map(a => ({
+    id: "mal_" + a.mal_id,
+    _sourceType: "anime",
+    title: a.title_english || a.title,
+    name:  a.title_english || a.title,
+    media_type: "tv",
+    poster_path: null,
+    _posterUrl: a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || null,
+    overview: a.synopsis || "",
+    vote_average: a.score || 0,
+    first_air_date: a.aired?.from || "",
+    adult: true,
+  }));
+}
+
+async function _searchApibayAdult(q) {
+  // apibay cat 500 = adult video, 506 = adult clips & hentai
+  // routed through Vercel proxy to avoid CORS
+  const proxy = u => `${API}/proxy?url=${encodeURIComponent(u)}`;
+  const urls = [
+    `https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=500`,
+    `https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=506`,
+  ];
+  const results = await Promise.allSettled(urls.map(async u => {
+    const r = await fetch(proxy(u), { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  }));
+
+  const seen = new Set();
+  const items = [];
+  for (const res of results) {
+    if (res.status !== "fulfilled") continue;
+    for (const t of res.value) {
+      if (!t.info_hash || t.info_hash === "0000000000000000000000000000000000000000") continue;
+      if (seen.has(t.info_hash)) continue;
+      seen.add(t.info_hash);
+      const sizeMB = t.size ? Math.round(t.size / 1024 / 1024) : 0;
+      const sizeStr = sizeMB > 1024 ? (sizeMB / 1024).toFixed(1) + " GB" : sizeMB + " MB";
+      items.push({
+        id: "tpb_" + t.id,
+        _sourceType: "movie",
+        _isTpb: true,
+        _infoHash: t.info_hash,
+        _seeders: t.seeders || 0,
+        _sizeStr: sizeStr,
+        title: t.name,
+        name:  t.name,
+        media_type: "movie",
+        poster_path: null,
+        _posterUrl: null,
+        overview: `👤 ${t.seeders || 0} seeders · 💾 ${sizeStr}`,
+        vote_average: 0,
+        release_date: "",
+        adult: true,
+      });
+    }
+  }
+  // Sort by seeders descending
+  items.sort((a, b) => b._seeders - a._seeders);
+  return items.slice(0, 20);
+}
+
+// Try to enrich apibay items with TMDB poster by title match
+async function _enrichWithPosters(tpbItems) {
+  // Batch: up to 6 poster lookups in parallel to avoid rate-limiting
+  const toEnrich = tpbItems.slice(0, 6);
+  await Promise.allSettled(toEnrich.map(async item => {
+    try {
+      const d = await tmdb("/search/movie", { query: item.title, include_adult: "true" });
+      const match = (d.results || [])[0];
+      if (match?.poster_path) {
+        item.poster_path = match.poster_path;
+        item._tmdbId = match.id;
+      }
+    } catch {}
+  }));
+}
+
 function showSearch(q) {
   $("main").style.display = "none"; $("hero").style.display = "none"; $("spage").classList.add("on");
   $("stitle").textContent = `"${q}"`;
-  const g = $("sgrid"); skels(g, 6);
-  tmdb("/search/multi", { query: q, include_adult: "true" }).then(d => {
-    const items = (d.results || []).filter(i => i.media_type !== "person");
+  const g = $("sgrid"); skels(g, 10);
+
+  Promise.allSettled([
+    _searchTmdbAdult(q),
+    _searchJikanHentai(q),
+    _searchApibayAdult(q),
+  ]).then(async ([tmdbRes, jikanRes, tpbRes]) => {
+    const tmdbItems  = tmdbRes.status  === "fulfilled" ? tmdbRes.value  : [];
+    const jikanItems = jikanRes.status === "fulfilled" ? jikanRes.value : [];
+    const tpbItems   = tpbRes.status   === "fulfilled" ? tpbRes.value   : [];
+
+    // Enrich top TPB results with TMDB posters (best-effort)
+    if (tpbItems.length) await _enrichWithPosters(tpbItems);
+
+    const all = [...tmdbItems, ...jikanItems, ...tpbItems];
     g.innerHTML = "";
-    if (!items.length) { g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
-    items.slice(0, 20).forEach(it => g.appendChild(makeCard(it, it.media_type || "movie")));
-  }).catch(() => { g.innerHTML = `<div style="color:var(--muted);padding:20px">⚠️ Search failed</div>`; });
+    if (!all.length) {
+      g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`;
+      return;
+    }
+    all.slice(0, 40).forEach(it => {
+      const card = makeCard(it, it._sourceType || it.media_type || "movie");
+      // Override poster for Jikan/TPB items
+      const overrideUrl = it._posterUrl || (it.poster_path ? null : null);
+      if (it._posterUrl) {
+        const img = card.querySelector(".cposter");
+        if (img) img.src = it._posterUrl;
+      }
+      // TPB badge
+      if (it._isTpb) {
+        const badge = document.createElement("div");
+        badge.style.cssText = "position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;z-index:2;";
+        badge.textContent = "TPB";
+        card.style.position = "relative";
+        card.appendChild(badge);
+      }
+      g.appendChild(card);
+    });
+  });
 }
 
 function hideSearch() { $("main").style.display = "block"; $("hero").style.display = "flex"; $("spage").classList.remove("on"); }
