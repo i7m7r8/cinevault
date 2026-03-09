@@ -668,21 +668,88 @@ async function fetchStreams(imdbId,isTv,s,e){
       if(!r.ok) continue;
       const d=await r.json();
       const streams=Array.isArray(d.streams)?d.streams:[];
-      const real=streams.filter(s=>s.infoHash&&!/^0+$/.test(s.infoHash)&&s.infoHash.length===40);
+      // Accept both: infoHash torrents AND direct url streams (MP4/M3U8)
+      const real=streams.filter(s=>
+        (s.infoHash&&!/^0+$/.test(s.infoHash)&&s.infoHash.length===40) ||
+        (s.url&&/^https?:\/\//i.test(s.url))
+      );
       if(real.length) return real.slice(0,15);
     }catch{continue;}
   }
   return[];
 }
 
-function buildStreamPicker(streams){
+// Play a direct URL (MP4/M3U8/WebM) in Video.js
+async function playDirectUrl(streamUrl, title){
+  clearPlayer();
+  const pwrap=$("pwrap");
+
+  // Fetch subs in parallel
+  const subPromise = cur?.imdb_id
+    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
+    : Promise.resolve([]);
+
+  const vidId = "vjs-cv-" + Date.now();
+  const vid = document.createElement("video");
+  vid.id = vidId;
+  vid.className = "video-js vjs-default-skin";
+  vid.setAttribute("playsinline","");
+  vid.setAttribute("crossorigin","anonymous");
+  vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
+  pwrap.appendChild(vid);
+
+  // Detect type
+  const isHLS=/\.m3u8/i.test(streamUrl)||/application\/x-mpegurl/i.test(streamUrl);
+  const isDASH=/\.mpd/i.test(streamUrl);
+  const mimeType=isHLS?"application/x-mpegURL":isDASH?"application/dash+xml":"video/mp4";
+
+  vjsPlayer = videojs(vidId, {
+    controls:true, autoplay:true, preload:"auto",
+    fluid:false, fill:true,
+    playbackRates:[0.5,0.75,1,1.25,1.5,2],
+    html5:{vhs:{overrideNative:true},nativeVideoTracks:false},
+    controlBar:{
+      children:[
+        "playToggle","skipBackward","skipForward","volumePanel",
+        "currentTimeDisplay","timeDivider","durationDisplay",
+        "progressControl","playbackRateMenuButton",
+        "subsCapsButton","pictureInPictureToggle","fullscreenToggle",
+      ],
+      skipButtons:{backward:10,forward:10},
+    },
+  });
+
+  vjsPlayer.src({src:streamUrl, type:mimeType});
+  vjsPlayer.play().catch(()=>{});
+
+  $("pph").classList.add("hidden");
+  setNameBar(title+" — Direct");
+  toast("🎬 Loading stream…");
+
+  vjsPlayer.on("error",()=>{
+    toast("❌ Stream failed — try another quality");
+  });
+
+  const cues=await subPromise;
+  if(cues.length){
+    _activeCues=cues;
+    // Wait for player ready before attaching track
+    vjsPlayer.ready(()=>attachSubtitleTrack(vjsPlayer,cues,"en","English"));
+    toast("▶ Playing · 🔤 EN subs active");
+  }
+}
+
+function buildStreamPicker(streams, autoPlay=false){
   const wrap=$("streambns"); wrap.innerHTML="";
   $("stream-loading").style.display="none";
   if(!streams.length){$("stream-picker").style.display="none";return;}
   $("stream-picker").style.display="block";
   const lbl=$("stream-label");
-  if(lbl) lbl.textContent="📊 AVAILABLE TORRENTS — tap to play";
-  streams.forEach(s=>{
+  if(lbl) lbl.textContent="📊 AVAILABLE STREAMS — tap to play";
+
+  let autoPlayed=false;
+
+  streams.forEach((s,idx)=>{
     const lines=(s.title||s.name||"").split("\n");
     const fname=lines[0]||"Unknown";
     const meta=lines.slice(1).join(" ");
@@ -693,10 +760,15 @@ function buildStreamPicker(streams){
     if(/hindi/i.test(fname+meta))    lang="🇮🇳 ";
     else if(/korean/i.test(fname+meta))   lang="🇰🇷 ";
     else if(/japanese/i.test(fname+meta)) lang="🇯🇵 ";
+
+    const isDirect=!s.infoHash&&s.url;
+    const typeTag=isDirect?`<span class="qlabel" style="background:#10b981;color:#fff">DIRECT</span>`:"";
+
     const row=document.createElement("div");
     row.className="stream-row";
     row.innerHTML=
       `<div class="stream-row-left">` +
+        typeTag+
         `<span class="qlabel ${qc}">${ql}</span>` +
         `<span class="stream-name">${lang}${fname}</span>` +
       `</div>` +
@@ -706,21 +778,38 @@ function buildStreamPicker(streams){
         `<span class="stream-play-btn">▶</span>` +
       `</div>`;
     row._hash=s.infoHash||"";
+    row._url=s.url||"";
     row._fileIdx=typeof s.fileIdx==="number"?s.fileIdx:0;
     row._title=fname;
-    row.onclick=()=>{
+
+    const playRow=()=>{
       document.querySelectorAll(".stream-row").forEach(x=>x.classList.remove("active"));
       row.classList.add("active");
-      if(row._hash){
-        const title=(cur.title||cur.name||"")+(cur.mediaType==="movie"?"":` S${curS}E${curE}`);
+      const title=(cur.title||cur.name||"")+(cur.mediaType==="movie"?"":` S${curS}E${curE}`);
+      if(row._url){
+        // Direct URL → Video.js
+        playDirectUrl(row._url, title);
+      } else if(row._hash){
+        // Torrent → Video.js via WebTorrent
         playTorrent(row._hash,row._fileIdx,title);
-      }else loadSource(srcIdx);
+      } else {
+        loadSource(srcIdx);
+      }
     };
+
+    row.onclick=playRow;
     wrap.appendChild(row);
+
+    // Auto-play: play the first stream automatically in Video.js
+    if(autoPlay && !autoPlayed){
+      autoPlayed=true;
+      // Small delay so DOM is ready
+      setTimeout(()=>{ row.click(); }, 100);
+    }
   });
 }
 
-async function loadDirectStreams(){
+async function loadDirectStreams(autoPlay=false){
   if(!cur||!cur.imdb_id){
     $("stream-loading").style.display="block";
     $("stream-loading").textContent="⚠️ No IMDb ID — streams unavailable";
@@ -729,17 +818,17 @@ async function loadDirectStreams(){
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
   const snapS=curS,snapE=curE;
   const cacheKey=`${cur.imdb_id}|${snapS}|${snapE}`;
-  if(cacheKey===_cacheKey&&_cachedStreams.length){buildStreamPicker(_cachedStreams);return;}
+  if(cacheKey===_cacheKey&&_cachedStreams.length){buildStreamPicker(_cachedStreams,autoPlay);return;}
   $("stream-picker").style.display="block";
   $("stream-loading").style.display="block";
-  $("stream-loading").textContent="🔄 Searching torrents… (may take 10-20s)";
+  $("stream-loading").textContent="🔄 Searching streams… (may take 10-20s)";
   $("streambns").innerHTML="";
   let dots=0;
   const pulse=setInterval(()=>{
     dots=(dots+1)%4;
     const el=$("stream-loading");
     if(el&&el.style.display!=="none")
-      el.textContent="🔄 Searching torrents"+".".repeat(dots)+" (this can take ~15s)";
+      el.textContent="🔄 Searching streams"+".".repeat(dots)+" (this can take ~15s)";
   },1500);
   try{
     const streams=await fetchStreams(cur.imdb_id,isTv,snapS,snapE);
@@ -748,8 +837,8 @@ async function loadDirectStreams(){
     _cachedStreams=streams;_cacheKey=cacheKey;
     if(!streams.length){
       $("stream-loading").style.display="block";
-      $("stream-loading").textContent="⚠️ No torrents found — try a source above";
-    }else buildStreamPicker(streams);
+      $("stream-loading").textContent="⚠️ No streams found — use a Source button above";
+    }else buildStreamPicker(streams, autoPlay);
   }catch(err){
     clearInterval(pulse);
     $("stream-loading").style.display="block";
@@ -773,8 +862,7 @@ async function loadSeasons(tvId){
         curS=s.season_number;curE=1;
         updateMmeta();
         await loadEps(tvId,curS);
-        loadSource(srcIdx);
-        loadDirectStreams();
+        loadDirectStreams(true);
       };
       wrap.appendChild(b);
     });
@@ -796,8 +884,7 @@ async function loadEps(tvId,s){
         b.classList.add("on");
         curE=ep.episode_number;
         updateMmeta();
-        loadSource(srcIdx);
-        loadDirectStreams();
+        loadDirectStreams(true);
       };
       wrap.appendChild(b);
     });
@@ -830,7 +917,7 @@ function openModal(item,type){
   buildSources();
   $("modal").classList.add("on");
   document.body.style.overflow="hidden";
-  if(!SOURCES[0].useImdb) loadSource(0);
+  // Do NOT pre-load iframe source — Video.js will auto-play the best stream
   (async()=>{
     if(!cur.imdb_id){
       try{
@@ -839,8 +926,7 @@ function openModal(item,type){
       }catch(e){console.error("IMDb fetch:",e);}
     }
     if(isTv) await loadSeasons(item.id);
-    if(SOURCES[0].useImdb) loadSource(0);
-    loadDirectStreams();
+    loadDirectStreams(true);  // auto-play first stream in Video.js
   })();
 }
 
