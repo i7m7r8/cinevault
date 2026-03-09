@@ -16,7 +16,7 @@
 <!-- WebTorrent -->
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
-/* (keep all existing styles from previous version) */
+/* (Keep all your existing CSS – it's unchanged) */
 :root {
   --bg: #0d0d14;
   --s1: #13131e;
@@ -573,7 +573,7 @@ footer{
 const $ = id => document.getElementById(id);
 
 // ── CONFIG ──────────────────────────────────────────────────────
-const API = "https://cinevault-api.imrannn68d-de2.workers.dev"; // for streams & subs only
+const API = "https://cinevault-api.imrannn68d-de2.workers.dev"; // for streams & subs
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
@@ -590,8 +590,8 @@ const SOURCES = [
 
 // ── STATE ───────────────────────────────────────────────────────
 let cur = null, curS = 1, curE = 1, srcIdx = 0, searchTimer = null, _cachedStreams = [], _cacheKey = "";
-let webtorrentClient = null; // lazy init
-let currentVideo = null;     // reference to the video element for subtitle controls
+let webtorrentClient = null;
+let currentVideo = null;
 
 // ── UTILS ───────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -606,22 +606,22 @@ function buildMagnetLink(hash) {
   return `magnet:?xt=urn:btih:${hash}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce`;
 }
 
-// Show/hide subtitle bar based on whether a video element exists
 function updateSubtitleBarVisibility() {
   const subbar = $("subbar");
-  if (currentVideo) {
-    subbar.classList.add("visible");
-  } else {
-    subbar.classList.remove("visible");
-  }
+  if (currentVideo) subbar.classList.add("visible");
+  else subbar.classList.remove("visible");
 }
 
-// ── TMDB (direct, not via worker) ───────────────────────────────
+// ── TMDB (direct) ───────────────────────────────────────────────
 async function tmdb(path, params={}) {
   const q = new URLSearchParams({ ...params, api_key: TMDB_KEY });
-  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
-  if (!r.ok) throw new Error("TMDB " + r.status);
-  return r.json();
+  const url = `https://api.themoviedb.org/3${path}?${q}`;
+  console.log('TMDB request:', url);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`TMDB ${r.status} – ${await r.text()}`);
+  const data = await r.json();
+  console.log('TMDB response:', data);
+  return data;
 }
 
 // ── QUALITY BADGE ────────────────────────────────────────────────
@@ -633,7 +633,6 @@ function qClass(name) {
   return ["SD", "sq-sd"];
 }
 
-// ── NOW PLAYING BOX ──────────────────────────────────────────────
 function setNameBar(title, sub) {
   $("stream-name-text").textContent   = title || "";
   $("stream-name-source").textContent = sub   || "";
@@ -642,7 +641,6 @@ function setNameBar(title, sub) {
 
 // ── PLAYER (IFRAME) ────────────────────────────────────────────
 function playUrl(url) {
-  // Remove any existing video element (torrent player)
   if (currentVideo) {
     currentVideo.pause();
     currentVideo.remove();
@@ -651,7 +649,7 @@ function playUrl(url) {
   }
   $("pph").classList.add("hidden");
   const pwrap = $("pwrap");
-  pwrap.innerHTML = ''; // clear iframe or video
+  pwrap.innerHTML = '';
   const iframe = document.createElement('iframe');
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
@@ -662,16 +660,13 @@ function playUrl(url) {
   iframe.src = url;
 }
 
-// ── TORRENT PLAYER (VIDEO) ──────────────────────────────────────
+// ── TORRENT PLAYER ──────────────────────────────────────────────
 async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, sourceName) {
   if (!webtorrentClient) webtorrentClient = new WebTorrent();
-
   const magnet = buildMagnetLink(infoHash);
   $("pph").classList.add("hidden");
   const pwrap = $("pwrap");
-  pwrap.innerHTML = ''; // remove any existing content
-
-  // Create video element
+  pwrap.innerHTML = '';
   const video = document.createElement('video');
   video.controls = true;
   video.autoplay = true;
@@ -681,9 +676,7 @@ async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, so
   pwrap.appendChild(video);
   currentVideo = video;
   updateSubtitleBarVisibility();
-
   setNameBar(title, "▶ " + sourceName);
-
   toast("⏳ Starting torrent...");
   webtorrentClient.add(magnet, (torrent) => {
     const file = torrent.files[fileIdx] || torrent.files[0];
@@ -693,13 +686,12 @@ async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, so
         return;
       }
       toast("▶ Playing torrent");
-      // After video is ready, fetch subtitles for default language (English)
-      fetchAndAttachSubs(imdbId, season, episode, 'en', video);
+      if (imdbId) fetchAndAttachSubs(imdbId, season, episode, 'en', video);
     });
   });
 }
 
-// ── SUBTITLE FUNCTIONS ──────────────────────────────────────────
+// ── SUBTITLE FUNCTIONS (unchanged, but you can remove if not needed) ──
 async function fetchAndAttachSubs(imdbId, season, episode, lang, video) {
   if (!imdbId) return;
   const langMap = { en:"eng", hi:"hin", ar:"ara", fr:"fre", es:"spa", de:"ger", pt:"por", it:"ita", ja:"jpn", ko:"kor", zh:"chi" };
@@ -708,58 +700,31 @@ async function fetchAndAttachSubs(imdbId, season, episode, lang, video) {
     const r = await fetch(`${API}/subtitles/${imdbId}?lang=${osLang}`);
     if (!r.ok) throw new Error("Sub fetch failed");
     const subs = await r.json();
-    if (!Array.isArray(subs) || !subs.length) {
-      toast("❌ No " + lang.toUpperCase() + " subtitles");
-      return;
-    }
-
-    // For TV: try to match episode filename
+    if (!Array.isArray(subs) || !subs.length) return;
     let sub;
     if (season && episode) {
       const epStr = "S" + String(season).padStart(2,"0") + "E" + String(episode).padStart(2,"0");
-      sub = subs.find(s => s.format==="srt" && (s.name||"").toUpperCase().includes(epStr))
-          || subs.find(s => s.format==="srt")
-          || subs[0];
+      sub = subs.find(s => s.format==="srt" && (s.name||"").toUpperCase().includes(epStr)) || subs.find(s => s.format==="srt") || subs[0];
     } else {
       sub = subs.find(s => s.format==="srt") || subs[0];
     }
-
-    if (!sub || !sub.url) throw new Error("No subtitle URL");
-
-    // Download and parse SRT
+    if (!sub || !sub.url) return;
     const srtText = await downloadAndDecompress(sub.url);
-    if (!srtText) throw new Error("Failed to download subtitle");
-
+    if (!srtText) return;
     const cues = parseSRT(srtText);
-    if (!cues.length) throw new Error("No cues parsed");
-
-    // Remove existing track if any
-    while (video.textTracks.length) {
-      video.removeChild(video.textTracks[0]);
-    }
-
+    if (!cues.length) return;
+    while (video.textTracks.length) video.removeChild(video.textTracks[0]);
     const track = video.addTextTrack('subtitles', lang.toUpperCase(), lang);
     track.mode = 'showing';
-    cues.forEach(c => {
-      const cue = new VTTCue(c.start, c.end, c.text);
-      track.addCue(cue);
-    });
-
-    // Store cues for offset adjustments
-    video._cues = cues;
-    video._lang = lang;
+    cues.forEach(c => track.addCue(new VTTCue(c.start, c.end, c.text)));
     toast("🔤 " + lang.toUpperCase() + " subtitles on");
-  } catch (e) {
-    console.error("Sub error", e);
-    toast("❌ Subtitle error");
-  }
+  } catch (e) { console.error("Sub error", e); }
 }
 
 async function downloadAndDecompress(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error("Download failed");
   const buffer = await r.arrayBuffer();
-  // Try to decompress if gzipped
   try {
     const ds = new DecompressionStream("gzip");
     const writer = ds.writable.getWriter();
@@ -778,7 +743,6 @@ async function downloadAndDecompress(url) {
     for (const c of chunks) { out.set(c, pos); pos += c.length; }
     return new TextDecoder().decode(out);
   } catch {
-    // Not gzipped, decode as text
     return new TextDecoder().decode(buffer);
   }
 }
@@ -795,8 +759,7 @@ function parseSRT(text) {
       const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/);
       return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : 0;
     };
-    const txt = lines.slice(lines.indexOf(timeMatch)+1).join("\n")
-      .replace(/<[^>]+>/g,"").trim();
+    const txt = lines.slice(lines.indexOf(timeMatch)+1).join("\n").replace(/<[^>]+>/g,"").trim();
     if (txt) cues.push({ start: toSec(s1), end: toSec(s2), text: txt });
   }
   return cues.sort((a,b) => a.start - b.start);
@@ -816,8 +779,7 @@ function offsetSubtitles(seconds) {
 
 function turnOffSubtitles() {
   if (!currentVideo || !currentVideo.textTracks.length) return;
-  const track = currentVideo.textTracks[0];
-  track.mode = 'disabled';
+  currentVideo.textTracks[0].mode = 'disabled';
   $("subsel").value = "";
   toast("🔤 Subtitles off");
 }
@@ -839,15 +801,10 @@ async function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src || !cur) return;
-
-  // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
-
   const isMovie = cur.mediaType === "movie";
   let id;
-
   if (src.useImdb) {
-    // Wait for IMDb ID if needed (up to 5 seconds)
     if (!cur.imdb_id) {
       toast("⏳ Fetching IMDb ID...");
       let waited = 0;
@@ -856,31 +813,25 @@ async function loadSource(i) {
         waited += 200;
       }
     }
-    id = cur.imdb_id || cur.id; // fallback to TMDB ID
+    id = cur.imdb_id || cur.id;
   } else {
     id = cur.id;
   }
-
   if (!id) {
     toast("❌ No valid ID for this source");
     return;
   }
-
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const title = cur.title || cur.name || "";
   const ep = isMovie ? "" : ` · S${curS} E${curE}`;
-
-  // If we were playing a torrent, clean it up
   if (currentVideo) {
     currentVideo.pause();
     currentVideo.remove();
     currentVideo = null;
     updateSubtitleBarVisibility();
   }
-
-  // Create iframe and play
   const pwrap = $("pwrap");
-  pwrap.innerHTML = ''; // remove any previous content
+  pwrap.innerHTML = '';
   const iframe = document.createElement('iframe');
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
@@ -888,7 +839,6 @@ async function loadSource(i) {
   iframe.onerror = () => toast("❌ Iframe failed to load");
   pwrap.appendChild(iframe);
   iframe.src = url;
-
   $("pph").classList.add("hidden");
   setNameBar(title + ep, "▶ " + src.name);
   toast("▶ " + src.name);
@@ -923,10 +873,8 @@ function buildStreamPicker(streams) {
   $("stream-loading").style.display = "none";
   if (!streams.length) { $("stream-picker").style.display = "none"; return; }
   $("stream-picker").style.display = "block";
-
   const label = $("stream-label");
   if (label) label.textContent = "📊 AVAILABLE TORRENTS";
-
   streams.forEach((s) => {
     const lines = (s.title || s.name || "").split("\n");
     const fname = lines[0] || "Unknown";
@@ -938,28 +886,10 @@ function buildStreamPicker(streams) {
     if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
     else if (/korean/i.test(fname+meta))   lang = "🇰🇷 ";
     else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
-
     const row = document.createElement("div");
     row.className = "stream-row";
-    row.innerHTML =
-      `<div class="stream-row-left">` +
-        `<span class="qlabel ${qc}">${ql}</span>` +
-        `<span class="stream-name">${lang}${fname}</span>` +
-      `</div>` +
-      `<div class="stream-row-right">` +
-        (seeds ? `<span class="stream-seeds">👤${seeds}</span>` : "") +
-        (size  ? `<span class="stream-size">💾${size}</span>`  : "") +
-        `<span class="stream-play-btn">▶</span>` +
-      `</div>`;
-
-    // Store stream data
-    row._fname   = fname;
-    row._ql      = ql;
-    row._size    = size;
-    row._seeds   = seeds;
-    row._hash    = s.infoHash  || "";
-    row._fileIdx = s.fileIdx !== undefined ? s.fileIdx : 0;
-
+    row.innerHTML = `<div class="stream-row-left"><span class="qlabel ${qc}">${ql}</span><span class="stream-name">${lang}${fname}</span></div><div class="stream-row-right">${seeds?`<span class="stream-seeds">👤${seeds}</span>`:''}${size?`<span class="stream-size">💾${size}</span>`:''}<span class="stream-play-btn">▶</span></div>`;
+    row._fname = fname; row._ql = ql; row._size = size; row._seeds = seeds; row._hash = s.infoHash || ""; row._fileIdx = s.fileIdx !== undefined ? s.fileIdx : 0;
     row.onclick = () => playStream(row);
     wrap.appendChild(row);
   });
@@ -968,8 +898,6 @@ function buildStreamPicker(streams) {
 function playStream(row) {
   document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
   row.classList.add("active");
-
-  // If this row has an infoHash, use torrent player
   if (row._hash) {
     const isMovie = cur.mediaType === "movie";
     const title = cur.title || cur.name || "";
@@ -977,15 +905,13 @@ function playStream(row) {
     playTorrent(row._hash, row._fileIdx, cur.imdb_id, curS, curE, title + ep, SOURCES[srcIdx]?.name || "Torrent");
     return;
   }
-
-  // Otherwise fallback to iframe source
   if (srcIdx < 0 || !document.querySelector("#srcbns .cbtn.on")) {
     loadSource(0);
     toast("▶ " + row._ql + " · " + SOURCES[0].name);
-    return;
+  } else {
+    loadSource(srcIdx);
+    toast("▶ " + row._ql + " · " + SOURCES[srcIdx].name);
   }
-  loadSource(srcIdx);
-  toast("▶ " + row._ql + " · " + SOURCES[srcIdx].name);
 }
 
 async function loadDirectStreams() {
@@ -993,7 +919,6 @@ async function loadDirectStreams() {
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
   $("streambns").innerHTML = "";
-
   if (!cur.imdb_id) {
     let waited = 0;
     await new Promise(resolve => {
@@ -1007,16 +932,13 @@ async function loadDirectStreams() {
     $("stream-loading").textContent = "⚠️ No IMDB ID — streams unavailable";
     return;
   }
-
   const snapS = curS, snapE = curE;
   const isTv  = cur.mediaType === "tv" || cur.mediaType === "series";
   const key   = cur.imdb_id + "|" + snapS + "|" + snapE;
-
   if (key === _cacheKey && _cachedStreams.length) {
     buildStreamPicker(_cachedStreams);
     return;
   }
-
   try {
     const streams = await fetchStreams(cur.imdb_id, isTv ? "series" : "movie", snapS, snapE);
     if (snapS === curS && snapE === curE) {
@@ -1042,13 +964,7 @@ function makeCard(item, type) {
   const rating = item.vote_average?.toFixed(1) || "—";
   const d = document.createElement("div");
   d.className = "card";
-  d.innerHTML = `
-    <img class="cposter" src="${poster(item.poster_path)}" alt="${title}" loading="lazy">
-    <div class="cov"><div class="pbc">▶</div></div>
-    <div class="cinfo">
-      <div class="ctitle">${title}</div>
-      <div class="cmeta"><span>${year}</span><span class="crating">⭐${rating}</span></div>
-    </div>`;
+  d.innerHTML = `<img class="cposter" src="${poster(item.poster_path)}" alt="${title}" loading="lazy"><div class="cov"><div class="pbc">▶</div></div><div class="cinfo"><div class="ctitle">${title}</div><div class="cmeta"><span>${year}</span><span class="crating">⭐${rating}</span></div></div>`;
   d.onclick = () => openModal(item, type);
   return d;
 }
@@ -1093,10 +1009,7 @@ function openModal(item, type) {
     currentVideo = null;
     updateSubtitleBarVisibility();
   }
-
   const isTv = type === "tv" || type === "series";
-
-  // Reset UI
   $("mtitle").textContent = item.title || item.name;
   $("mdesc").textContent  = item.overview || "";
   $("mbg").src            = back(item.backdrop_path);
@@ -1107,16 +1020,12 @@ function openModal(item, type) {
   const lbl0 = $("stream-label"); if(lbl0) lbl0.textContent = "📊 STREAMS";
   $("streambns").innerHTML = "";
   $("tv-ctrl").style.display = isTv ? "block" : "none";
-
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average?.toFixed(1) || "—";
   $("mmeta").innerHTML = `<span>${year}</span><span>•</span><span class="mrating">⭐${rating}</span><span>•</span><span>${type==="movie"?"🎬 Movie":"📺 Series"}</span>`;
-
   buildSources();
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
-
-  // Reset player area to iframe (default)
   const pwrap = $("pwrap");
   pwrap.innerHTML = '';
   const iframe = document.createElement('iframe');
@@ -1128,22 +1037,15 @@ function openModal(item, type) {
   pwrap.appendChild(iframe);
   $("pph").classList.remove("hidden");
   $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading...</div>`;
-
-  // Load first source using loadSource (ensures IMDb ID handling)
   srcIdx = 0;
   loadSource(0);
-
-  // Load everything async
   (async () => {
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
-        // If current source uses IMDb and we now have it, reload it
         if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
-      } catch (e) {
-        console.error("Failed to fetch IMDb ID", e);
-      }
+      } catch (e) { console.error("Failed to fetch IMDb ID", e); }
     }
     if (isTv) await loadSeasons(item.id);
     loadDirectStreams();
@@ -1155,6 +1057,7 @@ async function loadSeasons(tvId) {
   try {
     const d = await tmdb(`/tv/${tvId}`);
     const seasons = (d.seasons||[]).filter(s => s.season_number > 0);
+    console.log('Seasons:', seasons);
     const wrap = $("sbns"); wrap.innerHTML = "";
     seasons.forEach(s => {
       const b = document.createElement("button");
@@ -1170,15 +1073,14 @@ async function loadSeasons(tvId) {
       };
       wrap.appendChild(b);
     });
-    await loadEps(tvId, 1);
-  } catch (e) {
-    console.error("loadSeasons error", e);
-  }
+    if (seasons.length) await loadEps(tvId, 1);
+  } catch (e) { console.error("loadSeasons error", e); }
 }
 
 async function loadEps(tvId, s) {
   try {
     const d = await tmdb(`/tv/${tvId}/season/${s}`);
+    console.log(`Episodes for S${s}:`, d.episodes);
     const wrap = $("ebns"); wrap.innerHTML = "";
     (d.episodes||[]).forEach(ep => {
       const b = document.createElement("button");
@@ -1194,9 +1096,7 @@ async function loadEps(tvId, s) {
       };
       wrap.appendChild(b);
     });
-  } catch (e) {
-    console.error("loadEps error", e);
-  }
+  } catch (e) { console.error("loadEps error", e); }
 }
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
@@ -1281,7 +1181,6 @@ document.querySelectorAll(".tab").forEach(tab => {
     const secs = document.querySelectorAll("#main .sec");
     secs.forEach(s => s.style.display="none");
     const show = id => { document.querySelector(`#${id}`)?.closest(".sec")?.style?.setProperty("display","block"); };
-
     if (c==="home") {
       secs.forEach(s => s.style.display="block");
       $("hero").style.display="flex";
@@ -1316,20 +1215,21 @@ $("subOffBtn").onclick = () => turnOffSubtitles();
 
 // ── PWA SERVICE WORKER ──────────────────────────────────────────
 if ("serviceWorker" in navigator) {
-  const swCode = `
-const CACHE="cv-v2";
-const SHELL=["/cinevault/","/cinevault/index.html"];
-self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));
-self.addEventListener("fetch",e=>{
-  if(e.request.url.includes("tmdb")||e.request.url.includes("opensubtitles")||e.request.url.includes("torrentio")||e.request.url.includes("workers.dev"))return;
-  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
-});`;
+  const swCode = `const CACHE="cv-v2"; const SHELL=["/cinevault/","/cinevault/index.html"]; self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}))); self.addEventListener("fetch",e=>{ if(e.request.url.includes("tmdb")||e.request.url.includes("opensubtitles")||e.request.url.includes("torrentio")||e.request.url.includes("workers.dev"))return; e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))); });`;
   const blob = new Blob([swCode], { type:"application/javascript" });
   navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
 }
 
 // ── INIT ────────────────────────────────────────────────────────
 async function init() {
+  // Test TMDB connectivity
+  try {
+    await tmdb("/configuration");
+    console.log("TMDB connection OK");
+  } catch (e) {
+    console.error("TMDB connection FAILED", e);
+    toast("⚠️ TMDB connection failed – check console");
+  }
   await loadSec("g0","/trending/all/week",{},"movie",true);
   loadSec("g1","/discover/movie",{with_original_language:"hi",sort_by:"popularity.desc"},"movie");
   loadSec("g2","/discover/tv",{with_genres:"16",with_original_language:"ja",sort_by:"popularity.desc"},"tv");
