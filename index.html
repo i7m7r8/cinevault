@@ -364,9 +364,9 @@ function showIframe(url,nameLabel){
   setNameBar(nameLabel);
 }
 
-function setNameBar(label){
+function setNameBar(label, url=""){
   $("stream-name-text").textContent=label||"";
-  $("stream-name-source").textContent="";
+  $("stream-name-source").textContent=url?`▶ ${url.slice(0,80)}…`:"";
   $("stream-name-bar").classList.add("on");
 }
 
@@ -689,75 +689,103 @@ async function fetchStreams(imdbId,isTv,s,e){
   return allStreams.slice(0,15);
 }
 
-// Play a direct URL (MP4/M3U8/WebM) in Video.js
-// infoHash is optional — if provided and URL fails, tries alternate proxy URLs
-async function playDirectUrl(streamUrl, title, infoHash=null){
+// CORS proxy chain — tried in order when direct URL fails
+const CORS_PROXIES = [
+  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`${API}/proxy?url=${encodeURIComponent(u)}`,  // your own Vercel addon as proxy
+];
+
+async function playDirectUrl(streamUrl, title){
   clearPlayer();
   const pwrap=$("pwrap");
 
-  // Fetch subs in parallel
   const subPromise = cur?.imdb_id
     ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
     : Promise.resolve([]);
+
+  const isHLS=/m3u8/i.test(streamUrl);
+  const isDASH=/\.mpd/i.test(streamUrl);
 
   const vidId = "vjs-cv-" + Date.now();
   const vid = document.createElement("video");
   vid.id = vidId;
   vid.className = "video-js vjs-default-skin";
   vid.setAttribute("playsinline","");
-  vid.setAttribute("crossorigin","anonymous");
   vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
   pwrap.appendChild(vid);
-
-  // Detect MIME type
-  const isHLS=/\.m3u8/i.test(streamUrl)||/m3u8/i.test(streamUrl);
-  const isDASH=/\.mpd/i.test(streamUrl);
-  const mimeType=isHLS?"application/x-mpegURL":isDASH?"application/dash+xml":"video/mp4";
 
   vjsPlayer = videojs(vidId, {
     controls:true, autoplay:true, preload:"auto",
     fluid:false, fill:true,
     playbackRates:[0.5,0.75,1,1.25,1.5,2],
-    html5:{vhs:{overrideNative:true,limitRenditionByPlayerDimensions:false},nativeVideoTracks:false},
+    html5:{
+      vhs:{overrideNative:true, limitRenditionByPlayerDimensions:false, handleManifestRedirects:true},
+      nativeVideoTracks:false, nativeAudioTracks:false,
+    },
     controlBar:{
-      children:[
-        "playToggle","skipBackward","skipForward","volumePanel",
-        "currentTimeDisplay","timeDivider","durationDisplay",
-        "progressControl","playbackRateMenuButton",
-        "subsCapsButton","pictureInPictureToggle","fullscreenToggle",
-      ],
+      children:["playToggle","skipBackward","skipForward","volumePanel",
+        "currentTimeDisplay","timeDivider","durationDisplay","progressControl",
+        "playbackRateMenuButton","subsCapsButton","pictureInPictureToggle","fullscreenToggle"],
       skipButtons:{backward:10,forward:10},
     },
   });
 
-  vjsPlayer.src({src:streamUrl, type:mimeType});
-  vjsPlayer.play().catch(()=>{});
-
   $("pph").classList.add("hidden");
   setNameBar(title);
-  toast("🎬 Loading stream…");
 
-  // On error, auto-try the next stream row in the list
-  vjsPlayer.on("error", ()=>{
+  let proxyIdx = -1; // -1=direct, 0..N=proxy index
+  let errorCount = 0;
+
+  function getUrl(){
+    if(proxyIdx < 0) return streamUrl;
+    return CORS_PROXIES[proxyIdx] ? CORS_PROXIES[proxyIdx](streamUrl) : null;
+  }
+
+  function tryLoad(){
+    const url = getUrl();
+    if(!url){ tryNextStream(); return; }
+    const label = proxyIdx < 0 ? "🎬 Loading…" : `🔄 Proxy ${proxyIdx+1}…`;
+    toast(label);
+    setNameBar(title, url);
+    const mimeType = isHLS?"application/x-mpegURL":isDASH?"application/dash+xml":"video/mp4";
+    vjsPlayer.src({src:url, type:mimeType});
+    vjsPlayer.play().catch(()=>{});
+  }
+
+  function tryNextStream(){
     const rows=[...document.querySelectorAll(".stream-row")];
-    const activeIdx=rows.findIndex(r=>r.classList.contains("active"));
-    const next=rows[activeIdx+1];
-    if(next){
-      toast("⚠️ Stream failed — trying next…");
-      setTimeout(()=>next.click(), 800);
-    } else {
-      toast("❌ All streams failed — use a Source above");
+    const idx=rows.findIndex(r=>r.classList.contains("active"));
+    const next=rows[idx+1];
+    if(next){ toast("⏭ Trying next stream…"); setTimeout(()=>next.click(),400); }
+    else {
+      toast("❌ All streams failed — tap a Source above");
       const p=$("pph");
-      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>Stream failed. Try a Source button above.</div>';}
+      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No streams worked.<br><small>Tap a Source button above to watch.</small></div>';}
+    }
+  }
+
+  vjsPlayer.on("error", ()=>{
+    errorCount++;
+    proxyIdx++;
+    if(proxyIdx < CORS_PROXIES.length) setTimeout(tryLoad, 300);
+    else tryNextStream();
+  });
+
+  // Also catch successful play — attach subs then
+  vjsPlayer.on("playing", async()=>{
+    const cues = await subPromise;
+    if(cues.length && _activeCues !== cues){
+      _activeCues=cues;
+      attachSubtitleTrack(vjsPlayer,cues,"en","English");
     }
   });
 
-  const cues=await subPromise;
-  if(cues.length){
-    _activeCues=cues;
-    vjsPlayer.ready(()=>attachSubtitleTrack(vjsPlayer,cues,"en","English"));
-    toast("▶ Playing · 🔤 EN subs active");
-  }
+  tryLoad();
+  // Pre-fetch subs in background
+  subPromise.then(cues=>{
+    if(cues.length) toast("🔤 Subs ready");
+  });
 }
 
 function buildStreamPicker(streams, autoPlay=false){
