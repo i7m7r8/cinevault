@@ -838,54 +838,37 @@ function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   (async () => {
-    // ── TPB item: no TMDB id, no embed sources — show magnet info panel
+    // TPB item — no TMDB id, show magnet info, no embed sources
     if (item._isTpb) {
       $("stream-loading").style.display = "none";
       $("stream-picker").style.display = "block";
-      $("streambns").innerHTML = "";
-      const magnet = `magnet:?xt=urn:btih:${item._infoHash}&dn=${encodeURIComponent(item.title)}` +
-        `&tr=udp://tracker.opentrackr.org:1337/announce` +
-        `&tr=udp://open.stealth.si:80/announce`;
+      const magnet = `magnet:?xt=urn:btih:${item._infoHash}&dn=${encodeURIComponent(item.title)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce`;
       $("streambns").innerHTML =
-        `<div style="padding:14px;background:var(--s2);border-radius:10px;font-size:.85rem;line-height:1.8;color:var(--text);">` +
-          `<div style="font-weight:700;margin-bottom:6px;color:#a78bfa;">🧲 Torrent Info</div>` +
-          `<div>👤 Seeders: <b>${item._seeders}</b></div>` +
-          `<div>💾 Size: <b>${item._sizeStr}</b></div>` +
-          `<div style="margin-top:10px;">` +
-            `<a href="${magnet}" style="display:inline-block;padding:8px 14px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-size:.82rem;font-weight:600;">` +
-              `🧲 Open Magnet in App` +
-            `</a>` +
-          `</div>` +
-          `<div style="margin-top:8px;font-size:.75rem;color:var(--muted);">Copy hash: <code style="user-select:all;background:var(--s1);padding:2px 6px;border-radius:4px;">${item._infoHash}</code></div>` +
-        `</div>`;
-      // If we enriched a TMDB id during poster lookup, try embed sources too
+        `<div style="padding:14px;background:var(--s2);border-radius:10px;font-size:.85rem;line-height:2;color:var(--text)">` +
+        `<div style="font-weight:700;color:#a78bfa;margin-bottom:4px">🧲 Torrent — ${item.title}</div>` +
+        `<div>👤 Seeders: <b>${item._seeders}</b> &nbsp; 💾 Size: <b>${item._sizeStr}</b></div>` +
+        `<div style="margin-top:10px"><a href="${magnet}" style="display:inline-block;padding:7px 14px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:.82rem">🧲 Open in Torrent App</a></div>` +
+        `<div style="margin-top:8px;font-size:.74rem;color:var(--muted)">Hash: <code style="user-select:all;background:var(--s1);padding:2px 5px;border-radius:4px">${item._infoHash}</code></div></div>`;
       if (item._tmdbId) {
-        cur.id = item._tmdbId;
-        cur.imdb_id = null;
-        buildSources();
-        loadSource(0);
+        cur.id = item._tmdbId; cur.imdb_id = null;
+        buildSources(); loadSource(0);
       } else {
-        // Hide source buttons — they'd play wrong content
-        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px;">No embed sources — use magnet above</div>`;
+        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">⚠️ No embed match — use magnet above</div>`;
       }
       return;
     }
-
-    // ── MAL/Jikan item: use _tmdbId if available, else info-only
-    if (item.id && String(item.id).startsWith("mal_")) {
+    // MAL/Jikan item
+    if (item._isAnime) {
       if (item._tmdbId) {
-        cur.id = item._tmdbId;
-        cur.imdb_id = null;
-        buildSources();
-        loadSource(0);
+        cur.id = item._tmdbId; cur.imdb_id = null;
+        buildSources(); loadSource(0);
       } else {
-        $("stream-loading").textContent = "⚠️ No embed source — search title manually";
-        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px;">No TMDB match found</div>`;
+        $("stream-loading").textContent = "⚠️ No embed source found for this title";
+        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">No TMDB match found</div>`;
       }
       return;
     }
-
-    // ── Normal TMDB item
+    // Normal TMDB item
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${item.id}/external_ids`);
@@ -963,160 +946,100 @@ searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) show
 
 function clearSearch() { searchInput.value = ""; $("search-clear").style.display = "none"; hideSearch(); }
 
-// ── MULTI-SOURCE ADULT SEARCH ───────────────────────────────────
-// Source 1+2: TMDB /search/multi + /search/movie with include_adult=true
-// Source 3:   Jikan API (MyAnimeList) genres=12 (Hentai) — free, no key
-// Source 4+5: apibay.org cat=500 (adult video) + cat=506 (adult clips/hentai)
-//             via Vercel CORS proxy → results shaped into cards with infoHash
-
+// ── MULTI-SOURCE ADULT SEARCH ──────────────────────────────────
 async function _searchTmdbAdult(q) {
   const [multi, movies] = await Promise.allSettled([
     tmdb("/search/multi",  { query: q, include_adult: "true" }),
     tmdb("/search/movie",  { query: q, include_adult: "true" }),
   ]);
-  const seen = new Set();
-  const items = [];
-  const addItems = (list, fallbackType) => {
-    for (const it of list) {
-      if (it.media_type === "person") continue;
-      if (seen.has(it.id)) continue;
-      seen.add(it.id);
-      it._sourceType = it.media_type || fallbackType;
-      items.push(it);
-    }
-  };
-  if (multi.status  === "fulfilled") addItems(multi.value.results  || [], "movie");
-  if (movies.status === "fulfilled") addItems(movies.value.results || [], "movie");
+  const seen = new Set(), items = [];
+  const add = (list, fb) => { for (const it of list) { if (it.media_type === "person" || seen.has(it.id)) continue; seen.add(it.id); it._sourceType = it.media_type || fb; items.push(it); } };
+  if (multi.status  === "fulfilled") add(multi.value.results  || [], "movie");
+  if (movies.status === "fulfilled") add(movies.value.results || [], "movie");
   return items;
 }
 
 async function _searchJikanHentai(q) {
-  const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&genres=12&sfw=false&limit=10`;
-  const r = await fetch(url);
-  if (!r.ok) return [];
-  const d = await r.json();
-  return (d.data || []).map(a => ({
-    id: "mal_" + a.mal_id,
-    _sourceType: "anime",
-    title: a.title_english || a.title,
-    name:  a.title_english || a.title,
-    media_type: "tv",
-    poster_path: null,
-    _posterUrl: a.images?.jpg?.large_image_url || a.images?.jpg?.image_url || null,
-    overview: a.synopsis || "",
-    vote_average: a.score || 0,
-    first_air_date: a.aired?.from || "",
-    adult: true,
-  }));
+  try {
+    const r = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&genres=12&sfw=false&limit=10`);
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.data || []).map(a => ({
+      id: "mal_" + a.mal_id, _isAnime: true, _sourceType: "anime",
+      title: a.title_english || a.title, name: a.title_english || a.title,
+      media_type: "tv", poster_path: null,
+      _posterUrl: a.images?.jpg?.large_image_url || null,
+      overview: a.synopsis || "", vote_average: a.score || 0,
+      first_air_date: a.aired?.from || "", adult: true,
+    }));
+  } catch { return []; }
 }
 
 async function _searchApibayAdult(q) {
-  // apibay cat 500 = adult video, 506 = adult clips & hentai
-  // routed through Vercel proxy to avoid CORS
   const proxy = u => `${API}/proxy?url=${encodeURIComponent(u)}`;
-  const urls = [
-    `https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=500`,
-    `https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=506`,
-  ];
-  const results = await Promise.allSettled(urls.map(async u => {
-    const r = await fetch(proxy(u), { signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return [];
-    const d = await r.json();
-    return Array.isArray(d) ? d : [];
-  }));
-
-  const seen = new Set();
-  const items = [];
-  for (const res of results) {
-    if (res.status !== "fulfilled") continue;
-    for (const t of res.value) {
-      if (!t.info_hash || t.info_hash === "0000000000000000000000000000000000000000") continue;
-      if (seen.has(t.info_hash)) continue;
-      seen.add(t.info_hash);
-      const sizeMB = t.size ? Math.round(t.size / 1024 / 1024) : 0;
-      const sizeStr = sizeMB > 1024 ? (sizeMB / 1024).toFixed(1) + " GB" : sizeMB + " MB";
-      items.push({
-        id: "tpb_" + t.id,
-        _sourceType: "movie",
-        _isTpb: true,
-        _infoHash: t.info_hash,
-        _seeders: t.seeders || 0,
-        _sizeStr: sizeStr,
-        title: t.name,
-        name:  t.name,
-        media_type: "movie",
-        poster_path: null,
-        _posterUrl: null,
-        overview: `👤 ${t.seeders || 0} seeders · 💾 ${sizeStr}`,
-        vote_average: 0,
-        release_date: "",
-        adult: true,
-      });
-    }
+  const fetches = ["500","506"].map(cat =>
+    fetch(proxy(`https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=${cat}`), { signal: AbortSignal.timeout(10000) })
+      .then(r => r.ok ? r.json() : []).catch(() => [])
+  );
+  const [r500, r506] = await Promise.all(fetches);
+  const seen = new Set(), items = [];
+  for (const t of [...(r500||[]), ...(r506||[])]) {
+    if (!t.info_hash || t.info_hash === "0000000000000000000000000000000000000000" || seen.has(t.info_hash)) continue;
+    seen.add(t.info_hash);
+    const sizeMB = t.size ? Math.round(t.size / 1024 / 1024) : 0;
+    items.push({
+      id: "tpb_" + t.id, _isTpb: true, _sourceType: "movie",
+      _infoHash: t.info_hash, _seeders: +t.seeders || 0,
+      _sizeStr: sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB",
+      title: t.name, name: t.name, media_type: "movie",
+      poster_path: null, _posterUrl: null,
+      overview: `👤 ${t.seeders||0} seeders · 💾 ${sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB"}`,
+      vote_average: 0, release_date: "", adult: true,
+    });
   }
-  // Sort by seeders descending
-  items.sort((a, b) => b._seeders - a._seeders);
-  return items.slice(0, 20);
-}
-
-// Try to enrich apibay items with TMDB poster by title match
-async function _enrichWithPosters(tpbItems) {
-  // Batch: up to 6 poster lookups in parallel to avoid rate-limiting
-  const toEnrich = tpbItems.slice(0, 6);
-  await Promise.allSettled(toEnrich.map(async item => {
+  items.sort((a,b) => b._seeders - a._seeders);
+  // Enrich top 5 with TMDB poster
+  await Promise.allSettled(items.slice(0,5).map(async it => {
     try {
-      const d = await tmdb("/search/movie", { query: item.title, include_adult: "true" });
-      const match = (d.results || [])[0];
-      if (match?.poster_path) {
-        item.poster_path = match.poster_path;
-        item._tmdbId = match.id;
-      }
+      const d = await tmdb("/search/movie", { query: it.title, include_adult: "true" });
+      const m = (d.results||[])[0];
+      if (m?.poster_path) { it.poster_path = m.poster_path; it._tmdbId = m.id; }
     } catch {}
   }));
+  return items.slice(0, 20);
 }
 
 function showSearch(q) {
   $("main").style.display = "none"; $("hero").style.display = "none"; $("spage").classList.add("on");
   $("stitle").textContent = `"${q}"`;
   const g = $("sgrid"); skels(g, 10);
-
-  Promise.allSettled([
-    _searchTmdbAdult(q),
-    _searchJikanHentai(q),
-    _searchApibayAdult(q),
-  ]).then(async ([tmdbRes, jikanRes, tpbRes]) => {
-    const tmdbItems  = tmdbRes.status  === "fulfilled" ? tmdbRes.value  : [];
-    const jikanItems = jikanRes.status === "fulfilled" ? jikanRes.value : [];
-    const tpbItems   = tpbRes.status   === "fulfilled" ? tpbRes.value   : [];
-
-    // Enrich top TPB results with TMDB posters (best-effort)
-    if (tpbItems.length) await _enrichWithPosters(tpbItems);
-
-    const all = [...tmdbItems, ...jikanItems, ...tpbItems];
-    g.innerHTML = "";
-    if (!all.length) {
-      g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`;
-      return;
-    }
-    all.slice(0, 40).forEach(it => {
-      const card = makeCard(it, it._sourceType || it.media_type || "movie");
-      // Override poster for Jikan/TPB items
-      const overrideUrl = it._posterUrl || (it.poster_path ? null : null);
-      if (it._posterUrl) {
-        const img = card.querySelector(".cposter");
-        if (img) img.src = it._posterUrl;
-      }
-      // TPB badge
-      if (it._isTpb) {
-        const badge = document.createElement("div");
-        badge.style.cssText = "position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;z-index:2;";
-        badge.textContent = "TPB";
-        card.style.position = "relative";
-        card.appendChild(badge);
-      }
-      g.appendChild(card);
+  Promise.allSettled([_searchTmdbAdult(q), _searchJikanHentai(q), _searchApibayAdult(q)])
+    .then(([tRes, jRes, aRes]) => {
+      const all = [
+        ...(tRes.status === "fulfilled" ? tRes.value : []),
+        ...(jRes.status === "fulfilled" ? jRes.value : []),
+        ...(aRes.status === "fulfilled" ? aRes.value : []),
+      ];
+      g.innerHTML = "";
+      if (!all.length) { g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
+      all.slice(0, 40).forEach(it => {
+        const card = makeCard(it, it._sourceType || it.media_type || "movie");
+        if (it._posterUrl && !it.poster_path) { const img = card.querySelector(".cposter"); if (img) img.src = it._posterUrl; }
+        if (it._isTpb) {
+          card.style.position = "relative";
+          const b = document.createElement("div");
+          b.style.cssText = "position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;z-index:2";
+          b.textContent = "TPB"; card.appendChild(b);
+        }
+        if (it._isAnime) {
+          card.style.position = "relative";
+          const b = document.createElement("div");
+          b.style.cssText = "position:absolute;top:6px;left:6px;background:#ec4899;color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;z-index:2";
+          b.textContent = "HENTAI"; card.appendChild(b);
+        }
+        g.appendChild(card);
+      });
     });
-  });
 }
 
 function hideSearch() { $("main").style.display = "block"; $("hero").style.display = "flex"; $("spage").classList.remove("on"); }
