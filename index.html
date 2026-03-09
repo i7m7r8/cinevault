@@ -16,6 +16,7 @@
 <!-- WebTorrent -->
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <style>
+/* (keep all existing styles from previous version) */
 :root {
   --bg: #0d0d14;
   --s1: #13131e;
@@ -572,7 +573,8 @@ footer{
 const $ = id => document.getElementById(id);
 
 // ── CONFIG ──────────────────────────────────────────────────────
-const API = "https://cinevault-api.imrannn68d-de2.workers.dev";
+const API = "https://cinevault-api.imrannn68d-de2.workers.dev"; // for streams & subs only
+const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
 const SOURCES = [
@@ -614,10 +616,10 @@ function updateSubtitleBarVisibility() {
   }
 }
 
-// ── TMDB ────────────────────────────────────────────────────────
+// ── TMDB (direct, not via worker) ───────────────────────────────
 async function tmdb(path, params={}) {
-  const q = new URLSearchParams(params);
-  const r = await fetch(`${API}${path}?${q}`);
+  const q = new URLSearchParams({ ...params, api_key: TMDB_KEY });
+  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
   if (!r.ok) throw new Error("TMDB " + r.status);
   return r.json();
 }
@@ -1074,7 +1076,10 @@ async function loadSec(gid, path, params, type, hero=false) {
     g.innerHTML = "";
     if (hero && items.length) setHero(items[0], items[0].media_type || type);
     items.slice(0,12).forEach(it => g.appendChild(makeCard(it, it.media_type || type)));
-  } catch { g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Failed</div>`; }
+  } catch (e) {
+    console.error("loadSec error", e);
+    g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Failed</div>`;
+  }
 }
 
 // ── MODAL ───────────────────────────────────────────────────────
@@ -1136,7 +1141,9 @@ function openModal(item, type) {
         cur.imdb_id = ext.imdb_id;
         // If current source uses IMDb and we now have it, reload it
         if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to fetch IMDb ID", e);
+      }
     }
     if (isTv) await loadSeasons(item.id);
     loadDirectStreams();
@@ -1164,7 +1171,9 @@ async function loadSeasons(tvId) {
       wrap.appendChild(b);
     });
     await loadEps(tvId, 1);
-  } catch {}
+  } catch (e) {
+    console.error("loadSeasons error", e);
+  }
 }
 
 async function loadEps(tvId, s) {
@@ -1185,7 +1194,9 @@ async function loadEps(tvId, s) {
       };
       wrap.appendChild(b);
     });
-  } catch {}
+  } catch (e) {
+    console.error("loadEps error", e);
+  }
 }
 
 // ── CLOSE MODAL ─────────────────────────────────────────────────
