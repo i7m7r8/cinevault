@@ -851,16 +851,20 @@ async function loadSource(i) {
 
 // ── STREAM FETCHING ────────────────────────────────────────────
 async function fetchStreams(imdbId, type, s, e) {
-  const path = type === "movie" ? `movie/${imdbId}` : `series/${imdbId}:${s}:${e}`;
-  const workerStreams = type === "movie" ? `${API}/streams/${imdbId}` : `${API}/streams/${imdbId}/${s}/${e}`;
-  const endpoints = [
-    workerStreams,
-    `https://torrentio.strem.fun/stream/${path}.json`,
-  ];
-  for (const url of endpoints) {
+  // Primary: our Cloudflare worker — /streams/{imdbId} or /streams/{imdbId}/{s}/{e}
+  const workerUrl = type === "movie"
+    ? `${API}/streams/${imdbId}`
+    : `${API}/streams/${imdbId}/${s}/${e}`;
+  // Fallback: torrentio stremio addon
+  const stremioPath = type === "movie"
+    ? `movie/${imdbId}`
+    : `series/${imdbId}:${s}:${e}`;
+  const fallbackUrl = `https://torrentio.strem.fun/stream/${stremioPath}.json`;
+
+  for (const url of [workerUrl, fallbackUrl]) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 7000);
+      const timer = setTimeout(() => ctrl.abort(), 8000);
       const r = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!r.ok) continue;
@@ -884,8 +888,9 @@ function buildStreamPicker(streams) {
     const lines = (s.title || s.name || "").split("\n");
     const fname = lines[0] || "Unknown";
     const meta  = lines.slice(1).join(" ");
+    // Worker outputs: 👤123 💾1.2GB  (no spaces after emoji, no space before unit)
     const seeds = (meta.match(/👤\s*(\d+)/) || [])[1] || "";
-    const size  = (meta.match(/💾\s*([\d.]+ ?[KMGT]B)/) || [])[1] || "";
+    const size  = (meta.match(/💾\s*([\d.]+\s*[KMGT]?B)/) || [])[1] || "";
     const [ql, qc] = qClass(fname);
     let lang = "";
     if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
@@ -1018,7 +1023,14 @@ function openModal(item, type) {
   $("tv-ctrl").style.display = isTv ? "block" : "none";
   const year   = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average?.toFixed(1) || "—";
-  $("mmeta").innerHTML = `<span>${year}</span><span>•</span><span class="mrating">⭐${rating}</span><span>•</span><span>${type==="movie"?"🎬 Movie":"📺 Series"}</span>`;
+  // Helper to refresh mmeta badge (also called when season/episode changes)
+  cur._year = year; cur._rating = rating;
+  function updateMmeta() {
+    const ep = (cur.mediaType==="movie") ? "" : ` · S${curS} E${curE}`;
+    $("mmeta").innerHTML = `<span>${cur._year}</span><span>•</span><span class="mrating">⭐${cur._rating}</span><span>•</span><span>${cur.mediaType==="movie"?"🎬 Movie":"📺 Series"}</span>${ep?`<span>•</span><span style="color:var(--accent);font-weight:700">${ep.trim()}</span>`:""}`;
+  }
+  updateMmeta();
+  cur._updateMmeta = updateMmeta;
   buildSources();
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
@@ -1066,6 +1078,7 @@ async function loadSeasons(tvId) {
         document.querySelectorAll("#sbns .cbtn").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         curS = s.season_number; curE = 1;
+        if (cur._updateMmeta) cur._updateMmeta();
         await loadEps(tvId, curS);
         loadSource(srcIdx);
         loadDirectStreams();
@@ -1090,6 +1103,7 @@ async function loadEps(tvId, s) {
         document.querySelectorAll(".epbtn").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         curE = ep.episode_number;
+        if (cur._updateMmeta) cur._updateMmeta();
         loadSource(srcIdx);
         loadDirectStreams();
       };
