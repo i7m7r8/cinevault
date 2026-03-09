@@ -336,12 +336,13 @@ a{text-decoration:none;color:inherit}
 
 /* SUBTITLE CONTROLS */
 .subbar{
-  display:flex;
+  display:none;
   align-items:center;
   gap:7px;
   margin-top:10px;
   flex-wrap:wrap;
 }
+.subbar.visible{ display:flex; }
 .subsel{
   flex:1;min-width:180px;background:var(--s2);
   border:1px solid var(--border);color:var(--text);
@@ -363,7 +364,9 @@ a{text-decoration:none;color:inherit}
 #sub-overlay{
   position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
   z-index:20;pointer-events:none;width:90%;text-align:center;
+  display:none;
 }
+#sub-overlay.visible{ display:block; }
 #sub-text{
   background:rgba(0,0,0,0.75);color:#fff;font-size:15px;font-weight:600;
   padding:4px 10px;border-radius:6px;line-height:1.6;
@@ -513,7 +516,7 @@ footer{
 
       <div class="pwrap" id="pwrap">
         <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
-        <div id="sub-overlay" style="display:none"><span id="sub-text"></span></div>
+        <div id="sub-overlay"><span id="sub-text"></span></div>
         <div class="ploader" id="ploader"><div class="spin"></div></div>
         <!-- iframe or video will be inserted here -->
       </div>
@@ -535,7 +538,7 @@ footer{
         <div id="streambns"></div>
       </div>
 
-      <!-- SUBTITLE CONTROLS -->
+      <!-- SUBTITLE CONTROLS (visible only during torrent playback) -->
       <div class="subbar" id="subbar">
         <span class="clabel">🔤 SUBTITLE</span>
         <select class="subsel" id="subsel">
@@ -601,6 +604,16 @@ function buildMagnetLink(hash) {
   return `magnet:?xt=urn:btih:${hash}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce`;
 }
 
+// Show/hide subtitle bar based on whether a video element exists
+function updateSubtitleBarVisibility() {
+  const subbar = $("subbar");
+  if (currentVideo) {
+    subbar.classList.add("visible");
+  } else {
+    subbar.classList.remove("visible");
+  }
+}
+
 // ── TMDB ────────────────────────────────────────────────────────
 async function tmdb(path, params={}) {
   const q = new URLSearchParams(params);
@@ -627,11 +640,12 @@ function setNameBar(title, sub) {
 
 // ── PLAYER (IFRAME) ────────────────────────────────────────────
 function playUrl(url) {
-  // Remove any existing video element
+  // Remove any existing video element (torrent player)
   if (currentVideo) {
     currentVideo.pause();
     currentVideo.remove();
     currentVideo = null;
+    updateSubtitleBarVisibility();
   }
   $("pph").classList.add("hidden");
   const pwrap = $("pwrap");
@@ -641,6 +655,7 @@ function playUrl(url) {
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
   iframe.referrerPolicy = "no-referrer";
+  iframe.onerror = () => toast("❌ Iframe failed to load");
   pwrap.appendChild(iframe);
   iframe.src = url;
 }
@@ -663,6 +678,7 @@ async function playTorrent(infoHash, fileIdx, imdbId, season, episode, title, so
   video.playsInline = true;
   pwrap.appendChild(video);
   currentVideo = video;
+  updateSubtitleBarVisibility();
 
   setNameBar(title, "▶ " + sourceName);
 
@@ -817,18 +833,61 @@ function buildSources() {
   });
 }
 
-function loadSource(i) {
+async function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src || !cur) return;
+
+  // Highlight button
   document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
+
   const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("❌ No ID yet"); return; }
+  let id;
+
+  if (src.useImdb) {
+    // Wait for IMDb ID if needed (up to 5 seconds)
+    if (!cur.imdb_id) {
+      toast("⏳ Fetching IMDb ID...");
+      let waited = 0;
+      while (!cur.imdb_id && waited < 5000) {
+        await new Promise(r => setTimeout(r, 200));
+        waited += 200;
+      }
+    }
+    id = cur.imdb_id || cur.id; // fallback to TMDB ID
+  } else {
+    id = cur.id;
+  }
+
+  if (!id) {
+    toast("❌ No valid ID for this source");
+    return;
+  }
+
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const title = cur.title || cur.name || "";
   const ep = isMovie ? "" : ` · S${curS} E${curE}`;
-  playUrl(url);
+
+  // If we were playing a torrent, clean it up
+  if (currentVideo) {
+    currentVideo.pause();
+    currentVideo.remove();
+    currentVideo = null;
+    updateSubtitleBarVisibility();
+  }
+
+  // Create iframe and play
+  const pwrap = $("pwrap");
+  pwrap.innerHTML = ''; // remove any previous content
+  const iframe = document.createElement('iframe');
+  iframe.allowFullscreen = true;
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
+  iframe.referrerPolicy = "no-referrer";
+  iframe.onerror = () => toast("❌ Iframe failed to load");
+  pwrap.appendChild(iframe);
+  iframe.src = url;
+
+  $("pph").classList.add("hidden");
   setNameBar(title + ep, "▶ " + src.name);
   toast("▶ " + src.name);
 }
@@ -1027,6 +1086,7 @@ function openModal(item, type) {
     currentVideo.pause();
     currentVideo.remove();
     currentVideo = null;
+    updateSubtitleBarVisibility();
   }
 
   const isTv = type === "tv" || type === "series";
@@ -1059,20 +1119,14 @@ function openModal(item, type) {
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
   iframe.referrerPolicy = "no-referrer";
+  iframe.onerror = () => toast("❌ Iframe failed to load");
   pwrap.appendChild(iframe);
   $("pph").classList.remove("hidden");
   $("pph").innerHTML = `<div class="pph-icon">⏳</div><div>Loading...</div>`;
 
-  // Auto-play source 0
+  // Load first source using loadSource (ensures IMDb ID handling)
   srcIdx = 0;
-  const src0 = SOURCES[0];
-  const id0 = src0.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (id0) {
-    const url0 = isTv ? src0.tv(id0, 1, 1) : src0.movie(id0);
-    iframe.src = url0;
-    setNameBar((item.title||item.name) + (isTv?" · S1 E1":""), "▶ " + src0.name);
-    document.querySelectorAll("#srcbns .cbtn").forEach((b,j)=>b.classList.toggle("on",j===0));
-  }
+  loadSource(0);
 
   // Load everything async
   (async () => {
@@ -1080,6 +1134,7 @@ function openModal(item, type) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
         cur.imdb_id = ext.imdb_id;
+        // If current source uses IMDb and we now have it, reload it
         if (SOURCES[srcIdx]?.useImdb) loadSource(srcIdx);
       } catch {}
     }
@@ -1143,6 +1198,7 @@ function closeModal() {
     currentVideo.pause();
     currentVideo.remove();
     currentVideo = null;
+    updateSubtitleBarVisibility();
   }
   $("pph").classList.remove("hidden");
   $("pph").innerHTML = `<div class="pph-icon">🎬</div><div>Select a source to play</div>`;
