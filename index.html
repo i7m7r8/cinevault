@@ -835,17 +835,17 @@ function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   (async () => {
-    // Adult card with embed URL — play directly
-    if (item._embedUrl) {
+    // Eporner card — launch adult player immediately
+    if (item._isEporner && item._embedUrl) {
       $("stream-picker").style.display = "none";
       $("srcbns").innerHTML = "";
-      playAdultEmbed(item._embedUrl, item._source, item.title || item.name);
+      playAdultEmbed(item._embedUrl, "Eporner", item.title || item.name, item._posterUrl);
       return;
     }
-    // MAL/Jikan anime
+    // MAL/Jikan anime card
     if (item._isAnime) {
       if (item._tmdbId) { cur.id = item._tmdbId; cur.imdb_id = null; buildSources(); loadSource(0); }
-      else { $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No embed source found</div>'; }
+      else { $("stream-loading").style.display = "block"; $("stream-loading").textContent = "⚠️ No embed source found"; }
       return;
     }
     // Normal TMDB card
@@ -927,98 +927,114 @@ searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) show
 function clearSearch() { searchInput.value = ""; $("search-clear").style.display = "none"; hideSearch(); }
 
 // ══════════════════════════════════════════════════════════════════
-//  ADULT EMBED PLAYER
-//  Plays iframe embeds from Eporner, xVideos, xHamster, PornHub etc.
+//  ADULT VIDEO PLAYER
+//  A proper full-featured player for adult embed content.
+//  Shows thumbnail → click to load embed → fullscreen, title bar,
+//  result list (all Eporner results for the query, switchable).
 // ══════════════════════════════════════════════════════════════════
-function playAdultEmbed(embedUrl, sourceName, title) {
+
+// State for adult player result switching
+let _adultResults = [];
+let _adultIdx = 0;
+
+function playAdultEmbed(embedUrl, sourceName, title, thumbUrl) {
   clearPlayer();
   $("pph").classList.add("hidden");
   setNameBar((title || "Video") + (sourceName ? ` — ${sourceName}` : ""));
+
   const pwrap = $("pwrap");
+
+  // Build a rich player shell with thumbnail preview + click-to-play
+  // This avoids autoplay blocks and gives a proper UX
+  const shell = document.createElement("div");
+  shell.id = "adult-shell";
+  shell.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;display:flex;flex-direction:column;";
+
+  const playerArea = document.createElement("div");
+  playerArea.style.cssText = "flex:1;position:relative;overflow:hidden;";
+
+  if (thumbUrl) {
+    // Thumbnail overlay with big play button — click loads the real iframe
+    const thumb = document.createElement("div");
+    thumb.style.cssText = `position:absolute;inset:0;background:url(${thumbUrl}) center/cover no-repeat;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;`;
+    const playBtn = document.createElement("div");
+    playBtn.style.cssText = "width:72px;height:72px;background:rgba(232,23,58,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 24px rgba(0,0,0,.6);transition:transform .15s;";
+    playBtn.textContent = "▶";
+    thumb.appendChild(playBtn);
+    thumb.onmouseenter = () => { playBtn.style.transform = "scale(1.1)"; };
+    thumb.onmouseleave = () => { playBtn.style.transform = "scale(1)"; };
+    thumb.onclick = () => {
+      thumb.remove();
+      _injectAdultIframe(playerArea, embedUrl);
+    };
+    playerArea.appendChild(thumb);
+  } else {
+    _injectAdultIframe(playerArea, embedUrl);
+  }
+
+  shell.appendChild(playerArea);
+
+  // Result switcher bar — if multiple results loaded
+  if (_adultResults.length > 1) {
+    const bar = document.createElement("div");
+    bar.id = "adult-result-bar";
+    bar.style.cssText = "display:flex;gap:6px;padding:8px 10px;background:#111;overflow-x:auto;flex-shrink:0;scrollbar-width:thin;";
+    _adultResults.forEach((v, i) => {
+      const btn = document.createElement("button");
+      btn.style.cssText = `flex-shrink:0;padding:5px 10px;border-radius:6px;border:1px solid ${i===_adultIdx?"var(--accent)":"#333"};` +
+        `background:${i===_adultIdx?"var(--accent)":"#1a1a1a"};color:#fff;font-size:11px;cursor:pointer;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
+      btn.title = v.title || v.id;
+      btn.textContent = (i+1) + ". " + (v.title || v.id || "Video " + (i+1));
+      btn.onclick = () => {
+        _adultIdx = i;
+        // Rebuild player with new selection
+        playAdultEmbed(v.embed, "Eporner", v.title || v.id, v.thumbs?.[2]?.src || v.thumbs?.[0]?.src || v.default_thumb?.src || null);
+      };
+      bar.appendChild(btn);
+    });
+    shell.appendChild(bar);
+  }
+
+  pwrap.appendChild(shell);
+  toast("▶ " + (sourceName || "Playing"));
+}
+
+function _injectAdultIframe(container, embedUrl) {
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.src = embedUrl;
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture";
   iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  pwrap.appendChild(iframe);
-  toast("▶ " + (sourceName || "Playing…"));
+  container.appendChild(iframe);
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  ADULT SEARCH — 5 FREE NO-KEY SOURCES
-//
-//  1. Eporner       Official free API  → embed URL ✅
-//  2. xVideos       lustpress API      → embed URL ✅
-//  3. xHamster      lustpress API      → embed URL ✅
-//  4. PornHub       lustpress API      → embed URL ✅
-//  5. TMDB adult    Official free API  → 2Embed iframe
-//  6. Jikan hentai  Official free API  → 2Embed iframe
-//
-//  lustpress (lust.merahputih.moe) — free, CORS-enabled, no auth
-//  Docs: https://github.com/sinkaroid/lustpress
+//  EPORNER SEARCH  (official free API, no key, CORS-enabled)
+//  Docs: https://www.eporner.com/api/v2/
+//  Endpoint: GET https://www.eporner.com/api/v2/video/search/
+//    ?query=QUERY&per_page=20&thumbsize=big&format=json&lp=en
+//  Returns: { videos: [ { id, title, embed, views, rate, length_min,
+//                          thumbs:[{src,width,height}], added } ] }
+//  CORS: Eporner blocks direct browser requests — use Vercel proxy
 // ══════════════════════════════════════════════════════════════════
 
-const LUST = "https://lust.merahputih.moe";
-
-// Map lustpress response items → our card format
-// lustpress returns: { data: [ { title, embed, thumbnail, duration, url }, ... ] }
-function _lustToCards(items, source, badge, badgeColor) {
-  return (items || []).map((v, i) => ({
-    id: `${source}_${i}_${Math.random().toString(36).slice(2)}`,
-    _embedUrl:   v.embed       || v.url || "",
-    _posterUrl:  v.thumbnail   || v.image || null,
-    _source:     source,
-    _badge:      badge,
-    _badgeColor: badgeColor,
-    title: v.title || "Untitled",
-    name:  v.title || "Untitled",
-    media_type: "movie",
-    poster_path: null,
-    overview: `⏱ ${v.duration || "?"} · ${source}`,
-    vote_average: 0,
-    adult: true,
-  }));
-}
-
-async function _searchLustpress(site, q) {
-  // lustpress search: GET /SITE/search?key=QUERY&page=1
+async function _fetchEporner(q) {
+  const url = "https://www.eporner.com/api/v2/video/search/" +
+    "?query=" + encodeURIComponent(q) +
+    "&per_page=20&thumbsize=big&format=json&lp=en&order=top-rated";
   try {
-    const url = `${LUST}/${site}/search?key=${encodeURIComponent(q)}&page=1`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return [];
-    const d = await r.json();
-    return d.data || d.result || d.videos || d || [];
-  } catch { return []; }
-}
-
-async function _searchEporner(q) {
-  // Official Eporner API — free, no key, returns embed URL per video
+    // Try direct first (works if Eporner allows CORS for this endpoint)
+    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (r.ok) return (await r.json()).videos || [];
+  } catch {}
   try {
-    const url = "https://www.eporner.com/api/v2/video/search/" +
-      "?query=" + encodeURIComponent(q) +
-      "&per_page=15&thumbsize=big&format=json&lp=en";
+    // Fallback: route through Vercel proxy
     const proxy = `${API}/proxy?url=${encodeURIComponent(url)}`;
     const r = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return [];
-    const d = await r.json();
-    return (d.videos || []).map(v => ({
-      id: "ep_" + v.id,
-      _embedUrl:   v.embed,
-      _posterUrl:  v.thumbs?.[2]?.src || v.thumbs?.[0]?.src || v.default_thumb?.src || null,
-      _source:     "Eporner",
-      _badge:      "EP",
-      _badgeColor: "#e11d48",
-      title: v.title || v.id,
-      name:  v.title || v.id,
-      media_type: "movie",
-      poster_path: null,
-      overview: `⏱ ${v.length_min || "?"}min · 👁 ${Number(v.views||0).toLocaleString()} · ⭐ ${v.rate || "?"}`,
-      vote_average: parseFloat(v.rate) || 0,
-      release_date: v.added || "",
-      adult: true,
-    }));
-  } catch { return []; }
+    if (r.ok) return (await r.json()).videos || [];
+  } catch {}
+  return [];
 }
 
 async function _searchTmdbAdult(q) {
@@ -1048,10 +1064,8 @@ async function _searchJikanHentai(q) {
     const d = await r.json();
     return (d.data || []).map(a => ({
       id: "mal_" + a.mal_id,
-      _isAnime:    true,
+      _isAnime: true,
       _sourceType: "anime",
-      _badge:      "HENTAI",
-      _badgeColor: "#ec4899",
       title: a.title_english || a.title,
       name:  a.title_english || a.title,
       media_type: "tv",
@@ -1065,11 +1079,10 @@ async function _searchJikanHentai(q) {
   } catch { return []; }
 }
 
-function _addBadge(card, text, color) {
+function _badge(card, text, color) {
   const b = document.createElement("div");
   b.style.cssText = `position:absolute;top:6px;left:6px;background:${color};color:#fff;` +
-    `font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;z-index:2;letter-spacing:.5px;` +
-    `text-shadow:0 1px 2px rgba(0,0,0,.4)`;
+    `font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;z-index:3;letter-spacing:.5px`;
   b.textContent = text;
   card.appendChild(b);
 }
@@ -1080,51 +1093,54 @@ function showSearch(q) {
   $("spage").classList.add("on");
   $("stitle").textContent = `"${q}"`;
   const g = $("sgrid");
-  skels(g, 15);
+  skels(g, 12);
+  _adultResults = []; _adultIdx = 0;
 
-  // 6 sources in parallel
   Promise.allSettled([
-    _searchEporner(q),                                                    // Eporner official API
-    _searchLustpress("xvideos",  q).then(r => _lustToCards(r, "xVideos",  "XV", "#ff6600")),
-    _searchLustpress("xhamster", q).then(r => _lustToCards(r, "xHamster", "XH", "#f97316")),
-    _searchLustpress("pornhub",  q).then(r => _lustToCards(r, "PornHub",  "PH", "#ff9000")),
+    _fetchEporner(q),
     _searchTmdbAdult(q),
     _searchJikanHentai(q),
-  ]).then(results => {
-    const [epRes, xvRes, xhRes, phRes, tmdbRes, malRes] = results;
+  ]).then(([epRes, tmdbRes, malRes]) => {
 
-    // Merge: tube sites first (actually play), then TMDB, then anime
-    const tubeItems = [
-      ...(epRes.status   === "fulfilled" ? epRes.value   : []),
-      ...(xvRes.status   === "fulfilled" ? xvRes.value   : []),
-      ...(xhRes.status   === "fulfilled" ? xhRes.value   : []),
-      ...(phRes.status   === "fulfilled" ? phRes.value   : []),
-    ];
+    // Store raw Eporner videos globally so adult player can show switcher
+    const epVideos = epRes.status === "fulfilled" ? epRes.value : [];
+    _adultResults = epVideos;
+
+    // Convert Eporner raw videos → card items
+    const epItems = epVideos.map((v, i) => ({
+      id: "ep_" + v.id,
+      _isEporner: true,
+      _embedUrl:  v.embed,
+      _posterUrl: v.thumbs?.[2]?.src || v.thumbs?.[0]?.src || v.default_thumb?.src || null,
+      title: v.title || v.id,
+      name:  v.title || v.id,
+      media_type: "movie",
+      poster_path: null,
+      overview: `⏱ ${v.length_min || "?"}min · 👁 ${Number(v.views||0).toLocaleString()} · ⭐ ${v.rate || "?"}`,
+      vote_average: parseFloat(v.rate) || 0,
+      release_date: v.added || "",
+      adult: true,
+    }));
+
     const tmdbItems = tmdbRes.status === "fulfilled" ? tmdbRes.value : [];
     const malItems  = malRes.status  === "fulfilled" ? malRes.value  : [];
+    const all = [...epItems, ...tmdbItems, ...malItems];
 
-    const all = [...tubeItems, ...tmdbItems, ...malItems];
     g.innerHTML = "";
     if (!all.length) {
       g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`;
       return;
     }
 
-    all.slice(0, 80).forEach(it => {
+    all.slice(0, 60).forEach(it => {
       const card = makeCard(it, it._sourceType || it.media_type || "movie");
       card.style.position = "relative";
-
-      // Poster override for non-TMDB items
-      if ((it._posterUrl || it._embedUrl) && !it.poster_path) {
+      if (it._posterUrl && !it.poster_path) {
         const img = card.querySelector(".cposter");
-        if (img && it._posterUrl) img.src = it._posterUrl;
+        if (img) img.src = it._posterUrl;
       }
-
-      // Badge
-      const badge = it._badge || (it._isAnime ? "HENTAI" : null);
-      const color = it._badgeColor || (it._isAnime ? "#ec4899" : null);
-      if (badge && color) _addBadge(card, badge, color);
-
+      if (it._isEporner) _badge(card, "EP", "#e11d48");
+      if (it._isAnime)   _badge(card, "HENTAI", "#ec4899");
       g.appendChild(card);
     });
   });
