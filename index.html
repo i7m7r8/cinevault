@@ -300,7 +300,7 @@ const SOURCES = [
 
 let cur=null, curS=1, curE=1, srcIdx=0;
 let searchTimer=null, _cachedStreams=[], _cacheKey="";
-let webtorrentClient=null, vjsPlayer=null;
+let vjsPlayer=null;
 // Active subtitle state
 let _activeCues=[], _activeVttUrl=null, _activeVttObjectUrl=null;
 
@@ -337,16 +337,11 @@ function clearPlayer(){
 
 function stopVideo(){
   _activeCues=[]; _activeVttUrl=null;
-  if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){}  _activeVttObjectUrl=null;}
+  if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){} _activeVttObjectUrl=null;}
   if(vjsPlayer){
-    try{
-      // Stop torrent seeding for this file
-      if(vjsPlayer._torrent) { try{webtorrentClient&&webtorrentClient.remove(vjsPlayer._torrent);}catch(e){} }
-      vjsPlayer.dispose();
-    }catch(e){}
+    try{ vjsPlayer.dispose(); }catch(e){}
     vjsPlayer=null;
   }
-  // Remove any leftover vjs DOM
   document.querySelectorAll(".video-js,.vjs-hidden").forEach(el=>{try{el.remove();}catch(e){}});
 }
 
@@ -404,114 +399,14 @@ function loadSource(i){
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-// KEY FIX: We manage TextTrack cues manually using the native HTMLMediaElement
-// textTracks API so they survive seek/rewind perfectly. Video.js renders them
-// via its vjs-text-track-display which reads the native track in real time.
+// Instead of WebTorrent peer connections (which fail due to browser NAT/firewall),
+// use Torrentio's server-side HTTP proxy stream URL — it handles the torrent,
+// we get a plain HTTP video stream that Video.js plays directly.
 async function playTorrent(infoHash, fileIdx, title){
-  if(!webtorrentClient) webtorrentClient=new WebTorrent();
-  clearPlayer();
-  const pwrap=$("pwrap");
-
-  // Fetch subs in parallel
-  const subPromise = cur?.imdb_id
-    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
-    : Promise.resolve([]);
-
-  // Create <video> element — Video.js will wrap it
-  const vidId = "vjs-cv-" + Date.now();
-  const vid = document.createElement("video");
-  vid.id = vidId;
-  vid.className = "video-js vjs-default-skin";
-  vid.setAttribute("playsinline","");
-  vid.setAttribute("crossorigin","anonymous");
-  // Fill pwrap completely
-  vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
-  pwrap.appendChild(vid);
-
-  // Init Video.js with CC button in control bar
-  vjsPlayer = videojs(vidId, {
-    controls: true,
-    autoplay: true,
-    preload: "auto",
-    fluid: false,
-    fill: true,
-    playbackRates: [0.5,0.75,1,1.25,1.5,2],
-    controlBar: {
-      children: [
-        "playToggle",
-        "skipBackward",
-        "skipForward",
-        "volumePanel",
-        "currentTimeDisplay",
-        "timeDivider",
-        "durationDisplay",
-        "progressControl",
-        "playbackRateMenuButton",
-        "subsCapsButton",      // CC/Subtitle menu — lives inside VJS player, no extra buttons on page
-        "pictureInPictureToggle",
-        "fullscreenToggle",
-      ],
-      skipButtons:{backward:10,forward:10},
-    },
-  });
-
-  // The actual <video> element Video.js uses internally
-  // Video.js appends _html5_api to the original element id
-  const innerVideoId = vidId + "_html5_api";
-  // Wait a tick for VJS to set up its internal <video>
-  const getInnerVideo = () => document.getElementById(innerVideoId) || document.getElementById(vidId);
-
-  $("pph").classList.add("hidden");
-  setNameBar(title+" — Torrent");
-  toast("⏳ Connecting to peers…");
-
-  const magnet=buildMagnetLink(infoHash);
-  const torrentTimeout=setTimeout(()=>{
-    toast("❌ Timed out — no peers. Try another.");
-    const p=$("pph");
-    if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⏱️</div><div>No peers. Try another.</div>';}
-  },45000);
-
-  try {
-    webtorrentClient.add(magnet,{
-      announce:["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz"]
-    }, torrent=>{
-      clearTimeout(torrentTimeout);
-      // Store torrent ref for cleanup
-      vjsPlayer._torrent = torrent.magnetURI || magnet;
-
-      const vids=torrent.files
-        .filter(f=>/\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
-        .sort((a,b)=>b.length-a.length);
-
-      if(!vids.length){
-        toast("❌ No video file in torrent");
-        const p=$("pph");
-        if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No video file.</div>';}
-        return;
-      }
-
-      const file=vids[Math.min(fileIdx,vids.length-1)];
-      toast("🎬 "+file.name.slice(0,40));
-
-      // Render into the INNER video element (not the vjs wrapper div)
-      file.renderTo(getInnerVideo(),{autoplay:true}, async err=>{
-        if(err){toast("❌ Playback error");return;}
-
-        const cues=await subPromise;
-        if(cues.length){
-          _activeCues=cues;
-          attachSubtitleTrack(vjsPlayer, cues, "en", "English");
-          toast("▶ Playing · 🔤 EN subs active");
-        } else {
-          toast("▶ Playing · no subs found");
-        }
-      });
-    });
-  } catch(err){
-    clearTimeout(torrentTimeout);
-    toast("❌ Torrent load failed");
-  }
+  // Build Torrentio's HTTP proxy URL for this torrent
+  // Format: https://torrentio.strem.fun/{infoHash}/{fileIdx}/stream.mp4
+  const streamUrl = `https://torrentio.strem.fun/${infoHash}/${fileIdx}/stream.mp4`;
+  await playDirectUrl(streamUrl, title, infoHash);
 }
 
 // ── SUBTITLE ENGINE ───────────────────────────────────────────────
@@ -680,7 +575,8 @@ async function fetchStreams(imdbId,isTv,s,e){
 }
 
 // Play a direct URL (MP4/M3U8/WebM) in Video.js
-async function playDirectUrl(streamUrl, title){
+// infoHash is optional — if provided and URL fails, tries alternate proxy URLs
+async function playDirectUrl(streamUrl, title, infoHash=null){
   clearPlayer();
   const pwrap=$("pwrap");
 
@@ -698,8 +594,8 @@ async function playDirectUrl(streamUrl, title){
   vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
   pwrap.appendChild(vid);
 
-  // Detect type
-  const isHLS=/\.m3u8/i.test(streamUrl)||/application\/x-mpegurl/i.test(streamUrl);
+  // Detect MIME type
+  const isHLS=/\.m3u8/i.test(streamUrl)||/m3u8/i.test(streamUrl);
   const isDASH=/\.mpd/i.test(streamUrl);
   const mimeType=isHLS?"application/x-mpegURL":isDASH?"application/dash+xml":"video/mp4";
 
@@ -707,7 +603,7 @@ async function playDirectUrl(streamUrl, title){
     controls:true, autoplay:true, preload:"auto",
     fluid:false, fill:true,
     playbackRates:[0.5,0.75,1,1.25,1.5,2],
-    html5:{vhs:{overrideNative:true},nativeVideoTracks:false},
+    html5:{vhs:{overrideNative:true,limitRenditionByPlayerDimensions:false},nativeVideoTracks:false},
     controlBar:{
       children:[
         "playToggle","skipBackward","skipForward","volumePanel",
@@ -723,17 +619,27 @@ async function playDirectUrl(streamUrl, title){
   vjsPlayer.play().catch(()=>{});
 
   $("pph").classList.add("hidden");
-  setNameBar(title+" — Direct");
+  setNameBar(title);
   toast("🎬 Loading stream…");
 
-  vjsPlayer.on("error",()=>{
-    toast("❌ Stream failed — try another quality");
+  // On error, auto-try the next stream row in the list
+  vjsPlayer.on("error", ()=>{
+    const rows=[...document.querySelectorAll(".stream-row")];
+    const activeIdx=rows.findIndex(r=>r.classList.contains("active"));
+    const next=rows[activeIdx+1];
+    if(next){
+      toast("⚠️ Stream failed — trying next…");
+      setTimeout(()=>next.click(), 800);
+    } else {
+      toast("❌ All streams failed — use a Source above");
+      const p=$("pph");
+      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>Stream failed. Try a Source button above.</div>';}
+    }
   });
 
   const cues=await subPromise;
   if(cues.length){
     _activeCues=cues;
-    // Wait for player ready before attaching track
     vjsPlayer.ready(()=>attachSubtitleTrack(vjsPlayer,cues,"en","English"));
     toast("▶ Playing · 🔤 EN subs active");
   }
