@@ -838,37 +838,25 @@ function openModal(item, type) {
   document.body.style.overflow = "hidden";
 
   (async () => {
-    // TPB item — no TMDB id, show magnet info, no embed sources
+    // TPB torrent card
     if (item._isTpb) {
       $("stream-loading").style.display = "none";
       $("stream-picker").style.display = "block";
-      const magnet = `magnet:?xt=urn:btih:${item._infoHash}&dn=${encodeURIComponent(item.title)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce`;
-      $("streambns").innerHTML =
-        `<div style="padding:14px;background:var(--s2);border-radius:10px;font-size:.85rem;line-height:2;color:var(--text)">` +
-        `<div style="font-weight:700;color:#a78bfa;margin-bottom:4px">🧲 Torrent — ${item.title}</div>` +
-        `<div>👤 Seeders: <b>${item._seeders}</b> &nbsp; 💾 Size: <b>${item._sizeStr}</b></div>` +
-        `<div style="margin-top:10px"><a href="${magnet}" style="display:inline-block;padding:7px 14px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:.82rem">🧲 Open in Torrent App</a></div>` +
-        `<div style="margin-top:8px;font-size:.74rem;color:var(--muted)">Hash: <code style="user-select:all;background:var(--s1);padding:2px 5px;border-radius:4px">${item._infoHash}</code></div></div>`;
+      playTorrentBlob(item._infoHash, item.title);
       if (item._tmdbId) {
-        cur.id = item._tmdbId; cur.imdb_id = null;
-        buildSources(); loadSource(0);
+        cur.id = item._tmdbId; cur.imdb_id = null; buildSources(); loadSource(0);
       } else {
-        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">⚠️ No embed match — use magnet above</div>`;
+        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">⚠️ No embed match — torrent player above</div>`;
       }
       return;
     }
-    // MAL/Jikan item
+    // MAL/Jikan anime card
     if (item._isAnime) {
-      if (item._tmdbId) {
-        cur.id = item._tmdbId; cur.imdb_id = null;
-        buildSources(); loadSource(0);
-      } else {
-        $("stream-loading").textContent = "⚠️ No embed source found for this title";
-        $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">No TMDB match found</div>`;
-      }
+      if (item._tmdbId) { cur.id = item._tmdbId; cur.imdb_id = null; buildSources(); loadSource(0); }
+      else { $("stream-loading").textContent = "⚠️ No embed source found"; $("srcbns").innerHTML = `<div style="font-size:.78rem;color:var(--muted);padding:4px 2px">No TMDB match</div>`; }
       return;
     }
-    // Normal TMDB item
+    // Normal TMDB card
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${item.id}/external_ids`);
@@ -886,6 +874,9 @@ $("modal").onclick = e => { if (e.target === $("modal")) closeModal(); };
 
 function closeModal() {
   $("modal").classList.remove("on");
+  // Revoke any blob URL from torrent player
+  const pframe = document.getElementById("pframe");
+  if (pframe?._blobUrl) { URL.revokeObjectURL(pframe._blobUrl); }
   stopVideo();
   clearPlayer();
   document.body.style.overflow = "";
@@ -946,6 +937,66 @@ searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) show
 
 function clearSearch() { searchInput.value = ""; $("search-clear").style.display = "none"; hideSearch(); }
 
+// ── MAGNET / WEBTORRENT BLOB PLAYER ──────────────────────────────
+// Builds a full self-contained WebTorrent HTML page as a Blob URL
+// and injects it as an iframe — no external service needed
+function playTorrentBlob(infoHash, title) {
+  clearPlayer();
+  $("pph").classList.add("hidden");
+  setNameBar(title + " — Torrent");
+
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=wss://tracker.btorrent.xyz&tr=wss://tracker.openwebtorrent.com&tr=wss://tracker.webtorrent.dev`;
+
+  // Build HTML as joined array to avoid script-tag conflict
+  const _sc = 'script';
+  const finalHtml = [
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><style>',
+    '*{margin:0;padding:0;box-sizing:border-box}',
+    'body{background:#000;color:#fff;font-family:sans-serif;height:100vh;display:flex;align-items:center;justify-content:center}',
+    'video{width:100%;height:100vh;background:#000}',
+    '#status{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.75);padding:8px 14px;font-size:12px;color:#aaa;display:flex;gap:16px;z-index:10}',
+    '#err{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:24px;text-align:center;max-width:320px;display:none}',
+    '#err h3{color:#f87171;margin-bottom:8px}#err p{color:#aaa;font-size:13px;line-height:1.6}',
+    '</style></head><body>',
+    '<video id="v" controls autoplay playsinline></video>',
+    '<div id="status"><span id="sp">⏳ Connecting…</span><span id="sg"></span><span id="ss"></span></div>',
+    '<div id="err"><h3>⚠️ No peers found</h3><p>No WebRTC seeders reachable from browser.<br>Use a torrent app with the magnet link.</p></div>',
+    '<' + _sc + ' src="https://cdn.jsdelivr.net/npm/webtorrent@2/webtorrent.min.js"></' + _sc + '>',
+    '<' + _sc + '>',
+    'const magnet=' + JSON.stringify(magnet) + ';',
+    'const client=new WebTorrent();',
+    "let t=setTimeout(()=>{document.getElementById('err').style.display='block';document.getElementById('status').style.display='none';},30000);",
+    "client.add(magnet,tor=>{",
+    "  clearTimeout(t);",
+    "  const file=tor.files.reduce((a,b)=>a.length>b.length?a:b);",
+    "  file.renderTo('#v');",
+    "  const fmt=b=>b>1e9?(b/1e9).toFixed(1)+'GB':b>1e6?(b/1e6).toFixed(1)+'MB':(b/1e3|0)+'KB';",
+    "  setInterval(()=>{",
+    "    document.getElementById('sp').textContent='👤 '+tor.numPeers+' peers';",
+    "    document.getElementById('sg').textContent='📦 '+(tor.progress*100).toFixed(1)+'%';",
+    "    document.getElementById('ss').textContent='⬇ '+fmt(tor.downloadSpeed)+'/s';",
+    "  },1000);",
+    "});",
+    "client.on('error',()=>{clearTimeout(t);document.getElementById('err').style.display='block';document.getElementById('status').style.display='none';});",
+    '</' + _sc + '></body></html>',
+  ].join('');
+  const blob = new Blob([finalHtml], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  const pwrap = $("pwrap");
+  const iframe = document.createElement("iframe");
+  iframe.id = "pframe";
+  iframe.src = blobUrl;
+  iframe.allowFullscreen = true;
+  iframe.allow = "autoplay; fullscreen; encrypted-media";
+  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
+  pwrap.appendChild(iframe);
+
+  // Clean up blob URL when modal closes
+  iframe._blobUrl = blobUrl;
+  toast("🌀 Torrent player loading…");
+}
+
 // ── MULTI-SOURCE ADULT SEARCH ──────────────────────────────────
 async function _searchTmdbAdult(q) {
   const [multi, movies] = await Promise.allSettled([
@@ -977,23 +1028,24 @@ async function _searchJikanHentai(q) {
 
 async function _searchApibayAdult(q) {
   const proxy = u => `${API}/proxy?url=${encodeURIComponent(u)}`;
-  const fetches = ["500","506"].map(cat =>
-    fetch(proxy(`https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=${cat}`), { signal: AbortSignal.timeout(10000) })
-      .then(r => r.ok ? r.json() : []).catch(() => [])
+  const [r500, r506] = await Promise.all(
+    ["500","506"].map(cat =>
+      fetch(proxy(`https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=${cat}`), { signal: AbortSignal.timeout(10000) })
+        .then(r => r.ok ? r.json() : []).catch(() => [])
+    )
   );
-  const [r500, r506] = await Promise.all(fetches);
   const seen = new Set(), items = [];
-  for (const t of [...(r500||[]), ...(r506||[])]) {
+  for (const t of [...(Array.isArray(r500)?r500:[]), ...(Array.isArray(r506)?r506:[])]) {
     if (!t.info_hash || t.info_hash === "0000000000000000000000000000000000000000" || seen.has(t.info_hash)) continue;
     seen.add(t.info_hash);
-    const sizeMB = t.size ? Math.round(t.size / 1024 / 1024) : 0;
+    const sizeMB = t.size ? Math.round(t.size/1024/1024) : 0;
+    const sizeStr = sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB";
     items.push({
-      id: "tpb_" + t.id, _isTpb: true, _sourceType: "movie",
-      _infoHash: t.info_hash, _seeders: +t.seeders || 0,
-      _sizeStr: sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB",
+      id: "tpb_"+t.id, _isTpb: true, _sourceType: "movie",
+      _infoHash: t.info_hash, _seeders: +t.seeders||0, _sizeStr: sizeStr,
       title: t.name, name: t.name, media_type: "movie",
       poster_path: null, _posterUrl: null,
-      overview: `👤 ${t.seeders||0} seeders · 💾 ${sizeMB > 1024 ? (sizeMB/1024).toFixed(1)+" GB" : sizeMB+" MB"}`,
+      overview: `👤 ${t.seeders||0} seeders · 💾 ${sizeStr}`,
       vote_average: 0, release_date: "", adult: true,
     });
   }
@@ -1016,9 +1068,9 @@ function showSearch(q) {
   Promise.allSettled([_searchTmdbAdult(q), _searchJikanHentai(q), _searchApibayAdult(q)])
     .then(([tRes, jRes, aRes]) => {
       const all = [
-        ...(tRes.status === "fulfilled" ? tRes.value : []),
-        ...(jRes.status === "fulfilled" ? jRes.value : []),
-        ...(aRes.status === "fulfilled" ? aRes.value : []),
+        ...(tRes.status==="fulfilled" ? tRes.value : []),
+        ...(jRes.status==="fulfilled" ? jRes.value : []),
+        ...(aRes.status==="fulfilled" ? aRes.value : []),
       ];
       g.innerHTML = "";
       if (!all.length) { g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
