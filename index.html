@@ -13,7 +13,6 @@
 <title>CineVault</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
@@ -330,7 +329,7 @@ const SOURCES = [
 
 let cur=null, curS=1, curE=1, srcIdx=0;
 let searchTimer=null, _cachedStreams=[], _cacheKey="";
-let webtorrentClient=null, vjsPlayer=null;
+let vjsPlayer=null;
 // Active subtitle state
 let _activeCues=[], _activeVttUrl=null, _activeVttObjectUrl=null;
 
@@ -339,8 +338,13 @@ const back   = p => p ? `${IMG}w1280${p}` : "";
 
 function toast(msg,ms=2500){const t=$("toast");t.textContent=msg;t.classList.add("on");setTimeout(()=>t.classList.remove("on"),ms);}
 
-function buildMagnetLink(hash){
-  return `magnet:?xt=urn:btih:${hash}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce`;
+// Build a proxied URL through Cloudflare Pages (not blocked by Torrentio unlike Vercel)
+function proxyUrl(url){ return `https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(url)}`; }
+
+// Convert an infoHash into a direct HTTP stream URL using Torrentio's debrid-free HTTP endpoint
+// Torrentio streams via: https://torrentio.strem.fun/<hash>/<fileIdx>/stream
+function torrentioStreamUrl(infoHash, fileIdx=0){
+  return `https://torrentio.strem.fun/${infoHash}/${fileIdx}/stream`;
 }
 
 async function tmdb(path,params={}){
@@ -371,10 +375,7 @@ function stopVideo(){
   _activeVttUrl=null;
   if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){} _activeVttObjectUrl=null;}
   if(vjsPlayer){
-    try{
-      if(vjsPlayer._torrent&&webtorrentClient) try{webtorrentClient.remove(vjsPlayer._torrent);}catch(e){}
-      vjsPlayer.dispose();
-    }catch(e){}
+    try{ vjsPlayer.dispose(); }catch(e){}
     vjsPlayer=null;
   }
   document.querySelectorAll(".video-js,.vjs-hidden").forEach(el=>{try{el.remove();}catch(e){}});
@@ -436,103 +437,14 @@ function loadSource(i){
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-// WSS-only trackers that actually work in browsers
-const WSS_TRACKERS = [
-  "wss://tracker.openwebtorrent.com",
-  "wss://tracker.btorrent.xyz",
-  "wss://tracker.fastcast.nz",
-  "wss://tracker.webtorrent.dev",
-  "wss://tracker.files.fm:7073/announce",
-];
-
-async function playTorrent(infoHash, fileIdx, title, streamSources=[]){
-  if(!window.WebTorrent){ toast("❌ WebTorrent not loaded"); return; }
-  if(!webtorrentClient) webtorrentClient = new WebTorrent();
-  clearPlayer();
-  const pwrap=$("pwrap");
-
-  // Build VJS player
-  const vidId = "vjs-cv-" + Date.now();
-  const vid = document.createElement("video");
-  vid.id = vidId;
-  vid.className = "video-js vjs-default-skin";
-  vid.setAttribute("playsinline","");
-  vid.setAttribute("crossorigin","anonymous");
-  vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
-  pwrap.appendChild(vid);
-
-  vjsPlayer = videojs(vidId, {
-    controls:true, autoplay:true, preload:"auto",
-    fluid:false, fill:true,
-    playbackRates:[0.5,0.75,1,1.25,1.5,2],
-    controlBar:{
-      children:["playToggle","skipBackward","skipForward","volumePanel",
-        "currentTimeDisplay","timeDivider","durationDisplay","progressControl",
-        "playbackRateMenuButton","subsCapsButton","pictureInPictureToggle","fullscreenToggle"],
-      skipButtons:{backward:10,forward:10},
-    },
-  });
-
-  const getInnerVideo = () =>
-    document.getElementById(vidId+"_html5_api") || document.getElementById(vidId);
-
-  $("pph").classList.add("hidden");
-  setNameBar(title + " — Torrent");
-  toast("⏳ Finding peers…");
-
-  // Extract WSS trackers from stream sources + add our known-good ones
-  const streamWss = streamSources
-    .filter(s=>typeof s==="string" && s.startsWith("tracker:wss://"))
-    .map(s=>s.replace("tracker:",""));
-
-  const announce = [...new Set([...WSS_TRACKERS, ...streamWss])];
-
-  // Build magnet with ONLY WSS trackers (UDP silently fails in browser)
-  const magnetTrackers = announce.map(t=>`&tr=${encodeURIComponent(t)}`).join("");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}${magnetTrackers}`;
-
-  // Timeout → try next stream automatically
-  const torrentTimeout = setTimeout(()=>{
-    toast("⚠️ No peers found — trying next…");
-    const rows=[...document.querySelectorAll(".stream-row")];
-    const idx=rows.findIndex(r=>r.classList.contains("active"));
-    const next=rows[idx+1];
-    if(next) setTimeout(()=>next.click(), 300);
-    else {
-      const p=$("pph");
-      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No streams worked.<br><small>Tap a Source button above.</small></div>';}
-    }
-  }, 35000);
-
-  try{
-    webtorrentClient.add(magnet, {announce}, torrent=>{
-      clearTimeout(torrentTimeout);
-      vjsPlayer._torrent = torrent.magnetURI || magnet;
-
-      const vids = torrent.files
-        .filter(f=>/\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
-        .sort((a,b)=>b.length-a.length);
-
-      if(!vids.length){ toast("❌ No video file — trying next…");
-        const rows=[...document.querySelectorAll(".stream-row")];
-        const idx=rows.findIndex(r=>r.classList.contains("active"));
-        const next=rows[idx+1]; if(next) setTimeout(()=>next.click(),300);
-        return;
-      }
-
-      const file = vids[Math.min(fileIdx, vids.length-1)];
-      toast("🎬 " + file.name.slice(0,40));
-
-      file.renderTo(getInnerVideo(), {autoplay:true}, err=>{
-        if(err){ toast("❌ Playback error"); return; }
-        clearTimeout(torrentTimeout);
-        loadAndStartSubs("vjs");
-      });
-    });
-  }catch(err){
-    clearTimeout(torrentTimeout);
-    toast("❌ Torrent error");
-  }
+// Play an infoHash torrent by routing through Vercel proxy → Torrentio HTTP stream
+// No WebTorrent, no peer connections — pure HTTP via our backend
+async function playTorrent(infoHash, fileIdx, title){
+  // Torrentio serves a redirecting HTTP endpoint for each infoHash
+  // Our Vercel proxy fetches it server-side and relays with CORS + Range headers
+  const rawUrl   = torrentioStreamUrl(infoHash, fileIdx);
+  const proxyUri = proxyUrl(rawUrl);
+  await playDirectUrl(proxyUri, title);
 }
 
 // ── SUBTITLE OVERLAY ENGINE ───────────────────────────────────────
@@ -924,7 +836,6 @@ function buildStreamPicker(streams, autoPlay=false){
     row._url=s.url||"";
     row._fileIdx=typeof s.fileIdx==="number"?s.fileIdx:0;
     row._title=fname;
-    row._sources=Array.isArray(s.sources)?s.sources:[];
 
     const playRow=()=>{
       document.querySelectorAll(".stream-row").forEach(x=>x.classList.remove("active"));
@@ -934,7 +845,7 @@ function buildStreamPicker(streams, autoPlay=false){
         // Direct URL → Video.js
         playDirectUrl(row._url, title);
       } else if(row._hash){
-        playTorrent(row._hash, row._fileIdx, title, row._sources);
+        playTorrent(row._hash, row._fileIdx, title);
       } else {
         loadSource(srcIdx);
       }
