@@ -50,8 +50,32 @@ a{text-decoration:none;color:inherit}
 .video-js .vjs-play-progress,.video-js .vjs-volume-level{background:#e8173a;}
 .video-js .vjs-slider{background:rgba(255,255,255,0.2);}
 .vjs-menu-button-popup .vjs-menu{bottom:2.8em;}
-/* Subtitle display — VJS Blob VTT track, perfectly synced on seek */
-.video-js .vjs-text-track-display{pointer-events:none;}
+/* Subtitle overlay — works on top of ANY iframe or video */
+#sub-overlay{
+  position:absolute;bottom:54px;left:0;right:0;
+  text-align:center;pointer-events:none;z-index:20;
+  padding:0 8px;
+}
+#sub-overlay span{
+  display:inline-block;
+  background:rgba(0,0,0,0.85);color:#fff;
+  font-size:clamp(13px,2.4vw,19px);font-weight:600;
+  padding:4px 12px;border-radius:6px;
+  text-shadow:1px 1px 3px #000;line-height:1.65;
+  max-width:90%;word-break:break-word;
+}
+/* Sub controls bar */
+#sub-ctrl{
+  display:none;position:absolute;top:8px;right:8px;z-index:21;
+  display:flex;gap:4px;
+}
+#sub-ctrl button{
+  background:rgba(0,0,0,0.65);color:#fff;border:1px solid rgba(255,255,255,0.2);
+  border-radius:5px;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;
+  backdrop-filter:blur(4px);
+}
+#sub-ctrl button:hover{background:var(--accent);}
+#sub-ctrl.hidden{display:none!important;}
 .video-js .vjs-text-track-display .vjs-text-track-cue,
 .video-js .vjs-text-track-display .vjs-text-track-cue > *,
 .video-js .vjs-text-track-display div > span,
@@ -260,6 +284,12 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
       <div class="player-outer" id="player-outer">
         <div class="pwrap" id="pwrap">
           <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
+          <div id="sub-overlay"></div>
+          <div id="sub-ctrl" class="hidden">
+            <button onclick="shiftSub(-500)">◀ 0.5s</button>
+            <button onclick="toggleSub()">CC</button>
+            <button onclick="shiftSub(500)">0.5s ▶</button>
+          </div>
         </div>
       </div>
 
@@ -336,13 +366,13 @@ function clearPlayer(){
 }
 
 function stopVideo(){
-  _activeCues=[]; _activeVttUrl=null;
+  subOverlayStop();
+  _activeCues=[]; _subCues=[]; _subOffset=0;
+  _activeVttUrl=null;
   if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){} _activeVttObjectUrl=null;}
   if(vjsPlayer){
     try{
-      if(vjsPlayer._torrent&&webtorrentClient){
-        try{webtorrentClient.remove(vjsPlayer._torrent);}catch(e){}
-      }
+      if(vjsPlayer._torrent&&webtorrentClient) try{webtorrentClient.remove(vjsPlayer._torrent);}catch(e){}
       vjsPlayer.dispose();
     }catch(e){}
     vjsPlayer=null;
@@ -350,7 +380,7 @@ function stopVideo(){
   document.querySelectorAll(".video-js,.vjs-hidden").forEach(el=>{try{el.remove();}catch(e){}});
 }
 
-function showIframe(url,nameLabel){
+function showIframe(url, nameLabel){
   clearPlayer();
   const iframe=document.createElement("iframe");
   iframe.id="pframe";
@@ -362,6 +392,8 @@ function showIframe(url,nameLabel){
   $("pwrap").appendChild(iframe);
   $("pph").classList.add("hidden");
   setNameBar(nameLabel);
+  // Auto-load subs for iframe in wall-clock mode
+  if(cur?.imdb_id) loadAndStartSubs("wall");
 }
 
 function setNameBar(label, url=""){
@@ -404,18 +436,20 @@ function loadSource(i){
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-async function playTorrent(infoHash, fileIdx, title){
-  if(!window.WebTorrent){
-    toast("❌ WebTorrent not loaded");return;
-  }
+// WSS-only trackers that actually work in browsers
+const WSS_TRACKERS = [
+  "wss://tracker.openwebtorrent.com",
+  "wss://tracker.btorrent.xyz",
+  "wss://tracker.fastcast.nz",
+  "wss://tracker.webtorrent.dev",
+  "wss://tracker.files.fm:7073/announce",
+];
+
+async function playTorrent(infoHash, fileIdx, title, streamSources=[]){
+  if(!window.WebTorrent){ toast("❌ WebTorrent not loaded"); return; }
   if(!webtorrentClient) webtorrentClient = new WebTorrent();
   clearPlayer();
   const pwrap=$("pwrap");
-
-  // Subs in parallel
-  const subPromise = cur?.imdb_id
-    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
-    : Promise.resolve([]);
 
   // Build VJS player
   const vidId = "vjs-cv-" + Date.now();
@@ -443,42 +477,35 @@ async function playTorrent(infoHash, fileIdx, title){
     document.getElementById(vidId+"_html5_api") || document.getElementById(vidId);
 
   $("pph").classList.add("hidden");
-  setNameBar(title+" — Torrent");
-  toast("⏳ Connecting to peers…");
+  setNameBar(title + " — Torrent");
+  toast("⏳ Finding peers…");
 
-  // Extensive tracker list for better peer discovery
-  const trackers = [
-    "wss://tracker.openwebtorrent.com",
-    "wss://tracker.btorrent.xyz",
-    "wss://tracker.fastcast.nz",
-    "wss://tracker.webtorrent.dev",
-    "udp://tracker.opentrackr.org:1337/announce",
-    "udp://open.stealth.si:80/announce",
-    "udp://tracker.torrent.eu.org:451/announce",
-    "udp://exodus.desync.com:6969/announce",
-    "udp://tracker.cyberia.is:6969/announce",
-    "udp://tracker.moeking.me:6969/announce",
-    "udp://tracker.openbittorrent.com:6969/announce",
-    "udp://9.rarbg.com:2810/announce",
-  ];
+  // Extract WSS trackers from stream sources + add our known-good ones
+  const streamWss = streamSources
+    .filter(s=>typeof s==="string" && s.startsWith("tracker:wss://"))
+    .map(s=>s.replace("tracker:",""));
 
-  const magnet = `magnet:?xt=urn:btih:${infoHash}&tr=${trackers.join("&tr=")}`;
+  const announce = [...new Set([...WSS_TRACKERS, ...streamWss])];
 
-  // Auto-try next stream on timeout
+  // Build magnet with ONLY WSS trackers (UDP silently fails in browser)
+  const magnetTrackers = announce.map(t=>`&tr=${encodeURIComponent(t)}`).join("");
+  const magnet = `magnet:?xt=urn:btih:${infoHash}${magnetTrackers}`;
+
+  // Timeout → try next stream automatically
   const torrentTimeout = setTimeout(()=>{
-    toast("⚠️ Slow peers — trying next stream…");
+    toast("⚠️ No peers found — trying next…");
     const rows=[...document.querySelectorAll(".stream-row")];
     const idx=rows.findIndex(r=>r.classList.contains("active"));
     const next=rows[idx+1];
-    if(next){ setTimeout(()=>next.click(),300); }
+    if(next) setTimeout(()=>next.click(), 300);
     else {
       const p=$("pph");
-      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No streams worked. Use a Source button above.</div>';}
+      if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No streams worked.<br><small>Tap a Source button above.</small></div>';}
     }
-  }, 30000);
+  }, 35000);
 
   try{
-    webtorrentClient.add(magnet,{announce:trackers}, torrent=>{
+    webtorrentClient.add(magnet, {announce}, torrent=>{
       clearTimeout(torrentTimeout);
       vjsPlayer._torrent = torrent.magnetURI || magnet;
 
@@ -486,34 +513,113 @@ async function playTorrent(infoHash, fileIdx, title){
         .filter(f=>/\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
         .sort((a,b)=>b.length-a.length);
 
-      if(!vids.length){
-        toast("❌ No video file in torrent");return;
+      if(!vids.length){ toast("❌ No video file — trying next…");
+        const rows=[...document.querySelectorAll(".stream-row")];
+        const idx=rows.findIndex(r=>r.classList.contains("active"));
+        const next=rows[idx+1]; if(next) setTimeout(()=>next.click(),300);
+        return;
       }
 
       const file = vids[Math.min(fileIdx, vids.length-1)];
-      toast("🎬 "+file.name.slice(0,40));
+      toast("🎬 " + file.name.slice(0,40));
 
-      file.renderTo(getInnerVideo(),{autoplay:true}, async err=>{
+      file.renderTo(getInnerVideo(), {autoplay:true}, err=>{
         if(err){ toast("❌ Playback error"); return; }
         clearTimeout(torrentTimeout);
-        const cues = await subPromise;
-        if(cues.length){
-          _activeCues=cues;
-          attachSubtitleTrack(vjsPlayer, cues, "en", "English");
-          toast("▶ Playing · 🔤 EN subs active");
-        } else {
-          toast("▶ Playing");
-        }
+        loadAndStartSubs("vjs");
       });
     });
   }catch(err){
     clearTimeout(torrentTimeout);
-    toast("❌ Torrent error — try next stream");
+    toast("❌ Torrent error");
   }
 }
 
-// ── SUBTITLE ENGINE ───────────────────────────────────────────────
-// Convert cue array → WebVTT string
+// ── SUBTITLE OVERLAY ENGINE ───────────────────────────────────────
+// Works for BOTH Video.js (reads player time) and iframes (uses wall clock)
+let _subCues=[], _subOffset=0, _subVisible=true;
+let _subStartWall=null, _subStartOffset=0; // wall-clock tracking for iframe mode
+let _subRafId=null, _subMode="off"; // "vjs" | "wall" | "off"
+
+function subOverlayStart(mode){
+  _subMode=mode;
+  if(mode==="wall"){ _subStartWall=Date.now(); _subStartOffset=0; }
+  $("sub-ctrl").classList.remove("hidden");
+  subOverlayTick();
+}
+
+function subOverlayStop(){
+  _subMode="off";
+  if(_subRafId){cancelAnimationFrame(_subRafId);_subRafId=null;}
+  const el=$("sub-overlay"); if(el) el.innerHTML="";
+  $("sub-ctrl").classList.add("hidden");
+}
+
+function subOverlayTick(){
+  if(_subMode==="off") return;
+  _subRafId=requestAnimationFrame(subOverlayTick);
+
+  let t=0;
+  if(_subMode==="vjs" && vjsPlayer && !vjsPlayer.isDisposed()){
+    t = vjsPlayer.currentTime() + _subOffset/1000;
+  } else if(_subMode==="wall"){
+    t = (Date.now() - _subStartWall)/1000 + _subStartOffset + _subOffset/1000;
+  } else return;
+
+  const el=$("sub-overlay"); if(!el) return;
+  if(!_subVisible){el.innerHTML="";return;}
+
+  // Binary search for current cue
+  let lo=0,hi=_subCues.length-1,found=null;
+  while(lo<=hi){
+    const mid=(lo+hi)>>1;
+    const c=_subCues[mid];
+    if(t>=c.start && t<=c.end){found=c;break;}
+    else if(t<c.start) hi=mid-1;
+    else lo=mid+1;
+  }
+  el.innerHTML = found ? `<span>${found.text.replace(/\n/g,"<br>")}</span>` : "";
+}
+
+function shiftSub(ms){
+  _subOffset+=ms;
+  toast(`Sub offset: ${_subOffset>0?"+":""}${(_subOffset/1000).toFixed(1)}s`);
+}
+function toggleSub(){
+  _subVisible=!_subVisible;
+  toast(_subVisible?"🔤 Subs ON":"🔤 Subs OFF");
+}
+
+// Load subs and start overlay for current content
+async function loadAndStartSubs(mode){
+  if(!cur?.imdb_id) return;
+  subOverlayStop();
+  _subOffset=0;
+  try{
+    const cues=await fetchSubCues(cur.imdb_id, curS, curE, "en");
+    if(!cues.length){toast("⚠️ No subs found");return;}
+    _subCues=cues;
+    _activeCues=cues;
+    subOverlayStart(mode);
+    toast("🔤 EN subs active");
+    // Also attach to VJS track if player exists
+    if(mode==="vjs" && vjsPlayer && !vjsPlayer.isDisposed()){
+      attachSubtitleTrack(vjsPlayer, cues, "en", "English");
+    }
+  }catch(e){toast("⚠️ Sub fetch failed");}
+}
+
+// Wall-clock sub sync for iframes — user clicks play, we start the clock
+// We expose a "▶ Sub Sync" button in the name bar
+function startWallClockSubs(){
+  if(!_subCues.length){ loadAndStartSubs("wall"); return; }
+  _subStartWall=Date.now(); _subStartOffset=0; _subMode="wall";
+  $("sub-ctrl").classList.remove("hidden");
+  subOverlayTick();
+  toast("🔤 Subs synced to now");
+}
+
+// Convert cues → VTT text for attachSubtitleTrack
 function cuesToVTT(cues){
   const pad=(n,d=2)=>String(Math.floor(n)).padStart(d,"0");
   const fmt=s=>{
@@ -699,11 +805,6 @@ const CORS_PROXIES = [
 async function playDirectUrl(streamUrl, title){
   clearPlayer();
   const pwrap=$("pwrap");
-
-  const subPromise = cur?.imdb_id
-    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
-    : Promise.resolve([]);
-
   const isHLS=/m3u8/i.test(streamUrl);
   const isDASH=/\.mpd/i.test(streamUrl);
 
@@ -766,26 +867,17 @@ async function playDirectUrl(streamUrl, title){
   }
 
   vjsPlayer.on("error", ()=>{
-    errorCount++;
     proxyIdx++;
     if(proxyIdx < CORS_PROXIES.length) setTimeout(tryLoad, 300);
     else tryNextStream();
   });
 
-  // Also catch successful play — attach subs then
-  vjsPlayer.on("playing", async()=>{
-    const cues = await subPromise;
-    if(cues.length && _activeCues !== cues){
-      _activeCues=cues;
-      attachSubtitleTrack(vjsPlayer,cues,"en","English");
-    }
+  vjsPlayer.on("playing", ()=>{
+    if(!_subCues.length && cur?.imdb_id) loadAndStartSubs("vjs");
+    else if(_subCues.length) subOverlayStart("vjs");
   });
 
   tryLoad();
-  // Pre-fetch subs in background
-  subPromise.then(cues=>{
-    if(cues.length) toast("🔤 Subs ready");
-  });
 }
 
 function buildStreamPicker(streams, autoPlay=false){
@@ -832,6 +924,7 @@ function buildStreamPicker(streams, autoPlay=false){
     row._url=s.url||"";
     row._fileIdx=typeof s.fileIdx==="number"?s.fileIdx:0;
     row._title=fname;
+    row._sources=Array.isArray(s.sources)?s.sources:[];
 
     const playRow=()=>{
       document.querySelectorAll(".stream-row").forEach(x=>x.classList.remove("active"));
@@ -841,8 +934,7 @@ function buildStreamPicker(streams, autoPlay=false){
         // Direct URL → Video.js
         playDirectUrl(row._url, title);
       } else if(row._hash){
-        // Torrent → Video.js via WebTorrent
-        playTorrent(row._hash,row._fileIdx,title);
+        playTorrent(row._hash, row._fileIdx, title, row._sources);
       } else {
         loadSource(srcIdx);
       }
