@@ -50,8 +50,11 @@ a{text-decoration:none;color:inherit}
 .video-js .vjs-play-progress,.video-js .vjs-volume-level{background:#e8173a;}
 .video-js .vjs-slider{background:rgba(255,255,255,0.2);}
 .vjs-menu-button-popup .vjs-menu{bottom:2.8em;}
-/* Subtitle display — native Video.js rendering, perfectly synced */
+/* Subtitle display — VJS Blob VTT track, perfectly synced on seek */
 .video-js .vjs-text-track-display{pointer-events:none;}
+.video-js .vjs-text-track-display .vjs-text-track-cue,
+.video-js .vjs-text-track-display .vjs-text-track-cue > *,
+.video-js .vjs-text-track-display div > span,
 .video-js .vjs-text-track-display div{
   background:rgba(0,0,0,0.82)!important;
   color:#fff!important;
@@ -61,6 +64,10 @@ a{text-decoration:none;color:inherit}
   border-radius:5px!important;
   text-shadow:1px 1px 3px #000!important;
   line-height:1.6!important;
+}
+/* Ensure subtitle area is not clipped */
+.video-js .vjs-text-track-display{
+  bottom:3em!important;
 }
 /* Hide subtitle/caption button label, keep icon clean */
 .vjs-subs-caps-button .vjs-icon-placeholder:before{font-size:1.5em;}
@@ -294,8 +301,8 @@ const SOURCES = [
 let cur=null, curS=1, curE=1, srcIdx=0;
 let searchTimer=null, _cachedStreams=[], _cacheKey="";
 let webtorrentClient=null, vjsPlayer=null;
-// Raw cue store — used to re-apply after seek
-let _activeCues=[], _activeVttUrl=null;
+// Active subtitle state
+let _activeCues=[], _activeVttUrl=null, _activeVttObjectUrl=null;
 
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
 const back   = p => p ? `${IMG}w1280${p}` : "";
@@ -330,6 +337,7 @@ function clearPlayer(){
 
 function stopVideo(){
   _activeCues=[]; _activeVttUrl=null;
+  if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){}  _activeVttObjectUrl=null;}
   if(vjsPlayer){
     try{
       // Stop torrent seeding for this file
@@ -439,7 +447,8 @@ async function playTorrent(infoHash, fileIdx, title){
         "durationDisplay",
         "progressControl",
         "playbackRateMenuButton",
-        "subsCapsButton",   // ← CC/Subtitle toggle lives HERE inside player
+        "subsCapsButton",      // CC/Subtitle menu — lives inside VJS player, no extra buttons on page
+        "pictureInPictureToggle",
         "fullscreenToggle",
       ],
       skipButtons:{backward:10,forward:10},
@@ -447,7 +456,10 @@ async function playTorrent(infoHash, fileIdx, title){
   });
 
   // The actual <video> element Video.js uses internally
-  const innerVideo = document.getElementById(vidId+"_html5_api") || vid;
+  // Video.js appends _html5_api to the original element id
+  const innerVideoId = vidId + "_html5_api";
+  // Wait a tick for VJS to set up its internal <video>
+  const getInnerVideo = () => document.getElementById(innerVideoId) || document.getElementById(vidId);
 
   $("pph").classList.add("hidden");
   setNameBar(title+" — Torrent");
@@ -483,13 +495,13 @@ async function playTorrent(infoHash, fileIdx, title){
       toast("🎬 "+file.name.slice(0,40));
 
       // Render into the INNER video element (not the vjs wrapper div)
-      file.renderTo(innerVideo,{autoplay:true}, async err=>{
+      file.renderTo(getInnerVideo(),{autoplay:true}, async err=>{
         if(err){toast("❌ Playback error");return;}
 
         const cues=await subPromise;
         if(cues.length){
           _activeCues=cues;
-          attachNativeTextTrack(innerVideo, cues, "en", "English");
+          attachSubtitleTrack(vjsPlayer, cues, "en", "English");
           toast("▶ Playing · 🔤 EN subs active");
         } else {
           toast("▶ Playing · no subs found");
@@ -503,74 +515,94 @@ async function playTorrent(infoHash, fileIdx, title){
 }
 
 // ── SUBTITLE ENGINE ───────────────────────────────────────────────
-// Attach cues as a NATIVE TextTrack on the <video> element.
-// Video.js reads native tracks in real time — so seek/rewind always stays
-// perfectly in sync. No manual timeupdate polling needed.
-function attachNativeTextTrack(videoEl, cues, lang, label){
-  // Remove old tracks for this language
-  const existing=[...videoEl.textTracks].filter(t=>t.language===lang);
-  existing.forEach(t=>{
-    t.mode="disabled";
-    // Can't remove native tracks directly — disable is sufficient
-  });
+// Convert cue array → WebVTT string
+function cuesToVTT(cues){
+  const pad=(n,d=2)=>String(Math.floor(n)).padStart(d,"0");
+  const fmt=s=>{
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60),ms=Math.round((s%1)*1000);
+    return `${pad(h)}:${pad(m)}:${pad(sec)}.${pad(ms,3)}`;
+  };
+  return "WEBVTT\n\n"+cues.map((c,i)=>`${i+1}\n${fmt(c.start)} --> ${fmt(c.end)}\n${c.text}`).join("\n\n");
+}
 
-  // Add a new track
-  const track=videoEl.addTextTrack("subtitles", label, lang);
-  track.mode="showing";
+// Attach subtitles to a Video.js player using a Blob VTT URL.
+// This is the ONLY reliable method — VJS reads the <track> src at the current
+// playback time, so seek/rewind always stays perfectly in sync automatically.
+function attachSubtitleTrack(player, cues, lang, label){
+  if(!player) return;
 
-  // Add every cue
-  cues.forEach(c=>{
-    try{
-      const vttCue=new VTTCue(c.start, c.end, c.text);
-      track.addCue(vttCue);
-    }catch(e){}
-  });
-
-  // Tell Video.js to show this track in its UI menu
-  // vjsPlayer reads textTracks from the underlying video element automatically
-  if(vjsPlayer){
-    // Refresh Video.js text track list
-    try{
-      const tts=vjsPlayer.textTracks();
-      for(let i=0;i<tts.length;i++){
-        if(tts[i].language===lang){tts[i].mode="showing";}
-      }
-    }catch(e){}
+  // Revoke previous blob URL
+  if(_activeVttObjectUrl){
+    try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){}
+    _activeVttObjectUrl=null;
   }
+
+  // Build Blob URL from cues
+  const vttText = cuesToVTT(cues);
+  const blob = new Blob([vttText],{type:"text/vtt"});
+  const blobUrl = URL.createObjectURL(blob);
+  _activeVttObjectUrl = blobUrl;
+
+  // Remove all existing text tracks from VJS
+  const tracks = player.textTracks();
+  for(let i=tracks.length-1;i>=0;i--){
+    const t=tracks[i];
+    if(t.kind==="subtitles"||t.kind==="captions"){
+      try{player.removeRemoteTextTrack(t);}catch(e){}
+    }
+  }
+
+  // Add new track via VJS API — this creates a proper <track> element
+  // which the browser syncs automatically on seek/rewind
+  player.addRemoteTextTrack({
+    kind: "subtitles",
+    src:  blobUrl,
+    srclang: lang,
+    label: label,
+    default: true,
+  }, false);
+
+  // Give VJS a moment to register the track, then set mode to showing
+  setTimeout(()=>{
+    const tts=player.textTracks();
+    for(let i=0;i<tts.length;i++){
+      if(tts[i].language===lang){
+        tts[i].mode="showing";
+        break;
+      }
+    }
+  }, 300);
 }
 
 async function switchSubLang(lang){
   if(!cur?.imdb_id){toast("No active torrent player");return;}
+  if(!vjsPlayer){toast("⚠️ Player not ready");return;}
   const names={en:"English",hi:"Hindi",ar:"Arabic",fr:"French",es:"Spanish",de:"German",pt:"Portuguese",it:"Italian",ja:"Japanese",ko:"Korean",zh:"Chinese"};
   toast("🔤 Fetching "+(names[lang]||lang)+"…");
   try{
     const cues=await fetchSubCues(cur.imdb_id,curS,curE,lang);
     if(!cues.length){toast("⚠️ No subs found");return;}
     _activeCues=cues;
-
-    // Get inner video element
-    const innerVideo=document.getElementById(vjsPlayer?.id()+"_html5_api");
-    if(!innerVideo){toast("⚠️ Player not ready");return;}
-
-    // Disable all current tracks
-    [...innerVideo.textTracks].forEach(t=>{t.mode="disabled";});
-
-    attachNativeTextTrack(innerVideo, cues, lang, names[lang]||lang.toUpperCase());
+    attachSubtitleTrack(vjsPlayer, cues, lang, names[lang]||lang.toUpperCase());
     toast("🔤 "+(names[lang]||lang)+" subtitles active");
   }catch(e){toast("⚠️ Subtitle error");console.error(e);}
 }
 
 function offsetSubtitles(seconds){
-  // Shift all cues on all tracks
-  const innerVideo=vjsPlayer?document.getElementById(vjsPlayer.id()+"_html5_api"):null;
-  if(!innerVideo){toast("No active player");return;}
-  [...innerVideo.textTracks].forEach(track=>{
-    if(!track.cues) return;
-    [...track.cues].forEach(cue=>{
-      cue.startTime=Math.max(0,cue.startTime+seconds);
-      cue.endTime=Math.max(0,cue.endTime+seconds);
-    });
-  });
+  if(!vjsPlayer){toast("No active player");return;}
+  if(!_activeCues.length){toast("No subtitles loaded");return;}
+  _activeCues=_activeCues.map(c=>({
+    ...c,
+    start:Math.max(0,c.start+seconds),
+    end:Math.max(0,c.end+seconds)
+  }));
+  // Get current track language
+  const tts=vjsPlayer.textTracks();
+  let lang="en",label="English";
+  for(let i=0;i<tts.length;i++){
+    if(tts[i].mode==="showing"){lang=tts[i].language;label=tts[i].label;break;}
+  }
+  attachSubtitleTrack(vjsPlayer, _activeCues, lang, label);
   toast(`Sub offset ${seconds>0?"+":""}${seconds}s applied`);
 }
 
