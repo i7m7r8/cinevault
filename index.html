@@ -725,15 +725,32 @@ async function playTorrent(infoHash, fileIdx, title) {
   });
   updateSubtitleBarVisibility();
   setNameBar(title + " — Torrent");
-  toast("⏳ Connecting to torrent peers…");
+  toast("⏳ Connecting to peers… (may take 30s)");
+  // Timeout: if torrent doesn't start in 45s, show error
+  const torrentTimeout = setTimeout(() => {
+    toast("❌ Torrent timed out — no peers found. Try another stream.");
+    $("pph").classList.remove("hidden");
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No peers found. Try another torrent or source above.</div>';
+  }, 45000);
   webtorrentClient.add(magnet, torrent => {
-    // For TV packs: try to find the right episode file by fileIdx, fallback to largest video file
-    const videoFiles = torrent.files.filter(f => /\.(mp4|mkv|avi|mov|wmv|webm)$/i.test(f.name));
-    const file = videoFiles[fileIdx] || videoFiles[0] || torrent.files[fileIdx] || torrent.files[0];
-    if (!file) { toast("❌ No playable file found"); return; }
+    clearTimeout(torrentTimeout);
+    // Find best video file: prefer by fileIdx, fallback to largest video file
+    const videoFiles = torrent.files
+      .filter(f => /\.(mp4|mkv|avi|mov|wmv|webm)$/i.test(f.name))
+      .sort((a, b) => b.length - a.length);
+    const file = videoFiles[fileIdx] || videoFiles[0] || torrent.files[0];
+    if (!file) {
+      toast("❌ No playable file in torrent");
+      $("pph").classList.remove("hidden");
+      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file found. Try another torrent.</div>';
+      return;
+    }
     file.renderTo(video, { autoplay: true }, err => {
-      if (err) { toast("❌ Torrent playback error: " + err.message); return; }
-      toast("▶ Playing: " + file.name);
+      if (err) {
+        toast("❌ Playback error — try another torrent");
+        return;
+      }
+      toast("▶ " + file.name);
       if (cur.imdb_id) fetchAndAttachSubs(cur.imdb_id, curS, curE, 'en', video);
     });
   });
@@ -741,24 +758,28 @@ async function playTorrent(infoHash, fileIdx, title) {
 
 // ── STREAMS ───────────────────────────────────────────────────────
 async function fetchStreams(imdbId, isTv, s, e) {
-  // args.js handles: /stream/{type}/{id}.json
-  // TV episode id format: tt1234567:1:1  (colon-separated season:episode)
   const type = isTv ? "series" : "movie";
   const stremioId = isTv ? `${imdbId}:${s}:${e}` : imdbId;
+  // Primary: our Vercel API — needs up to 15s (TMDB + apibay)
   const primaryUrl = `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`;
-  // Fallback: torrentio public addon (same Stremio format)
+  // Fallback: torrentio public Stremio addon
   const fallbackUrl = `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`;
 
   for (const url of [primaryUrl, fallbackUrl]) {
     try {
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 9000);
+      // 25s timeout — Vercel hobby functions can take up to ~15s (TMDB 5s + apibay 10s)
+      const t = setTimeout(() => ctrl.abort(), 25000);
       const r = await fetch(url, { signal: ctrl.signal });
       clearTimeout(t);
       if (!r.ok) continue;
       const d = await r.json();
       const streams = Array.isArray(d.streams) ? d.streams : [];
-      if (streams.length) return streams.slice(0, 15);
+      // Filter out fake fallback streams (zero hash = apibay found nothing)
+      const real = streams.filter(s =>
+        s.infoHash && !/^0+$/.test(s.infoHash) && s.infoHash.length === 40
+      );
+      if (real.length) return real.slice(0, 15);
     } catch { continue; }
   }
   return [];
@@ -827,22 +848,32 @@ async function loadDirectStreams() {
   }
   $("stream-picker").style.display = "block";
   $("stream-loading").style.display = "block";
-  $("stream-loading").textContent = "🔄 Loading streams…";
+  $("stream-loading").textContent = "🔄 Searching torrents… (may take 10-20s)";
   $("streambns").innerHTML = "";
+  // Pulse the loading text so user knows it's working
+  let dots = 0;
+  const pulse = setInterval(() => {
+    dots = (dots + 1) % 4;
+    const el = $("stream-loading");
+    if (el && el.style.display !== "none")
+      el.textContent = "🔄 Searching torrents" + ".".repeat(dots) + " (this can take ~15s)";
+  }, 1500);
   try {
     const streams = await fetchStreams(cur.imdb_id, isTv, snapS, snapE);
+    clearInterval(pulse);
     // Only render if user hasn't switched episode while loading
     if (snapS !== curS || snapE !== curE) return;
     _cachedStreams = streams; _cacheKey = cacheKey;
     if (!streams.length) {
       $("stream-loading").style.display = "block";
-      $("stream-loading").textContent = "⚠️ No streams found";
+      $("stream-loading").textContent = "⚠️ No torrents found — try a different source above";
     } else {
       buildStreamPicker(streams);
     }
   } catch(err) {
+    clearInterval(pulse);
     $("stream-loading").style.display = "block";
-    $("stream-loading").textContent = "⚠️ Failed to load streams";
+    $("stream-loading").textContent = "⚠️ Stream fetch failed — try again";
     console.error("loadDirectStreams error:", err);
   }
 }
@@ -926,9 +957,13 @@ function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // Async: fetch IMDb ID → seasons → source + streams
+  // Immediately load source 0 if it doesn't need IMDb ID (2Embed = TMDB id only)
+  // This makes video start playing right away without waiting for IMDb fetch
+  if (!SOURCES[0].useImdb) loadSource(0);
+
+  // Async: fetch IMDb ID in background, then seasons + streams
   (async () => {
-    // Step 1: IMDb ID (required for IMDB-sources and stream fetching)
+    // Step 1: IMDb ID (needed for some sources + all stream fetching)
     if (!cur.imdb_id) {
       try {
         const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
@@ -936,13 +971,13 @@ function openModal(item, type) {
       } catch(e) { console.error("IMDb fetch failed:", e); }
     }
 
-    // Step 2: TV seasons/episodes
+    // Step 2: TV seasons/episodes (populates season/episode buttons)
     if (isTv) await loadSeasons(item.id);
 
-    // Step 3: Load default source (now IMDb ID is available)
-    loadSource(0);
+    // Step 3: If source 0 needed IMDb (or wasn't loaded yet), load it now
+    if (SOURCES[0].useImdb) loadSource(0);
 
-    // Step 4: Fetch torrent streams
+    // Step 4: Fetch torrent streams (IMDb ID now resolved)
     loadDirectStreams();
   })();
 }
@@ -1180,7 +1215,7 @@ document.querySelectorAll(".tab").forEach(tab => {
 
 // ── PWA ───────────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
-  const swCode = `const CACHE="cv-v3";const SHELL=["/"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));self.addEventListener("fetch",e=>{if(["tmdb","opensubtitles","torrentio","workers.dev","apibay","torrents-csv"].some(s=>e.request.url.includes(s)))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const swCode = `const CACHE="cv-v3";const SHELL=["/"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));self.addEventListener("fetch",e=>{if(["tmdb","opensubtitles","torrentio","vercel.app","workers.dev","apibay","torrents-csv","nyaa.si"].some(s=>e.request.url.includes(s)))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   const blob = new Blob([swCode],{type:"application/javascript"});
   navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
 }
