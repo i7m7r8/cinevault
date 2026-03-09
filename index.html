@@ -275,13 +275,25 @@ a{text-decoration:none;color:inherit}
 .cbtn.on-g{background:var(--green);border-color:var(--green);color:#fff}
 
 /* PLAYER WRAPPER */
+.player-outer{ position:relative; width:100%; }
 .pwrap{
   width:100%;aspect-ratio:16/9;border-radius:10px;
   overflow:hidden;background:#000;
   border:1px solid var(--border);position:relative;
 }
 .pwrap iframe, .pwrap video{
-  width:100%;height:100%;border:none;display:block;
+  position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;
+}
+/* SUBTITLE OVERLAY over the player */
+#sub-overlay{
+  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
+  z-index:20;pointer-events:none;width:92%;text-align:center;display:none;
+}
+#sub-overlay.visible{ display:block; }
+#sub-text{
+  background:rgba(0,0,0,.82);color:#fff;font-size:clamp(13px,2.5vw,17px);font-weight:600;
+  padding:4px 12px;border-radius:6px;line-height:1.7;
+  white-space:pre-line;text-shadow:1px 1px 3px #000;display:inline-block;max-width:100%;
 }
 .pph{
   position:absolute;inset:0;
@@ -364,18 +376,7 @@ a{text-decoration:none;color:inherit}
   padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;
   white-space:nowrap;
 }
-/* SUBTITLE OVERLAY */
-#sub-overlay{
-  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
-  z-index:20;pointer-events:none;width:90%;text-align:center;
-  display:none;
-}
-#sub-overlay.visible{ display:block; }
-#sub-text{
-  background:rgba(0,0,0,0.75);color:#fff;font-size:15px;font-weight:600;
-  padding:4px 10px;border-radius:6px;line-height:1.6;
-  white-space:pre-line;text-shadow:1px 1px 2px #000;
-}
+/* sub-overlay CSS merged into player section above */
 
 /* TOAST */
 #toast{
@@ -518,11 +519,12 @@ footer{
         <div class="cbtns" id="srcbns"></div>
       </div>
 
-      <div class="pwrap" id="pwrap">
-        <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
+      <div class="player-outer" id="player-outer">
+        <div class="pwrap" id="pwrap">
+          <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
+          <!-- iframe or video inserted here by JS -->
+        </div>
         <div id="sub-overlay"><span id="sub-text"></span></div>
-        <div class="ploader" id="ploader"><div class="spin"></div></div>
-        <!-- iframe or video will be inserted here -->
       </div>
       <div id="stream-name-bar">
         <div class="snb-label">▶ Now Playing</div>
@@ -634,7 +636,6 @@ function showIframe(url, nameLabel) {
   stopVideo();
   const pwrap = $("pwrap");
   pwrap.innerHTML = '';
-  $("sub-overlay").style.display = "none";
   const iframe = document.createElement('iframe');
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
@@ -648,8 +649,10 @@ function showIframe(url, nameLabel) {
 }
 
 function stopVideo() {
+  clearSubs();
   if (plyrInstance) { try { plyrInstance.destroy(); } catch(e){} plyrInstance = null; }
   if (currentVideo) { try { currentVideo.pause(); currentVideo.remove(); } catch(e){} currentVideo = null; }
+  document.querySelectorAll(".plyr").forEach(el => { try { el.remove(); } catch(e){} });
   updateSubtitleBarVisibility();
 }
 
@@ -705,55 +708,77 @@ function loadSource(i) {
 async function playTorrent(infoHash, fileIdx, title) {
   if (!webtorrentClient) webtorrentClient = new WebTorrent();
   const magnet = buildMagnetLink(infoHash);
-  stopVideo();
+
+  // Tear down existing player cleanly
+  clearPlayer();
   const pwrap = $("pwrap");
-  pwrap.innerHTML = '';
-  $("pph").classList.add("hidden");
-  const video = document.createElement('video');
-  video.id = 'plyr-video';
+
+  // Create a raw <video> — do NOT use Plyr here.
+  // WebTorrent.file.renderTo() needs the original <video> DOM node.
+  // Plyr wraps/replaces it internally and breaks renderTo silently.
+  const video = document.createElement("video");
+  video.id = "torrent-video";
   video.controls = true;
   video.autoplay = true;
   video.playsInline = true;
-  video.style.cssText = "width:100%;height:100%;display:block";
+  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;display:block";
   pwrap.appendChild(video);
   currentVideo = video;
-  plyrInstance = new Plyr(video, {
-    captions: { active: true, update: true, language: 'auto' },
-    controls: ['play-large','play','rewind','fast-forward','progress','current-time','mute','volume','captions','settings','fullscreen'],
-    settings: ['captions','speed'],
-    tooltips: { controls: true, seek: true },
-  });
+
+  $("pph").classList.add("hidden");
   updateSubtitleBarVisibility();
   setNameBar(title + " — Torrent");
-  toast("⏳ Connecting to peers… (may take 30s)");
-  // Timeout: if torrent doesn't start in 45s, show error
+  toast("⏳ Connecting to peers…");
+
+  // 45s timeout
   const torrentTimeout = setTimeout(() => {
-    toast("❌ Torrent timed out — no peers found. Try another stream.");
-    $("pph").classList.remove("hidden");
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No peers found. Try another torrent or source above.</div>';
+    toast("❌ Timed out — no peers. Try another torrent.");
+    const pph = $("pph");
+    if (pph) { pph.classList.remove("hidden"); pph.innerHTML = '<div class="pph-icon">⏱️</div><div>No peers found. Try another torrent above.</div>'; }
   }, 45000);
-  webtorrentClient.add(magnet, torrent => {
-    clearTimeout(torrentTimeout);
-    // Find best video file: prefer by fileIdx, fallback to largest video file
-    const videoFiles = torrent.files
-      .filter(f => /\.(mp4|mkv|avi|mov|wmv|webm)$/i.test(f.name))
-      .sort((a, b) => b.length - a.length);
-    const file = videoFiles[fileIdx] || videoFiles[0] || torrent.files[0];
-    if (!file) {
-      toast("❌ No playable file in torrent");
-      $("pph").classList.remove("hidden");
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file found. Try another torrent.</div>';
-      return;
-    }
-    file.renderTo(video, { autoplay: true }, err => {
-      if (err) {
-        toast("❌ Playback error — try another torrent");
+
+  try {
+    webtorrentClient.add(magnet, {
+      announce: [
+        "wss://tracker.openwebtorrent.com",
+        "wss://tracker.btorrent.xyz",
+        "wss://tracker.fastcast.nz",
+        "udp://tracker.opentrackr.org:1337/announce",
+      ]
+    }, torrent => {
+      clearTimeout(torrentTimeout);
+
+      // Pick best video file: sort by size desc, use fileIdx as hint
+      const vids = torrent.files
+        .filter(f => /\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
+        .sort((a, b) => b.length - a.length);
+
+      if (!vids.length) {
+        toast("❌ No video file in torrent");
+        const pph = $("pph");
+        if (pph) { pph.classList.remove("hidden"); pph.innerHTML = '<div class="pph-icon">⚠️</div><div>No video file found.</div>'; }
         return;
       }
-      toast("▶ " + file.name);
-      if (cur.imdb_id) fetchAndAttachSubs(cur.imdb_id, curS, curE, 'en', video);
+
+      const file = vids[Math.min(fileIdx, vids.length - 1)];
+      toast("🎬 " + file.name.slice(0, 40));
+
+      // renderTo streams the file into the <video> element directly
+      file.renderTo(video, { autoplay: true }, err => {
+        if (err) { console.error("renderTo:", err); toast("❌ Playback error — try another"); return; }
+        toast("▶ Playing");
+        // Auto-load subtitles 2s after playback starts
+        if (cur?.imdb_id) {
+          const lang = $("subsel")?.value || "en";
+          if (lang) setTimeout(() => fetchAndAttachSubs(cur.imdb_id, curS, curE, lang, video), 2000);
+        }
+      });
     });
-  });
+  } catch(err) {
+    clearTimeout(torrentTimeout);
+    console.error("WT add error:", err);
+    toast("❌ Torrent load failed");
+  }
 }
 
 // ── STREAMS ───────────────────────────────────────────────────────
@@ -836,6 +861,7 @@ function buildStreamPicker(streams) {
 
 async function loadDirectStreams() {
   if (!cur || !cur.imdb_id) {
+    $("stream-loading").style.display = "block";
     $("stream-loading").textContent = "⚠️ No IMDb ID — streams unavailable";
     return;
   }
@@ -944,7 +970,10 @@ function openModal(item, type) {
   updateMmeta();
 
   // Reset player area
-  $("pwrap").innerHTML = `<div class="pph" id="pph"><div class="pph-icon">⏳</div><div>Fetching info…</div></div><div id="sub-overlay"><span id="sub-text"></span></div><div class="ploader" id="ploader"><div class="spin"></div></div>`;
+  // Safe reset: don't wipe pwrap innerHTML (kills element refs) — just update pph
+  clearPlayer();
+  const _pph = $("pph");
+  if (_pph) { _pph.classList.remove("hidden"); _pph.innerHTML = '<div class="pph-icon">⏳</div><div>Fetching info…</div>'; }
   $("stream-name-bar").classList.remove("on");
   $("streambns").innerHTML = "";
   $("stream-loading").style.display = "block";
@@ -995,39 +1024,84 @@ function closeModal() {
   $("stream-name-bar").classList.remove("on");
 }
 
-// ── SUBTITLE FUNCTIONS ────────────────────────────────────────────
+// ── SUBTITLE SYSTEM — custom overlay, sec-by-sec timeupdate sync ──────────
+// All subtitle state
+let _subCues = [];           // [{start,end,text}] sorted by start
+let _subOffset = 0;          // user offset in seconds (+=later, -=earlier)
+let _subVideo = null;        // video element subs are attached to
+
+function _subTick() {
+  // Called on every timeupdate and seeked event — always in sync including after rewind
+  const overlay = $("sub-overlay");
+  const subText = $("sub-text");
+  if (!overlay || !subText || !_subVideo || !_subCues.length) return;
+  const t = _subVideo.currentTime + _subOffset;
+  // Binary search for current cue
+  let lo = 0, hi = _subCues.length - 1, found = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const cue = _subCues[mid];
+    if (t >= cue.start && t <= cue.end) { found = cue; break; }
+    if (t < cue.start) hi = mid - 1; else lo = mid + 1;
+  }
+  if (found) {
+    subText.textContent = found.text;
+    overlay.style.display = "block";
+  } else {
+    overlay.style.display = "none";
+  }
+}
+
+function _attachSubListener(video) {
+  // Remove from any previous video
+  if (_subVideo) {
+    _subVideo.removeEventListener("timeupdate", _subTick);
+    _subVideo.removeEventListener("seeked", _subTick);
+  }
+  _subVideo = video;
+  if (video) {
+    video.addEventListener("timeupdate", _subTick);
+    video.addEventListener("seeked", _subTick);  // instant sync after rewind/skip
+  }
+}
+
+function clearSubs() {
+  _attachSubListener(null);
+  _subCues = []; _subOffset = 0;
+  const overlay = $("sub-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+
 async function fetchAndAttachSubs(imdbId, season, episode, lang, video) {
-  if (!imdbId) return;
+  if (!imdbId || !video) return;
   const langMap = { en:"eng", hi:"hin", ar:"ara", fr:"fre", es:"spa", de:"ger", pt:"por", it:"ita", ja:"jpn", ko:"kor", zh:"chi" };
   const osLang = langMap[lang] || "eng";
+  toast("🔤 Fetching subtitles…");
   try {
-    // OpenSubtitles REST API — works directly from browser with CORS
-    const imdbNum = imdbId.replace("tt", "");
+    const imdbNum = imdbId.replace("tt","");
     let url = `https://rest.opensubtitles.org/search/imdbid-${imdbNum}/sublanguageid-${osLang}`;
     if (season)  url += `/season-${season}`;
     if (episode) url += `/episode-${episode}`;
-    const r = await fetch(url, {
-      headers: { "X-User-Agent": "TemporaryUserAgent" }
-    });
-    if (!r.ok) return;
+    const r = await fetch(url, { headers:{ "X-User-Agent":"TemporaryUserAgent" } });
+    if (!r.ok) { toast("⚠️ No subtitle service response"); return; }
     const subs = await r.json();
-    if (!Array.isArray(subs) || !subs.length) return;
+    if (!Array.isArray(subs) || !subs.length) { toast("⚠️ No subtitles found"); return; }
     const epStr = season ? "S"+String(season).padStart(2,"0")+"E"+String(episode).padStart(2,"0") : "";
     let sub = epStr
-      ? (subs.find(s=>s.SubFormat==="srt"&&(s.SubFileName||"").toUpperCase().includes(epStr))
-         || subs.find(s=>s.SubFormat==="srt") || subs[0])
-      : (subs.find(s=>s.SubFormat==="srt") || subs[0]);
-    if (!sub?.SubDownloadLink) return;
+      ? (subs.find(s => s.SubFormat==="srt" && (s.SubFileName||"").toUpperCase().includes(epStr))
+         || subs.find(s => s.SubFormat==="srt") || subs[0])
+      : (subs.find(s => s.SubFormat==="srt") || subs[0]);
+    if (!sub?.SubDownloadLink) { toast("⚠️ Subtitle link not found"); return; }
     const srtText = await downloadAndDecompress(sub.SubDownloadLink);
     if (!srtText) return;
     const cues = parseSRT(srtText);
-    if (!cues.length) return;
-    for (let i=0; i<video.textTracks.length; i++) video.textTracks[i].mode = 'disabled';
-    const track = video.addTextTrack('subtitles', lang.toUpperCase(), lang);
-    track.mode = 'showing';
-    cues.forEach(c => track.addCue(new VTTCue(c.start, c.end, c.text)));
-    toast("🔤 " + lang.toUpperCase() + " subtitles loaded");
-  } catch(e) { console.error("Sub error:", e); }
+    if (!cues.length) { toast("⚠️ Subtitle parse failed"); return; }
+    _subCues = cues;
+    _subOffset = 0;
+    _attachSubListener(video);
+    _subTick(); // sync immediately
+    toast(`🔤 ${lang.toUpperCase()} subtitles — ${cues.length} lines`);
+  } catch(e) { console.error("Sub error:", e); toast("⚠️ Subtitle error"); }
 }
 
 async function downloadAndDecompress(url) {
@@ -1046,10 +1120,10 @@ async function downloadAndDecompress(url) {
       if (done) break;
       chunks.push(value);
     }
-    const total = chunks.reduce((n,c) => n+c.length, 0);
+    const total = chunks.reduce((n, c) => n + c.length, 0);
     const out = new Uint8Array(total);
     let pos = 0;
-    for (const c of chunks) { out.set(c,pos); pos+=c.length; }
+    for (const c of chunks) { out.set(c, pos); pos += c.length; }
     return new TextDecoder().decode(out);
   } catch {
     return new TextDecoder().decode(buffer);
@@ -1058,36 +1132,40 @@ async function downloadAndDecompress(url) {
 
 function parseSRT(text) {
   const cues = [];
-  for (const block of text.replace(/\r/g,"").trim().split(/\n\s*\n/)) {
+  for (const block of text.replace(/\r/g, "").trim().split(/\n\s*\n/)) {
     const lines = block.trim().split("\n");
     const timeLine = lines.find(l => l.includes("-->"));
     if (!timeLine) continue;
-    const [s1,s2] = timeLine.split("-->").map(s=>s.trim());
-    const toSec = t => { const m=t.match(/(\d+):(\d+):(\d+)[,.](\d+)/); return m?+m[1]*3600+ +m[2]*60+ +m[3]+ +m[4]/1000:0; };
-    const txt = lines.slice(lines.indexOf(timeLine)+1).join("\n").replace(/<[^>]+>/g,"").trim();
+    const [s1, s2] = timeLine.split("-->").map(s => s.trim());
+    const toSec = t => {
+      const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+      return m ? +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000 : 0;
+    };
+    const txt = lines.slice(lines.indexOf(timeLine)+1).join("\n")
+      .replace(/<[^>]+>/g,"").replace(/\{[^}]+\}/g,"").trim();
     if (txt) cues.push({ start:toSec(s1), end:toSec(s2), text:txt });
   }
-  return cues.sort((a,b)=>a.start-b.start);
+  return cues.sort((a, b) => a.start - b.start);
 }
 
 function offsetSubtitles(seconds) {
-  if (!currentVideo || !currentVideo.textTracks.length) return;
-  const cues = currentVideo.textTracks[0].cues;
-  if (!cues) return;
-  for (let i=0; i<cues.length; i++) { cues[i].startTime+=seconds; cues[i].endTime+=seconds; }
-  toast(`Subtitle offset ${seconds>0?"+":""}${seconds}s`);
+  // Positive = shift subtitles later (if subs appear too early)
+  // Negative = shift subtitles earlier (if subs appear too late)
+  _subOffset += seconds;
+  _subTick(); // apply immediately
+  toast(`Subtitle offset ${_subOffset >= 0 ? "+" : ""}${_subOffset.toFixed(1)}s`);
 }
 
 function turnOffSubtitles() {
-  if (!currentVideo) return;
-  for (let i=0; i<currentVideo.textTracks.length; i++) currentVideo.textTracks[i].mode='disabled';
-  $("subsel").value=""; toast("🔤 Subtitles off");
+  clearSubs();
+  $("subsel").value = "";
+  toast("🔤 Subtitles off");
 }
 
 $("applySubBtn").onclick = () => {
-  if (!currentVideo || !cur?.imdb_id) { toast("❌ No video or IMDb ID"); return; }
+  if (!currentVideo || !cur?.imdb_id) { toast("❌ No video playing"); return; }
   const lang = $("subsel").value;
-  if (!lang) { toast("Select a language"); return; }
+  if (!lang) { toast("Select a language first"); return; }
   fetchAndAttachSubs(cur.imdb_id, curS, curE, lang, currentVideo);
 };
 $("subOffsetPlus").onclick  = () => offsetSubtitles(0.5);
