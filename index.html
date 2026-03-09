@@ -350,56 +350,89 @@ function clearPlayer() {
   $("stream-name-bar").classList.remove("on");
 }
 
-// ── WEBTOR PLAYER (official window.webtor.push API) ────────────
+// ── TORRENT PLAYER: tries engines in order ──────────────────────
+// Engine 1: btorrent.xyz  — pure WebTorrent in-browser, FOSS, iframe
+// Engine 2: webtor.io     — cloud-based, open new tab (SDK is broken for embed)
+// Engine 3: fallback      — first iframe source (2Embed)
+
 function playWebtor(infoHash, fileIdx, title) {
+  _playTorrentEngine(infoHash, fileIdx, title, 0);
+}
+
+const _TORRENT_ENGINES = [
+  // btorrent.xyz: open-source WebTorrent player, supports infoHash in URL
+  (hash, idx, title) => `https://btorrent.xyz/#${hash}`,
+
+  // Instant.io: another WebTorrent embed (backup)
+  (hash, idx, title) => `https://instant.io/#${hash}`,
+];
+
+function _playTorrentEngine(infoHash, fileIdx, title, engineIdx) {
   clearPlayer();
   $("pph").classList.add("hidden");
-  setNameBar(title + " — Webtor");
+
+  // If no more iframe engines, open webtor.io in new tab + show fallback UI
+  if (engineIdx >= _TORRENT_ENGINES.length) {
+    _showTorrentFallbackUI(infoHash, fileIdx, title);
+    return;
+  }
+
+  const url = _TORRENT_ENGINES[engineIdx](infoHash, fileIdx, title);
+  const label = engineIdx === 0 ? "bTorrent" : "Instant.io";
+  setNameBar(title + ` — ${label}`);
 
   const pwrap = $("pwrap");
-  const containerId = "webtor-wrap-" + Date.now();
+  const iframe = document.createElement("iframe");
+  iframe.id = "pframe";
+  iframe.allowFullscreen = true;
+  iframe.allow = "autoplay; fullscreen; encrypted-media";
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups allow-presentation";
+  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
+  iframe.src = url;
 
-  // Webtor needs a div with a unique id to mount into
-  const wrap = document.createElement("div");
-  wrap.id = containerId;
-  wrap.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
-  pwrap.appendChild(wrap);
+  // If this engine iframe fails to load, try next
+  let loaded = false;
+  iframe.onload = () => { loaded = true; };
+  setTimeout(() => {
+    if (!loaded && $("pframe") === iframe) {
+      toast(`⚠️ ${label} not responding — trying next…`);
+      _playTorrentEngine(infoHash, fileIdx, title, engineIdx + 1);
+    }
+  }, 8000);
 
+  pwrap.appendChild(iframe);
+  toast(`🌀 ${label} loading…`);
+}
+
+function _showTorrentFallbackUI(infoHash, fileIdx, title) {
+  const pwrap = $("pwrap");
   const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}`
     + `&tr=udp://tracker.opentrackr.org:1337/announce`
     + `&tr=udp://open.stealth.si:80/announce`
     + `&tr=wss://tracker.btorrent.xyz`
     + `&tr=wss://tracker.openwebtorrent.com`;
 
-  function launchWebtor() {
-    window.webtor = window.webtor || [];
-    window.webtor.push({
-      id: containerId,
-      magnet: magnet,
-      fileIndex: fileIdx || 0,
-      lang: "en",
-      width: "100%",
-      height: "100%",
-    });
-    toast("🌀 Webtor starting…");
-  }
+  const webtorUrl = `https://webtor.io/#/show?magnet=${encodeURIComponent(magnet)}&file-index=${fileIdx||0}`;
 
-  // Load SDK once, then push config
-  if (window.__webtorSdkLoaded) {
-    launchWebtor();
-  } else {
-    window.__webtorSdkLoaded = true;
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js";
-    s.charset = "utf-8";
-    s.async = true;
-    s.onload = launchWebtor;
-    s.onerror = () => {
-      toast("⚠️ Webtor SDK failed — switching to embed source…");
-      loadSource(0);
-    };
-    document.head.appendChild(s);
-  }
+  setNameBar(title + " — Torrent Options");
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = `
+    <div style="text-align:center;padding:1.5rem;color:#ccc;max-width:420px;margin:auto;">
+      <div style="font-size:2rem;margin-bottom:.8rem;">🌀</div>
+      <div style="font-weight:600;font-size:1rem;margin-bottom:1rem;color:#eee;">In-browser torrent players blocked by iFrame sandbox</div>
+      <div style="font-size:.85rem;margin-bottom:1.4rem;line-height:1.6;">
+        Open in a <b>new tab</b> to stream via Webtor's cloud servers (free, no account needed):
+      </div>
+      <a href="${webtorUrl}" target="_blank" rel="noopener"
+         style="display:inline-block;padding:.65rem 1.4rem;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem;margin-bottom:.8rem;">
+        🌐 Open in Webtor.io
+      </a>
+      <div style="font-size:.75rem;color:#888;margin-top:.6rem;">or try an embed source below ↓</div>
+    </div>`;
+
+  // Auto-highlight first iframe source button
+  const srcBtns = [...document.querySelectorAll("#srcbns .cbtn")];
+  if (srcBtns.length > 1) srcBtns[1].classList.add("on");
 }
 
 // ── VIDEO.JS FOR DIRECT STREAMS (MP4/HLS) ──────────────────────
@@ -784,7 +817,7 @@ function buildSources() {
   // Optional Webtor button (comment out if not wanted)
   const wb = document.createElement("button");
   wb.className = "cbtn";
-  wb.textContent = "🌀 Webtor";
+  wb.textContent = "🌀 Torrent";
   wb.onclick = () => {
     document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
     wb.classList.add("on");
