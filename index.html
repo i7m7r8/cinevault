@@ -323,10 +323,10 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  // Remove any video elements, iframes, and Webtor containers
+  // Remove any video elements and iframes
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -350,97 +350,7 @@ function clearPlayer() {
   $("stream-name-bar").classList.remove("on");
 }
 
-// ── TORRENT PLAYER: tries engines in order ──────────────────────
-// Engine 1: btorrent.xyz  — pure WebTorrent in-browser, FOSS, iframe
-// Engine 2: webtor.io     — cloud-based, open new tab (SDK is broken for embed)
-// Engine 3: fallback      — first iframe source (2Embed)
-
-function playWebtor(infoHash, fileIdx, title) {
-  _playTorrentEngine(infoHash, fileIdx, title, 0);
-}
-
-const _TORRENT_ENGINES = [
-  // btorrent.xyz: open-source WebTorrent player, supports infoHash in URL
-  (hash, idx, title) => `https://btorrent.xyz/#${hash}`,
-
-  // Instant.io: another WebTorrent embed (backup)
-  (hash, idx, title) => `https://instant.io/#${hash}`,
-];
-
-function _playTorrentEngine(infoHash, fileIdx, title, engineIdx) {
-  clearPlayer();
-  $("pph").classList.add("hidden");
-
-  // If no more iframe engines, open webtor.io in new tab + show fallback UI
-  if (engineIdx >= _TORRENT_ENGINES.length) {
-    _showTorrentFallbackUI(infoHash, fileIdx, title);
-    return;
-  }
-
-  const url = _TORRENT_ENGINES[engineIdx](infoHash, fileIdx, title);
-  const label = engineIdx === 0 ? "bTorrent" : "Instant.io";
-  setNameBar(title + ` — ${label}`);
-
-  const pwrap = $("pwrap");
-  const iframe = document.createElement("iframe");
-  iframe.id = "pframe";
-  iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; encrypted-media";
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups allow-presentation";
-  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  iframe.src = url;
-
-  // If this engine iframe fails to load, try next
-  let loaded = false;
-  iframe.onload = () => { loaded = true; };
-  setTimeout(() => {
-    if (!loaded && $("pframe") === iframe) {
-      toast(`⚠️ ${label} not responding — trying next…`);
-      _playTorrentEngine(infoHash, fileIdx, title, engineIdx + 1);
-    }
-  }, 8000);
-
-  pwrap.appendChild(iframe);
-  toast(`🌀 ${label} loading…`);
-}
-
-function _showTorrentFallbackUI(infoHash, fileIdx, title) {
-  const pwrap = $("pwrap");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title)}`
-    + `&tr=udp://tracker.opentrackr.org:1337/announce`
-    + `&tr=udp://open.stealth.si:80/announce`
-    + `&tr=wss://tracker.btorrent.xyz`
-    + `&tr=wss://tracker.openwebtorrent.com`;
-
-  const webtorUrl = `https://webtor.io/#/show?magnet=${encodeURIComponent(magnet)}&file-index=${fileIdx||0}`;
-
-  setNameBar(title + " — Torrent Options");
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML = `
-    <div style="text-align:center;padding:1.5rem;color:#ccc;max-width:420px;margin:auto;">
-      <div style="font-size:2rem;margin-bottom:.8rem;">🌀</div>
-      <div style="font-weight:600;font-size:1rem;margin-bottom:1rem;color:#eee;">In-browser torrent players blocked by iFrame sandbox</div>
-      <div style="font-size:.85rem;margin-bottom:1.4rem;line-height:1.6;">
-        Open in a <b>new tab</b> to stream via Webtor's cloud servers (free, no account needed):
-      </div>
-      <a href="${webtorUrl}" target="_blank" rel="noopener"
-         style="display:inline-block;padding:.65rem 1.4rem;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem;margin-bottom:.8rem;">
-        🌐 Open in Webtor.io
-      </a>
-      <div style="font-size:.75rem;color:#888;margin-top:.6rem;">or try an embed source below ↓</div>
-    </div>`;
-
-  // Auto-highlight first iframe source button
-  const srcBtns = [...document.querySelectorAll("#srcbns .cbtn")];
-  if (srcBtns.length > 1) srcBtns[1].classList.add("on");
-}
-
 // ── VIDEO.JS FOR DIRECT STREAMS (MP4/HLS) ──────────────────────
-const CORS_PROXIES = [
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `${API}/proxy?url=${encodeURIComponent(u)}`,
-];
 
 function playDirectUrl(streamUrl, title) {
   clearPlayer();
@@ -474,17 +384,6 @@ function playDirectUrl(streamUrl, title) {
     },
   });
 
-  let proxyIdx = -1; // -1 = direct, 0..N = proxy
-
-  const tryLoad = () => {
-    const url = proxyIdx < 0 ? streamUrl : CORS_PROXIES[proxyIdx]?.(streamUrl);
-    if (!url) { tryNextStream(); return; }
-    toast(proxyIdx < 0 ? "🎬 Loading…" : `🔄 Proxy ${proxyIdx + 1}…`);
-    const mimeType = isHLS ? "application/x-mpegURL" : isDASH ? "application/dash+xml" : "video/mp4";
-    vjsPlayer.src({ src: url, type: mimeType });
-    vjsPlayer.play().catch(() => {});
-  };
-
   const tryNextStream = () => {
     const rows = [...document.querySelectorAll(".stream-row")];
     const idx = rows.findIndex(r => r.classList.contains("active"));
@@ -497,11 +396,14 @@ function playDirectUrl(streamUrl, title) {
     }
   };
 
-  vjsPlayer.on("error", () => {
-    proxyIdx++;
-    if (proxyIdx < CORS_PROXIES.length) setTimeout(tryLoad, 300);
-    else tryNextStream();
-  });
+  const tryLoad = () => {
+    toast("🎬 Loading…");
+    const mimeType = isHLS ? "application/x-mpegURL" : isDASH ? "application/dash+xml" : "video/mp4";
+    vjsPlayer.src({ src: streamUrl, type: mimeType });
+    vjsPlayer.play().catch(() => {});
+  };
+
+  vjsPlayer.on("error", () => tryNextStream());
 
   vjsPlayer.on("playing", () => {
     if (!_subCues.length && cur?.imdb_id) loadAndStartSubs("vjs");
@@ -683,9 +585,9 @@ async function fetchStreams(imdbId, isTv, s, e) {
       if (!r.ok) continue;
       const d = await r.json();
       const streams = Array.isArray(d.streams) ? d.streams : [];
+      // Only keep direct HTTP streams — no torrents
       const directStreams = streams.filter(s => s.url && /^https?:\/\//i.test(s.url) && !s.infoHash);
-      const torrentStreams = streams.filter(s => s.infoHash && !/^0+$/.test(s.infoHash) && s.infoHash.length === 40);
-      allStreams = [...allStreams, ...directStreams, ...torrentStreams];
+      allStreams = [...allStreams, ...directStreams];
       if (directStreams.length) break;
     } catch { continue; }
   }
@@ -714,10 +616,10 @@ function buildStreamPicker(streams, autoPlay = false) {
     else if (/korean/i.test(fname + meta)) lang = "🇰🇷 ";
     else if (/japanese/i.test(fname + meta)) lang = "🇯🇵 ";
 
-    const isDirect = !s.infoHash && s.url;
+    const isDirect = !!s.url;
     const typeTag = isDirect
       ? `<span class="qlabel" style="background:#10b981;color:#fff">DIRECT</span>`
-      : `<span class="qlabel" style="background:#3b82f6;color:#fff">P2P</span>`;
+      : `<span class="qlabel" style="background:#6b7280;color:#fff">N/A</span>`;
 
     const row = document.createElement("div");
     row.className = "stream-row";
@@ -733,9 +635,7 @@ function buildStreamPicker(streams, autoPlay = false) {
         `<span class="stream-play-btn">▶</span>` +
       `</div>`;
 
-    row._hash = s.infoHash || "";
     row._url = s.url || "";
-    row._fileIdx = typeof s.fileIdx === "number" ? s.fileIdx : 0;
     row._title = fname;
 
     const playRow = () => {
@@ -744,10 +644,8 @@ function buildStreamPicker(streams, autoPlay = false) {
       const title = (cur.title || cur.name || "") + (cur.mediaType === "movie" ? "" : ` S${curS}E${curE}`);
       if (row._url) {
         playDirectUrl(row._url, title);
-      } else if (row._hash) {
-        playWebtor(row._hash, row._fileIdx, title);
       } else {
-        loadSource(srcIdx);
+        loadSource(0); // fallback to 2Embed
       }
     };
 
@@ -814,30 +712,9 @@ const SOURCES = [
 function buildSources() {
   const wrap = $("srcbns");
   wrap.innerHTML = "";
-  // Optional Webtor button (comment out if not wanted)
-  const wb = document.createElement("button");
-  wb.className = "cbtn";
-  wb.textContent = "🌀 Torrent";
-  wb.onclick = () => {
-    document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
-    wb.classList.add("on");
-    const firstHash = document.querySelector(".stream-row[data-hash]");
-    if (firstHash) {
-      const hash = firstHash.dataset.hash;
-      const fidx = parseInt(firstHash.dataset.fidx || "0");
-      const title = (cur?.title || cur?.name || "") + (cur?.mediaType === "movie" ? "" : ` S${curS}E${curE}`);
-      playWebtor(hash, fidx, title);
-    } else if (_cachedStreams.length) {
-      const s = _cachedStreams.find(s => s.infoHash);
-      if (s) playWebtor(s.infoHash, s.fileIdx || 0, cur?.title || cur?.name || "");
-      else toast("No torrent streams available");
-    } else toast("No torrent streams loaded yet");
-  };
-  wrap.appendChild(wb);
-
   SOURCES.forEach((src, i) => {
     const b = document.createElement("button");
-    b.className = "cbtn";
+    b.className = "cbtn" + (i === 0 ? " on" : "");
     b.textContent = src.name;
     b.onclick = () => loadSource(i);
     wrap.appendChild(b);
@@ -849,9 +726,9 @@ function loadSource(i) {
   srcIdx = i;
   const src = SOURCES[i];
   if (!src) return;
-  document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.remove("on"));
+  document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
   const srcBtns = [...document.querySelectorAll("#srcbns .cbtn")];
-  if (srcBtns[i + 1]) srcBtns[i + 1].classList.add("on"); // +1 because Webtor is first
+  if (srcBtns[i]) srcBtns[i].classList.add("on");
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
@@ -968,7 +845,8 @@ function openModal(item, type) {
       } catch (e) { console.error("IMDb fetch:", e); }
     }
     if (isTv) await loadSeasons(item.id);
-    loadDirectStreams(true);
+    loadSource(0); // 2Embed loads immediately as default
+    loadDirectStreams(false); // silently fetch direct streams in background
   })();
 }
 
@@ -1041,7 +919,7 @@ function showSearch(q) {
   $("main").style.display = "none"; $("hero").style.display = "none"; $("spage").classList.add("on");
   $("stitle").textContent = `"${q}"`;
   const g = $("sgrid"); skels(g, 6);
-  tmdb("/search/multi", { query: q }).then(d => {
+  tmdb("/search/multi", { query: q, include_adult: "true" }).then(d => {
     const items = (d.results || []).filter(i => i.media_type !== "person");
     g.innerHTML = "";
     if (!items.length) { g.innerHTML = `<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
