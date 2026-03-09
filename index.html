@@ -13,63 +13,17 @@
 <title>CineVault</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<!-- WebTorrent -->
 <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
-<!-- Video.js FOSS player (official WebTorrent-compatible player) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
-/* Video.js overrides — fill pwrap, CineVault accent colour */
-.pwrap .video-js {
-  position:absolute;inset:0;width:100%!important;height:100%!important;
-}
-.video-js .vjs-big-play-button {
-  background:rgba(232,23,58,0.85);border:2px solid #e8173a;
-  border-radius:50%;width:60px;height:60px;line-height:60px;
-  top:50%;left:50%;transform:translate(-50%,-50%);margin:0;
-  transition:transform .15s;
-}
-.video-js .vjs-big-play-button:hover { transform:translate(-50%,-50%) scale(1.1); }
-.video-js .vjs-control-bar {
-  background:linear-gradient(transparent,rgba(0,0,0,0.8));
-  height:42px;padding:0 6px;
-}
-.video-js .vjs-play-progress,
-.video-js .vjs-volume-level { background:#e8173a; }
-.video-js .vjs-slider { background:rgba(255,255,255,0.2); }
-.vjs-menu-button-popup .vjs-menu { bottom:2.5em; }
-/* Subtitles rendered by Video.js inside the player */
-.video-js .vjs-text-track-display { pointer-events:none; }
-.video-js .vjs-subtitles-button .vjs-icon-placeholder:before,
-.video-js .vjs-captions-button .vjs-icon-placeholder:before { font-size:1.6em; }
-</style>
-<style>
-/* (Keep all your existing CSS – it's unchanged) */
 :root {
-  --bg: #0d0d14;
-  --s1: #13131e;
-  --s2: #1a1a28;
-  --s3: #222235;
-  --border: rgba(255,255,255,0.07);
-  --accent: #e8173a;
-  --accent-dim: rgba(232,23,58,0.15);
-  --gold: #fbbf24;
-  --green: #10b981;
-  --text: #f2f2f8;
-  --muted: #6b6b8a;
-  --r: 10px;
-  --nav-h: 58px;
+  --bg:#0d0d14;--s1:#13131e;--s2:#1a1a28;--s3:#222235;
+  --border:rgba(255,255,255,0.07);--accent:#e8173a;--accent-dim:rgba(232,23,58,0.15);
+  --gold:#fbbf24;--green:#10b981;--text:#f2f2f8;--muted:#6b6b8a;--r:10px;--nav-h:58px;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f0f0f7;
-    --s1: #ffffff;
-    --s2: #f8f8ff;
-    --s3: #ededfa;
-    --border: rgba(0,0,0,0.08);
-    --text: #0d0d14;
-    --muted: #8080a0;
-  }
+@media(prefers-color-scheme:light){
+  :root{--bg:#f0f0f7;--s1:#ffffff;--s2:#f8f8ff;--s3:#ededfa;--border:rgba(0,0,0,0.08);--text:#0d0d14;--muted:#8080a0;}
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
@@ -77,385 +31,162 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 img{display:block}
 button{cursor:pointer;font-family:'DM Sans',sans-serif}
 a{text-decoration:none;color:inherit}
-
-/* SCROLLBAR */
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px}
 
+/* ── VIDEO.JS OVERRIDES ── */
+.pwrap .video-js{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;}
+.video-js .vjs-big-play-button{
+  background:rgba(232,23,58,0.85);border:2px solid #e8173a;
+  border-radius:50%;width:60px;height:60px;line-height:60px;
+  top:50%;left:50%;transform:translate(-50%,-50%);margin:0;transition:transform .15s;
+}
+.video-js .vjs-big-play-button:hover{transform:translate(-50%,-50%) scale(1.1);}
+.video-js .vjs-control-bar{
+  background:linear-gradient(transparent,rgba(0,0,0,0.85));
+  height:46px;padding:0 6px;align-items:center;
+}
+.video-js .vjs-play-progress,.video-js .vjs-volume-level{background:#e8173a;}
+.video-js .vjs-slider{background:rgba(255,255,255,0.2);}
+.vjs-menu-button-popup .vjs-menu{bottom:2.8em;}
+/* Subtitle display — native Video.js rendering, perfectly synced */
+.video-js .vjs-text-track-display{pointer-events:none;}
+.video-js .vjs-text-track-display div{
+  background:rgba(0,0,0,0.82)!important;
+  color:#fff!important;
+  font-size:clamp(13px,2.2vw,18px)!important;
+  font-weight:600!important;
+  padding:3px 10px!important;
+  border-radius:5px!important;
+  text-shadow:1px 1px 3px #000!important;
+  line-height:1.6!important;
+}
+/* Hide subtitle/caption button label, keep icon clean */
+.vjs-subs-caps-button .vjs-icon-placeholder:before{font-size:1.5em;}
+
 /* NAV */
-#nav {
-  position:fixed;top:0;left:0;right:0;z-index:90;
-  height:var(--nav-h);
-  display:flex;align-items:center;gap:10px;
-  padding:0 14px;
-  background:rgba(13,13,20,0.9);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
-  border-bottom:1px solid var(--border);
-}
-@media(prefers-color-scheme:light){
-  #nav{background:rgba(240,240,247,0.92)}
-}
-.logo{
-  font-family:'Syne',sans-serif;font-size:20px;font-weight:800;
-  letter-spacing:2px;color:var(--accent);
-  text-shadow:0 0 24px rgba(232,23,58,0.5);
-  flex-shrink:0;
-}
-/* SEARCH */
-#search-box{
-  flex:1;position:relative;max-width:340px;
-}
-#search-box input{
-  width:100%;background:var(--s2);
-  border:1px solid var(--border);color:var(--text);
-  padding:8px 12px 8px 36px;border-radius:8px;
-  font-size:14px;font-family:'DM Sans',sans-serif;
-  outline:none;transition:border-color .2s;
-  -webkit-appearance:none;
-}
+#nav{position:fixed;top:0;left:0;right:0;z-index:90;height:var(--nav-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:rgba(13,13,20,0.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
+@media(prefers-color-scheme:light){#nav{background:rgba(240,240,247,0.92)}}
+.logo{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;letter-spacing:2px;color:var(--accent);text-shadow:0 0 24px rgba(232,23,58,0.5);flex-shrink:0;}
+#search-box{flex:1;position:relative;max-width:340px;}
+#search-box input{width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:8px 12px 8px 36px;border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;-webkit-appearance:none;}
 #search-box input:focus{border-color:var(--accent)}
 #search-box input::placeholder{color:var(--muted)}
 .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
-#search-clear{
-  position:absolute;right:8px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:var(--muted);font-size:16px;
-  display:none;padding:2px 4px;
-}
-/* TABS */
-#tabs{
-  display:flex;gap:2px;flex-shrink:0;
-  overflow-x:auto;scrollbar-width:none;
-  -webkit-overflow-scrolling:touch;
-}
+#search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:16px;display:none;padding:2px 4px;}
+#tabs{display:flex;gap:2px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 #tabs::-webkit-scrollbar{display:none}
-.tab{
-  padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;
-  border:none;background:transparent;color:var(--muted);
-  transition:all .2s;white-space:nowrap;
-}
+.tab{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--muted);transition:all .2s;white-space:nowrap;}
 .tab.on,.tab:active{background:var(--accent);color:#fff}
 
 /* HERO */
-#hero{
-  height:75vw;max-height:520px;min-height:300px;
-  position:relative;display:flex;align-items:flex-end;
-  padding:20px 16px;margin-top:var(--nav-h);overflow:hidden;
-}
-#hero-bg{
-  position:absolute;inset:0;
-  background-size:cover;background-position:center;
-  transition:background-image .6s ease;
-}
-#hero-bg::after{
-  content:'';position:absolute;inset:0;
-  background:
-    linear-gradient(to top,var(--bg) 0%,rgba(13,13,20,.6) 45%,transparent 100%),
-    linear-gradient(to right,rgba(13,13,20,.8) 0%,transparent 60%);
-}
-@media(prefers-color-scheme:light){
-  #hero-bg::after{
-    background:
-      linear-gradient(to top,var(--bg) 0%,rgba(240,240,247,.6) 45%,transparent 100%),
-      linear-gradient(to right,rgba(240,240,247,.8) 0%,transparent 60%);
-  }
-}
+#hero{height:75vw;max-height:520px;min-height:300px;position:relative;display:flex;align-items:flex-end;padding:20px 16px;margin-top:var(--nav-h);overflow:hidden;}
+#hero-bg{position:absolute;inset:0;background-size:cover;background-position:center;transition:background-image .6s ease;}
+#hero-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,var(--bg) 0%,rgba(13,13,20,.6) 45%,transparent 100%),linear-gradient(to right,rgba(13,13,20,.8) 0%,transparent 60%);}
+@media(prefers-color-scheme:light){#hero-bg::after{background:linear-gradient(to top,var(--bg) 0%,rgba(240,240,247,.6) 45%,transparent 100%),linear-gradient(to right,rgba(240,240,247,.8) 0%,transparent 60%);}}
 .hc{position:relative;z-index:2;max-width:420px}
-.hbadge{
-  display:inline-flex;align-items:center;gap:4px;
-  background:var(--accent);color:#fff;
-  padding:2px 9px;border-radius:4px;
-  font-size:10px;font-weight:700;letter-spacing:1px;
-  text-transform:uppercase;margin-bottom:8px;
-}
-#htitle{
-  font-family:'Syne',sans-serif;font-size:clamp(22px,5vw,46px);
-  font-weight:800;line-height:1.05;margin-bottom:6px;
-}
-#hdesc{
-  font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-}
+.hbadge{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;padding:2px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+#htitle{font-family:'Syne',sans-serif;font-size:clamp(22px,5vw,46px);font-weight:800;line-height:1.05;margin-bottom:6px;}
+#hdesc{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .hmeta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:12px}
 .hrating{color:var(--gold);font-weight:700}
 .hbtns{display:flex;gap:8px}
-.btn-w{
-  display:flex;align-items:center;gap:5px;
-  background:var(--accent);color:#fff;
-  border:none;padding:9px 18px;border-radius:8px;
-  font-size:13px;font-weight:600;
-  transition:all .15s;
-}
+.btn-w{display:flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;transition:all .15s;}
 .btn-w:active{transform:scale(.96)}
-.btn-i{
-  display:flex;align-items:center;gap:5px;
-  background:rgba(255,255,255,.1);color:var(--text);
-  border:1px solid var(--border);padding:9px 14px;border-radius:8px;
-  font-size:13px;font-weight:500;
-  backdrop-filter:blur(10px);
-  transition:all .15s;
-}
+.btn-i{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);color:var(--text);border:1px solid var(--border);padding:9px 14px;border-radius:8px;font-size:13px;font-weight:500;backdrop-filter:blur(10px);transition:all .15s;}
 .btn-i:active{transform:scale(.96)}
 
 /* SECTIONS */
 .sec{padding:16px 14px 4px}
-.sec-title{
-  font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
-  letter-spacing:.5px;margin-bottom:12px;
-  display:flex;align-items:center;gap:8px;
-}
+.sec-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .sec-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,var(--border),transparent)}
-
-/* GRID */
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
-  gap:8px;
-}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;}
 @media(min-width:480px){.grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}}
 @media(min-width:768px){.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 
 /* CARD */
-.card{
-  border-radius:var(--r);overflow:hidden;
-  cursor:pointer;background:var(--s2);
-  border:1px solid var(--border);
-  transition:transform .2s,box-shadow .2s;
-  position:relative;
-}
-@media(hover:hover){
-  .card:hover{transform:translateY(-3px) scale(1.02);border-color:var(--accent);box-shadow:0 6px 20px rgba(232,23,58,.2);z-index:2}
-  .card:hover .cov{opacity:1}
-}
+.card{border-radius:var(--r);overflow:hidden;cursor:pointer;background:var(--s2);border:1px solid var(--border);transition:transform .2s,box-shadow .2s;position:relative;}
+@media(hover:hover){.card:hover{transform:translateY(-3px) scale(1.02);border-color:var(--accent);box-shadow:0 6px 20px rgba(232,23,58,.2);z-index:2}.card:hover .cov{opacity:1}}
 .card:active{transform:scale(.97)}
 .cposter{width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--s3)}
 .cinfo{padding:6px 8px 8px}
 .ctitle{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .cmeta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
 .crating{color:var(--gold);font-weight:700}
-.cov{
-  position:absolute;inset:0;background:rgba(0,0,0,.6);
-  display:flex;align-items:center;justify-content:center;
-  opacity:0;transition:opacity .2s;border-radius:var(--r);
-}
+.cov{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;border-radius:var(--r);}
 .pbc{width:40px;height:40px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
-
-/* SKELETON */
-.sk{
-  border-radius:var(--r);aspect-ratio:2/3;
-  background:linear-gradient(90deg,var(--s2) 25%,var(--s3) 50%,var(--s2) 75%);
-  background-size:200% 100%;
-  animation:sh 1.4s infinite;
-}
+.sk{border-radius:var(--r);aspect-ratio:2/3;background:linear-gradient(90deg,var(--s2) 25%,var(--s3) 50%,var(--s2) 75%);background-size:200% 100%;animation:sh 1.4s infinite;}
 @keyframes sh{to{background-position:-200% 0}}
 
 /* MODAL */
-#modal{
-  position:fixed;inset:0;z-index:200;
-  background:rgba(0,0,0,.85);
-  display:none;align-items:flex-start;justify-content:center;
-  padding:8px 8px 40px;overflow-y:auto;
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  -webkit-overflow-scrolling:touch;
-}
+#modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;align-items:flex-start;justify-content:center;padding:8px 8px 40px;overflow-y:auto;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);-webkit-overflow-scrolling:touch;}
 #modal.on{display:flex}
-.mbox{
-  background:var(--s1);border-radius:16px;
-  width:100%;max-width:820px;margin:auto;
-  border:1px solid var(--border);
-  overflow:visible;position:relative;
-}
-.mclose{
-  position:absolute;top:8px;right:8px;z-index:10;
-  width:32px;height:32px;border-radius:50%;
-  background:rgba(0,0,0,.7);border:1px solid var(--border);
-  color:#fff;font-size:15px;
-  display:flex;align-items:center;justify-content:center;
-}
+.mbox{background:var(--s1);border-radius:16px;width:100%;max-width:820px;margin:auto;border:1px solid var(--border);overflow:visible;position:relative;}
+.mclose{position:absolute;top:8px;right:8px;z-index:10;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.7);border:1px solid var(--border);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;}
 .mclose:active{transform:scale(.9)}
 .mback{width:100%;aspect-ratio:16/9;background:#000;position:relative;overflow:hidden}
 .mback img{width:100%;height:100%;object-fit:cover;opacity:.45}
-.mback::after{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(to top,var(--s1),transparent 55%);
-}
+.mback::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,var(--s1),transparent 55%);}
 .mbody{padding:14px 16px 40px;overflow-x:hidden}
 .mtitle{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:5px}
 .mmeta{display:flex;flex-wrap:wrap;gap:7px;font-size:11px;color:var(--muted);margin-bottom:8px;align-items:center}
 .mrating{color:var(--gold);font-weight:700}
 .mdesc{font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:14px}
-
-/* CTRL */
 .crow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}
 .clabel{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-right:2px;white-space:nowrap}
 .cbtns{display:flex;gap:4px;flex-wrap:wrap}
-.cbtn{
-  padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;
-  border:1px solid var(--border);background:var(--s2);color:var(--text);
-  transition:all .15s;white-space:nowrap;
-}
+.cbtn{padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--s2);color:var(--text);transition:all .15s;white-space:nowrap;}
 .cbtn:active{transform:scale(.94)}
 .cbtn.on,.cbtn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
-.cbtn.on-g{background:var(--green);border-color:var(--green);color:#fff}
 
-/* PLAYER WRAPPER */
-.player-outer{ position:relative; width:100%; }
-.pwrap{
-  width:100%;aspect-ratio:16/9;border-radius:10px;
-  overflow:hidden;background:#000;
-  border:1px solid var(--border);position:relative;
-}
-.pwrap iframe, .pwrap video{
-  position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;
-}
-/* SUBTITLE OVERLAY over the player */
-#sub-overlay{
-  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
-  z-index:20;pointer-events:none;width:92%;text-align:center;display:none;
-}
-#sub-overlay.visible{ display:block; }
-#sub-text{
-  background:rgba(0,0,0,.82);color:#fff;font-size:clamp(13px,2.5vw,17px);font-weight:600;
-  padding:4px 12px;border-radius:6px;line-height:1.7;
-  white-space:pre-line;text-shadow:1px 1px 3px #000;display:inline-block;max-width:100%;
-}
-.pph{
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:8px;color:var(--muted);font-size:13px;
-  background:#000;
-}
+/* PLAYER */
+.player-outer{position:relative;width:100%;}
+.pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
+.pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;}
+.pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
 
 /* NOW PLAYING BAR */
-#stream-name-bar{
-  display:none;
-  margin-top:10px;
-  background:var(--s1);
-  border:2px solid var(--accent);
-  border-radius:12px;
-  padding:12px 16px;
-  box-shadow:0 4px 20px rgba(232,23,58,0.15);
-}
-#stream-name-bar.on{ display:block; }
-#stream-name-bar .snb-label{
-  font-size:10px;font-weight:800;letter-spacing:1.2px;
-  text-transform:uppercase;color:var(--accent);
-  margin-bottom:6px;display:flex;align-items:center;gap:5px;
-}
-#stream-name-bar .snb-title{
-  font-size:12px;font-weight:600;color:var(--text);
-  word-break:break-all;line-height:1.5;margin-bottom:4px;
-}
-#stream-name-bar .snb-source{
-  font-size:11px;color:var(--muted);margin-top:2px;
-}
-.ploader{
-  display:none;position:absolute;inset:0;
-  background:rgba(0,0,0,.6);
-  align-items:center;justify-content:center;
-}
-.ploader.on{display:flex}
-.spin{
-  width:36px;height:36px;border:3px solid rgba(255,255,255,.15);
-  border-top-color:var(--accent);border-radius:50%;
-  animation:spin .8s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
+#stream-name-bar{display:none;margin-top:10px;background:var(--s1);border:2px solid var(--accent);border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(232,23,58,0.15);}
+#stream-name-bar.on{display:block}
+#stream-name-bar .snb-label{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+#stream-name-bar .snb-title{font-size:12px;font-weight:600;color:var(--text);word-break:break-all;line-height:1.5;margin-bottom:4px;}
+#stream-name-bar .snb-source{font-size:11px;color:var(--muted);margin-top:2px;}
 
 /* EPISODE GRID */
 .epwrap{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;max-height:120px;overflow-y:auto}
-.epbtn{
-  width:34px;height:34px;border-radius:6px;font-size:11px;font-weight:700;
-  border:1px solid var(--border);background:var(--s2);color:var(--text);
-  display:flex;align-items:center;justify-content:center;transition:all .15s;
-}
+.epbtn{width:34px;height:34px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid var(--border);background:var(--s2);color:var(--text);display:flex;align-items:center;justify-content:center;transition:all .15s;}
 .epbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .epbtn:active{transform:scale(.9)}
 
-
-
-
-.sub-offset{
-  background:var(--s3);color:var(--text);border:1px solid var(--border);
-  padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;
-  white-space:nowrap;
-}
-/* sub-overlay CSS merged into player section above */
+/* STREAM LIST */
+.stream-row{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:5px;background:var(--s2);border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .15s,background .15s,transform .1s;-webkit-tap-highlight-color:transparent;user-select:none;}
+.stream-row:active{transform:scale(.98);}
+.stream-row.active{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 1px var(--accent);}
+.stream-row-left{display:flex;align-items:center;gap:8px;min-width:0;flex:1;}
+.stream-row-right{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.qlabel{font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;flex-shrink:0;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+.sq-4k{background:#a855f7;color:#fff;}.sq-1080{background:var(--accent);color:#fff;}.sq-720{background:#3b82f6;color:#fff;}.sq-480,.sq-sd{background:var(--s3);color:var(--muted);}
+.stream-name{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);flex:1;min-width:0;}
+.stream-seeds{font-size:10px;color:var(--green);font-weight:700;flex-shrink:0;}
+.stream-size{font-size:10px;color:var(--muted);flex-shrink:0;}
+.stream-play-btn{width:28px;height:28px;border-radius:50%;flex-shrink:0;background:var(--s3);color:var(--text);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s;pointer-events:none;}
+.stream-row.active .stream-play-btn{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* TOAST */
-#toast{
-  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
-  background:var(--s3);color:var(--text);
-  padding:9px 18px;border-radius:20px;font-size:13px;font-weight:500;
-  border:1px solid var(--border);z-index:999;
-  transition:transform .3s ease;white-space:nowrap;
-  box-shadow:0 4px 20px rgba(0,0,0,.3);
-}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--s3);color:var(--text);padding:9px 18px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border);z-index:999;transition:transform .3s ease;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3);}
 #toast.on{transform:translateX(-50%) translateY(0)}
-
-footer{
-  text-align:center;padding:24px;
-  color:var(--muted);font-size:10px;
-  border-top:1px solid var(--border);
-  margin-top:12px;
-}
-
-/* SAFE AREA */
-@supports(padding-bottom:env(safe-area-inset-bottom)){
-  footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-}
-
-/* STREAM LIST */
-.stream-row {
-  display:flex;align-items:center;gap:10px;
-  padding:10px 12px;margin-bottom:5px;
-  background:var(--s2);border:2px solid var(--border);
-  border-radius:10px;cursor:pointer;
-  transition:border-color .15s,background .15s,transform .1s;
-  -webkit-tap-highlight-color:transparent;
-  user-select:none;
-}
-.stream-row:active { transform:scale(.98); }
-.stream-row.active {
-  border-color:var(--accent);
-  background:var(--accent-dim);
-  box-shadow:0 0 0 1px var(--accent);
-}
-.stream-row-left { display:flex;align-items:center;gap:8px;min-width:0;flex:1; }
-.stream-row-right { display:flex;align-items:center;gap:5px;flex-shrink:0; }
-.qlabel {
-  font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;
-  flex-shrink:0;text-transform:uppercase;letter-spacing:.5px;
-  white-space:nowrap;
-}
-.sq-4k   { background:#a855f7;color:#fff; }
-.sq-1080 { background:var(--accent);color:#fff; }
-.sq-720  { background:#3b82f6;color:#fff; }
-.sq-480,.sq-sd { background:var(--s3);color:var(--muted); }
-.stream-name {
-  font-size:11px;font-weight:500;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  color:var(--text);flex:1;min-width:0;
-}
-.stream-seeds { font-size:10px;color:var(--green);font-weight:700;flex-shrink:0; }
-.stream-size  { font-size:10px;color:var(--muted);flex-shrink:0; }
-.stream-play-btn {
-  width:28px;height:28px;border-radius:50%;flex-shrink:0;
-  background:var(--s3);color:var(--text);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;transition:all .15s;pointer-events:none;
-}
-.stream-row.active .stream-play-btn {
-  background:var(--accent);border-color:var(--accent);color:#fff;
-}
+footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-top:1px solid var(--border);margin-top:12px;}
+@supports(padding-bottom:env(safe-area-inset-bottom)){footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}}
+#spage{display:none;padding:16px 14px}
+#spage.on{display:block}
+.spage-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-bottom:12px;}
 </style>
 </head>
 <body>
 
-<!-- NAV -->
 <nav id="nav">
   <div class="logo">CV</div>
   <div id="search-box">
@@ -473,17 +204,13 @@ footer{
   </div>
 </nav>
 
-<!-- HERO -->
 <div id="hero">
   <div id="hero-bg"></div>
   <div class="hc">
     <div class="hbadge">⭐ Featured</div>
     <div id="htitle">Loading…</div>
     <div id="hdesc"></div>
-    <div class="hmeta">
-      <span id="hyear"></span><span>•</span>
-      <span class="hrating" id="hrating"></span>
-    </div>
+    <div class="hmeta"><span id="hyear"></span><span>•</span><span class="hrating" id="hrating"></span></div>
     <div class="hbtns">
       <button class="btn-w" id="hplay">▶ Watch</button>
       <button class="btn-i" id="hinfo">ℹ Info</button>
@@ -491,7 +218,6 @@ footer{
   </div>
 </div>
 
-<!-- MAIN -->
 <div id="main">
   <div class="sec"><div class="sec-title" id="t0">🔥 Trending</div><div class="grid" id="g0"></div></div>
   <div class="sec"><div class="sec-title">🇮🇳 Bollywood</div><div class="grid" id="g1"></div></div>
@@ -499,13 +225,11 @@ footer{
   <div class="sec"><div class="sec-title">🇰🇷 Korean</div><div class="grid" id="g3"></div></div>
 </div>
 
-<!-- SEARCH PAGE -->
 <div id="spage">
   <div class="spage-title" id="stitle">Results</div>
   <div class="grid" id="sgrid"></div>
 </div>
 
-<!-- MODAL -->
 <div id="modal">
   <div class="mbox">
     <button class="mclose" id="mclose">✕</button>
@@ -529,30 +253,20 @@ footer{
       <div class="player-outer" id="player-outer">
         <div class="pwrap" id="pwrap">
           <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
-          <!-- iframe or video inserted here by JS -->
         </div>
-        <div id="sub-overlay"><span id="sub-text"></span></div>
       </div>
+
       <div id="stream-name-bar">
         <div class="snb-label">▶ Now Playing</div>
         <div class="snb-title" id="stream-name-text"></div>
         <div class="snb-source" id="stream-name-source"></div>
       </div>
 
-      <!-- Quality/File selector -->
-      <div class="crow" id="file-row" style="display:none;margin-top:10px">
-        <span class="clabel">🎬 File</span>
-        <div class="cbtns" id="filebns"></div>
-      </div>
-
       <div id="stream-picker" style="display:block;margin-top:14px">
-        <div class="clabel" id="stream-label" style="margin-bottom:8px">📊 TORRENT QUALITY — tap row then pick source above</div>
+        <div class="clabel" id="stream-label" style="margin-bottom:8px">📊 TORRENT QUALITY — tap to play</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
-
-
-
     </div>
   </div>
 </div>
@@ -562,9 +276,6 @@ footer{
 
 <script>
 const $ = id => document.getElementById(id);
-
-// ── CONFIG ──────────────────────────────────────────────────────
-// UPDATE this to your deployed Cloudflare Pages URL after deploying worker_fixed.js
 const API = "https://test-repo-six-sepia.vercel.app";
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
@@ -580,157 +291,143 @@ const SOURCES = [
   { name:"NontonGo",   useImdb:true,  movie:id=>`https://www.nontongo.win/embed/movie?imdb=${id}`,                 tv:(id,s,e)=>`https://www.nontongo.win/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
 ];
 
-// ── STATE ────────────────────────────────────────────────────────
-let cur = null, curS = 1, curE = 1, srcIdx = 0;
-let searchTimer = null, _cachedStreams = [], _cacheKey = "";
-let webtorrentClient = null, currentVideo = null, vjsPlayer = null;
+let cur=null, curS=1, curE=1, srcIdx=0;
+let searchTimer=null, _cachedStreams=[], _cacheKey="";
+let webtorrentClient=null, vjsPlayer=null;
+// Raw cue store — used to re-apply after seek
+let _activeCues=[], _activeVttUrl=null;
 
-// ── UTILS ────────────────────────────────────────────────────────
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
 const back   = p => p ? `${IMG}w1280${p}` : "";
 
-function toast(msg, ms=2500) {
-  const t = $("toast"); t.textContent = msg; t.classList.add("on");
-  setTimeout(() => t.classList.remove("on"), ms);
-}
+function toast(msg,ms=2500){const t=$("toast");t.textContent=msg;t.classList.add("on");setTimeout(()=>t.classList.remove("on"),ms);}
 
-function buildMagnetLink(hash) {
+function buildMagnetLink(hash){
   return `magnet:?xt=urn:btih:${hash}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.stealth.si:80/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce`;
 }
 
-// ── TMDB ─────────────────────────────────────────────────────────
-async function tmdb(path, params={}) {
-  const q = new URLSearchParams({ ...params, api_key: TMDB_KEY });
-  const r = await fetch(`https://api.themoviedb.org/3${path}?${q}`);
-  if (!r.ok) throw new Error(`TMDB ${r.status}`);
+async function tmdb(path,params={}){
+  const q=new URLSearchParams({...params,api_key:TMDB_KEY});
+  const r=await fetch(`https://api.themoviedb.org/3${path}?${q}`);
+  if(!r.ok) throw new Error(`TMDB ${r.status}`);
   return r.json();
 }
 
-// ── QUALITY BADGE ─────────────────────────────────────────────────
-function qClass(name) {
-  if (/4k|2160/i.test(name))  return ["4K",   "sq-4k"];
-  if (/1080/i.test(name))     return ["1080p", "sq-1080"];
-  if (/720/i.test(name))      return ["720p",  "sq-720"];
-  if (/480/i.test(name))      return ["480p",  "sq-480"];
-  return ["SD", "sq-sd"];
+function qClass(name){
+  if(/4k|2160/i.test(name)) return["4K","sq-4k"];
+  if(/1080/i.test(name))    return["1080p","sq-1080"];
+  if(/720/i.test(name))     return["720p","sq-720"];
+  if(/480/i.test(name))     return["480p","sq-480"];
+  return["SD","sq-sd"];
 }
 
-// ── PLAYER HELPERS ────────────────────────────────────────────────
-
-// Remove only the media element (iframe or video) from pwrap.
-// Never wipes pph/sub-overlay — those are permanent DOM nodes.
-function clearPlayer() {
+// ── PLAYER CLEANUP ──────────────────────────────────────────────
+function clearPlayer(){
   stopVideo();
-  const pwrap = $("pwrap");
-  if (!pwrap) return;
-  // Remove iframe
-  const iframe = document.getElementById("pframe");
-  if (iframe) iframe.remove();
-  // Remove any leftover video or plyr containers
-  pwrap.querySelectorAll("video, .plyr").forEach(el => el.remove());
+  const iframe=document.getElementById("pframe");
+  if(iframe) iframe.remove();
 }
 
-function showIframe(url, nameLabel) {
+function stopVideo(){
+  _activeCues=[]; _activeVttUrl=null;
+  if(vjsPlayer){
+    try{
+      // Stop torrent seeding for this file
+      if(vjsPlayer._torrent) { try{webtorrentClient&&webtorrentClient.remove(vjsPlayer._torrent);}catch(e){} }
+      vjsPlayer.dispose();
+    }catch(e){}
+    vjsPlayer=null;
+  }
+  // Remove any leftover vjs DOM
+  document.querySelectorAll(".video-js,.vjs-hidden").forEach(el=>{try{el.remove();}catch(e){}});
+}
+
+function showIframe(url,nameLabel){
   clearPlayer();
-  const iframe = document.createElement("iframe");
-  iframe.id = "pframe";
-  iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
-  iframe.referrerPolicy = "no-referrer";
-  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;display:block";
-  iframe.src = url;
+  const iframe=document.createElement("iframe");
+  iframe.id="pframe";
+  iframe.allowFullscreen=true;
+  iframe.allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
+  iframe.referrerPolicy="no-referrer";
+  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;display:block";
+  iframe.src=url;
   $("pwrap").appendChild(iframe);
   $("pph").classList.add("hidden");
   setNameBar(nameLabel);
 }
 
-function stopVideo() {
-  clearSubs();
-  if (vjsPlayer) { try { vjsPlayer.dispose(); } catch(e){} vjsPlayer = null; }
-  if (currentVideo) { try { currentVideo.pause(); currentVideo.remove(); } catch(e){} currentVideo = null; }
-  // Clean up any leftover vjs wrappers
-  document.querySelectorAll(".video-js").forEach(el => { try { el.remove(); } catch(e){} });
-}
-
-function setNameBar(label) {
-  $("stream-name-text").textContent = label || "";
-  $("stream-name-source").textContent = "";
+function setNameBar(label){
+  $("stream-name-text").textContent=label||"";
+  $("stream-name-source").textContent="";
   $("stream-name-bar").classList.add("on");
 }
 
-function updateSubtitleBarVisibility() {
-  $("subbar").classList.toggle("visible", !!currentVideo);
+function updateMmeta(){
+  if(!cur) return;
+  const ep=(cur.mediaType==="movie")?"":` · S${curS} E${curE}`;
+  const epHtml=ep?`<span>•</span><span style="color:var(--accent);font-weight:700">${ep.trim()}</span>`:"";
+  $("mmeta").innerHTML=`<span>${cur._year||""}</span><span>•</span><span class="mrating">⭐${cur._rating||"—"}</span><span>•</span><span>${cur.mediaType==="movie"?"🎬 Movie":"📺 Series"}</span>`+epHtml;
 }
 
-function updateMmeta() {
-  if (!cur) return;
-  const ep = (cur.mediaType === "movie") ? "" : ` · S${curS} E${curE}`;
-  const epHtml = ep ? `<span>•</span><span style="color:var(--accent);font-weight:700">${ep.trim()}</span>` : "";
-  $("mmeta").innerHTML =
-    `<span>${cur._year||""}</span><span>•</span>` +
-    `<span class="mrating">⭐${cur._rating||"—"}</span><span>•</span>` +
-    `<span>${cur.mediaType==="movie"?"🎬 Movie":"📺 Series"}</span>` + epHtml;
-}
-
-// ── SOURCE BUTTONS ────────────────────────────────────────────────
-function buildSources() {
-  const wrap = $("srcbns");
-  wrap.innerHTML = "";
-  SOURCES.forEach((src, i) => {
-    const b = document.createElement("button");
-    b.className = "cbtn" + (i === 0 ? " on" : "");
-    b.textContent = src.name;
-    b.onclick = () => loadSource(i);
+// ── SOURCE BUTTONS ───────────────────────────────────────────────
+function buildSources(){
+  const wrap=$("srcbns"); wrap.innerHTML="";
+  SOURCES.forEach((src,i)=>{
+    const b=document.createElement("button");
+    b.className="cbtn"+(i===0?" on":"");
+    b.textContent=src.name;
+    b.onclick=()=>loadSource(i);
     wrap.appendChild(b);
   });
 }
 
-function loadSource(i) {
-  if (!cur) return;
-  srcIdx = i;
-  const src = SOURCES[i];
-  if (!src) return;
-  document.querySelectorAll("#srcbns .cbtn").forEach((b, j) => b.classList.toggle("on", j === i));
-  const isMovie = cur.mediaType === "movie";
-  const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
-  if (!id) { toast("⏳ IMDb ID not ready — try again in a moment"); return; }
-  const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
-  const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — ${src.name}`;
-  showIframe(url, label);
-  toast("▶ " + src.name);
+function loadSource(i){
+  if(!cur) return;
+  srcIdx=i;
+  const src=SOURCES[i]; if(!src) return;
+  document.querySelectorAll("#srcbns .cbtn").forEach((b,j)=>b.classList.toggle("on",j===i));
+  const isMovie=cur.mediaType==="movie";
+  const id=src.useImdb?(cur.imdb_id||cur.id):cur.id;
+  if(!id){toast("⏳ IMDb ID not ready — try again");return;}
+  const url=isMovie?src.movie(id):src.tv(id,curS,curE);
+  const label=`${cur.title||cur.name||""}${isMovie?"":` · S${curS}E${curE}`} — ${src.name}`;
+  showIframe(url,label);
+  toast("▶ "+src.name);
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-async function playTorrent(infoHash, fileIdx, title) {
-  if (!webtorrentClient) webtorrentClient = new WebTorrent();
-
+// KEY FIX: We manage TextTrack cues manually using the native HTMLMediaElement
+// textTracks API so they survive seek/rewind perfectly. Video.js renders them
+// via its vjs-text-track-display which reads the native track in real time.
+async function playTorrent(infoHash, fileIdx, title){
+  if(!webtorrentClient) webtorrentClient=new WebTorrent();
   clearPlayer();
-  const pwrap = $("pwrap");
+  const pwrap=$("pwrap");
 
-  // ── Start subtitle fetch immediately, parallel to torrent ──
+  // Fetch subs in parallel
   const subPromise = cur?.imdb_id
-    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(() => [])
+    ? fetchSubCues(cur.imdb_id, curS, curE, "en").catch(()=>[])
     : Promise.resolve([]);
 
-  // ── Create Video.js player element ──
-  // Video.js needs a <video> with class="video-js" in the DOM before init
+  // Create <video> element — Video.js will wrap it
+  const vidId = "vjs-cv-" + Date.now();
   const vid = document.createElement("video");
-  vid.id = "vjs-torrent-" + Date.now(); // unique id each time
+  vid.id = vidId;
   vid.className = "video-js vjs-default-skin";
-  vid.setAttribute("playsinline", "");
-  vid.setAttribute("crossorigin", "anonymous");
-  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+  vid.setAttribute("playsinline","");
+  vid.setAttribute("crossorigin","anonymous");
+  // Fill pwrap completely
+  vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;";
   pwrap.appendChild(vid);
 
-  // ── Init Video.js ──
-  vjsPlayer = videojs(vid.id, {
+  // Init Video.js with CC button in control bar
+  vjsPlayer = videojs(vidId, {
     controls: true,
     autoplay: true,
     preload: "auto",
     fluid: false,
-    responsive: false,
     fill: true,
-    playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+    playbackRates: [0.5,0.75,1,1.25,1.5,2],
     controlBar: {
       children: [
         "playToggle",
@@ -742,398 +439,165 @@ async function playTorrent(infoHash, fileIdx, title) {
         "durationDisplay",
         "progressControl",
         "playbackRateMenuButton",
-        "subsCapsButton",
+        "subsCapsButton",   // ← CC/Subtitle toggle lives HERE inside player
         "fullscreenToggle",
       ],
-      skipButtons: { backward: 10, forward: 10 },
+      skipButtons:{backward:10,forward:10},
     },
   });
 
-  // Video.js wraps the <video> — inner element is vid.id + "_html5_api"
-  // WebTorrent's renderTo needs the actual <video> element inside the vjs wrapper
-  const innerVideo = document.getElementById(vid.id + "_html5_api") || vid;
-  currentVideo = innerVideo;
+  // The actual <video> element Video.js uses internally
+  const innerVideo = document.getElementById(vidId+"_html5_api") || vid;
 
   $("pph").classList.add("hidden");
-  setNameBar(title + " — Torrent");
+  setNameBar(title+" — Torrent");
   toast("⏳ Connecting to peers…");
 
-  const magnet = buildMagnetLink(infoHash);
-  const torrentTimeout = setTimeout(() => {
+  const magnet=buildMagnetLink(infoHash);
+  const torrentTimeout=setTimeout(()=>{
     toast("❌ Timed out — no peers. Try another.");
-    const pph = $("pph");
-    if (pph) { pph.classList.remove("hidden"); pph.innerHTML = '<div class="pph-icon">⏱️</div><div>No peers. Try another torrent.</div>'; }
-  }, 45000);
+    const p=$("pph");
+    if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⏱️</div><div>No peers. Try another.</div>';}
+  },45000);
 
   try {
-    webtorrentClient.add(magnet, {
-      announce: ["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz"]
-    }, torrent => {
+    webtorrentClient.add(magnet,{
+      announce:["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz"]
+    }, torrent=>{
       clearTimeout(torrentTimeout);
+      // Store torrent ref for cleanup
+      vjsPlayer._torrent = torrent.magnetURI || magnet;
 
-      const vids = torrent.files
-        .filter(f => /\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
-        .sort((a, b) => b.length - a.length);
+      const vids=torrent.files
+        .filter(f=>/\.(mp4|mkv|avi|mov|wmv|webm|m4v)$/i.test(f.name))
+        .sort((a,b)=>b.length-a.length);
 
-      if (!vids.length) {
+      if(!vids.length){
         toast("❌ No video file in torrent");
-        const pph = $("pph");
-        if (pph) { pph.classList.remove("hidden"); pph.innerHTML = '<div class="pph-icon">⚠️</div><div>No video file.</div>'; }
+        const p=$("pph");
+        if(p){p.classList.remove("hidden");p.innerHTML='<div class="pph-icon">⚠️</div><div>No video file.</div>';}
         return;
       }
 
-      const file = vids[Math.min(fileIdx, vids.length - 1)];
-      toast("🎬 " + file.name.slice(0, 40));
+      const file=vids[Math.min(fileIdx,vids.length-1)];
+      toast("🎬 "+file.name.slice(0,40));
 
-      // WebTorrent renders into the inner <video> element (not the vjs wrapper div)
-      file.renderTo(innerVideo, { autoplay: true }, async err => {
-        if (err) { toast("❌ Playback error"); return; }
+      // Render into the INNER video element (not the vjs wrapper div)
+      file.renderTo(innerVideo,{autoplay:true}, async err=>{
+        if(err){toast("❌ Playback error");return;}
 
-        // Await subs — parallel fetch almost certainly done by now
-        const cues = await subPromise;
-        if (cues.length) {
-          const vttUrl = buildVTTBlobUrl(cues);
-          // Add via Video.js API — appears in the CC/Subtitles menu button
-          vjsPlayer.addRemoteTextTrack({
-            kind: "subtitles",
-            label: "English",
-            srclang: "en",
-            src: vttUrl,
-            default: true,
-          }, false);
+        const cues=await subPromise;
+        if(cues.length){
+          _activeCues=cues;
+          attachNativeTextTrack(innerVideo, cues, "en", "English");
           toast("▶ Playing · 🔤 EN subs active");
         } else {
-          toast("▶ Playing · pick language below");
+          toast("▶ Playing · no subs found");
         }
-
-        showSubLangBar("en", cues.length > 0);
       });
     });
-  } catch(err) {
+  } catch(err){
     clearTimeout(torrentTimeout);
     toast("❌ Torrent load failed");
   }
 }
 
-
-
-// ── STREAMS ───────────────────────────────────────────────────────
-async function fetchStreams(imdbId, isTv, s, e) {
-  const type = isTv ? "series" : "movie";
-  const stremioId = isTv ? `${imdbId}:${s}:${e}` : imdbId;
-  // Primary: our Vercel API — needs up to 15s (TMDB + apibay)
-  const primaryUrl = `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`;
-  // Fallback: torrentio public Stremio addon
-  const fallbackUrl = `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`;
-
-  for (const url of [primaryUrl, fallbackUrl]) {
-    try {
-      const ctrl = new AbortController();
-      // 25s timeout — Vercel hobby functions can take up to ~15s (TMDB 5s + apibay 10s)
-      const t = setTimeout(() => ctrl.abort(), 25000);
-      const r = await fetch(url, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!r.ok) continue;
-      const d = await r.json();
-      const streams = Array.isArray(d.streams) ? d.streams : [];
-      // Filter out fake fallback streams (zero hash = apibay found nothing)
-      const real = streams.filter(s =>
-        s.infoHash && !/^0+$/.test(s.infoHash) && s.infoHash.length === 40
-      );
-      if (real.length) return real.slice(0, 15);
-    } catch { continue; }
-  }
-  return [];
-}
-
-function buildStreamPicker(streams) {
-  const wrap = $("streambns");
-  wrap.innerHTML = "";
-  $("stream-loading").style.display = "none";
-  if (!streams.length) { $("stream-picker").style.display = "none"; return; }
-  $("stream-picker").style.display = "block";
-  const lbl = $("stream-label");
-  if (lbl) lbl.textContent = "📊 AVAILABLE TORRENTS — tap to play";
-  streams.forEach(s => {
-    const lines = (s.title || s.name || "").split("\n");
-    const fname = lines[0] || "Unknown";
-    const meta  = lines.slice(1).join(" ");
-    const seeds = (meta.match(/👤\s*(\d+)/) || [])[1] || "";
-    const size  = (meta.match(/💾\s*([\d.]+\s*(?:GB|MB|KB|B))/) || [])[1] || "";
-    const [ql, qc] = qClass(fname);
-    let lang = "";
-    if      (/hindi/i.test(fname+meta))    lang = "🇮🇳 ";
-    else if (/korean/i.test(fname+meta))   lang = "🇰🇷 ";
-    else if (/japanese/i.test(fname+meta)) lang = "🇯🇵 ";
-    const row = document.createElement("div");
-    row.className = "stream-row";
-    row.innerHTML =
-      `<div class="stream-row-left">` +
-        `<span class="qlabel ${qc}">${ql}</span>` +
-        `<span class="stream-name">${lang}${fname}</span>` +
-      `</div>` +
-      `<div class="stream-row-right">` +
-        (seeds ? `<span class="stream-seeds">👤${seeds}</span>` : '') +
-        (size  ? `<span class="stream-size">💾${size}</span>`  : '') +
-        `<span class="stream-play-btn">▶</span>` +
-      `</div>`;
-    // Attach stream data directly
-    row._hash    = s.infoHash || "";
-    row._fileIdx = typeof s.fileIdx === "number" ? s.fileIdx : 0;
-    row._title   = fname;
-    row.onclick  = () => {
-      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
-      row.classList.add("active");
-      if (row._hash) {
-        const title = (cur.title || cur.name || "") + (cur.mediaType==="movie" ? "" : ` S${curS}E${curE}`);
-        playTorrent(row._hash, row._fileIdx, title);
-      } else {
-        loadSource(srcIdx);
-      }
-    };
-    wrap.appendChild(row);
+// ── SUBTITLE ENGINE ───────────────────────────────────────────────
+// Attach cues as a NATIVE TextTrack on the <video> element.
+// Video.js reads native tracks in real time — so seek/rewind always stays
+// perfectly in sync. No manual timeupdate polling needed.
+function attachNativeTextTrack(videoEl, cues, lang, label){
+  // Remove old tracks for this language
+  const existing=[...videoEl.textTracks].filter(t=>t.language===lang);
+  existing.forEach(t=>{
+    t.mode="disabled";
+    // Can't remove native tracks directly — disable is sufficient
   });
-}
 
-async function loadDirectStreams() {
-  if (!cur || !cur.imdb_id) {
-    $("stream-loading").style.display = "block";
-    $("stream-loading").textContent = "⚠️ No IMDb ID — streams unavailable";
-    return;
-  }
-  const isTv = cur.mediaType === "tv" || cur.mediaType === "series";
-  const snapS = curS, snapE = curE;
-  const cacheKey = `${cur.imdb_id}|${snapS}|${snapE}`;
-  if (cacheKey === _cacheKey && _cachedStreams.length) {
-    buildStreamPicker(_cachedStreams);
-    return;
-  }
-  $("stream-picker").style.display = "block";
-  $("stream-loading").style.display = "block";
-  $("stream-loading").textContent = "🔄 Searching torrents… (may take 10-20s)";
-  $("streambns").innerHTML = "";
-  // Pulse the loading text so user knows it's working
-  let dots = 0;
-  const pulse = setInterval(() => {
-    dots = (dots + 1) % 4;
-    const el = $("stream-loading");
-    if (el && el.style.display !== "none")
-      el.textContent = "🔄 Searching torrents" + ".".repeat(dots) + " (this can take ~15s)";
-  }, 1500);
-  try {
-    const streams = await fetchStreams(cur.imdb_id, isTv, snapS, snapE);
-    clearInterval(pulse);
-    // Only render if user hasn't switched episode while loading
-    if (snapS !== curS || snapE !== curE) return;
-    _cachedStreams = streams; _cacheKey = cacheKey;
-    if (!streams.length) {
-      $("stream-loading").style.display = "block";
-      $("stream-loading").textContent = "⚠️ No torrents found — try a different source above";
-    } else {
-      buildStreamPicker(streams);
-    }
-  } catch(err) {
-    clearInterval(pulse);
-    $("stream-loading").style.display = "block";
-    $("stream-loading").textContent = "⚠️ Stream fetch failed — try again";
-    console.error("loadDirectStreams error:", err);
+  // Add a new track
+  const track=videoEl.addTextTrack("subtitles", label, lang);
+  track.mode="showing";
+
+  // Add every cue
+  cues.forEach(c=>{
+    try{
+      const vttCue=new VTTCue(c.start, c.end, c.text);
+      track.addCue(vttCue);
+    }catch(e){}
+  });
+
+  // Tell Video.js to show this track in its UI menu
+  // vjsPlayer reads textTracks from the underlying video element automatically
+  if(vjsPlayer){
+    // Refresh Video.js text track list
+    try{
+      const tts=vjsPlayer.textTracks();
+      for(let i=0;i<tts.length;i++){
+        if(tts[i].language===lang){tts[i].mode="showing";}
+      }
+    }catch(e){}
   }
 }
 
-// ── SEASONS / EPISODES ────────────────────────────────────────────
-async function loadSeasons(tvId) {
-  const wrap = $("sbns"); wrap.innerHTML = "";
-  try {
-    const d = await tmdb(`/tv/${tvId}`);
-    const seasons = (d.seasons || []).filter(s => s.season_number > 0);
-    seasons.forEach(s => {
-      const b = document.createElement("button");
-      b.className = "cbtn" + (s.season_number === curS ? " on" : "");
-      b.textContent = `S${s.season_number}`;
-      b.onclick = async () => {
-        document.querySelectorAll("#sbns .cbtn").forEach(x => x.classList.remove("on"));
-        b.classList.add("on");
-        curS = s.season_number; curE = 1;
-        updateMmeta();
-        await loadEps(tvId, curS);
-        loadSource(srcIdx);
-        loadDirectStreams();
-      };
-      wrap.appendChild(b);
+async function switchSubLang(lang){
+  if(!cur?.imdb_id){toast("No active torrent player");return;}
+  const names={en:"English",hi:"Hindi",ar:"Arabic",fr:"French",es:"Spanish",de:"German",pt:"Portuguese",it:"Italian",ja:"Japanese",ko:"Korean",zh:"Chinese"};
+  toast("🔤 Fetching "+(names[lang]||lang)+"…");
+  try{
+    const cues=await fetchSubCues(cur.imdb_id,curS,curE,lang);
+    if(!cues.length){toast("⚠️ No subs found");return;}
+    _activeCues=cues;
+
+    // Get inner video element
+    const innerVideo=document.getElementById(vjsPlayer?.id()+"_html5_api");
+    if(!innerVideo){toast("⚠️ Player not ready");return;}
+
+    // Disable all current tracks
+    [...innerVideo.textTracks].forEach(t=>{t.mode="disabled";});
+
+    attachNativeTextTrack(innerVideo, cues, lang, names[lang]||lang.toUpperCase());
+    toast("🔤 "+(names[lang]||lang)+" subtitles active");
+  }catch(e){toast("⚠️ Subtitle error");console.error(e);}
+}
+
+function offsetSubtitles(seconds){
+  // Shift all cues on all tracks
+  const innerVideo=vjsPlayer?document.getElementById(vjsPlayer.id()+"_html5_api"):null;
+  if(!innerVideo){toast("No active player");return;}
+  [...innerVideo.textTracks].forEach(track=>{
+    if(!track.cues) return;
+    [...track.cues].forEach(cue=>{
+      cue.startTime=Math.max(0,cue.startTime+seconds);
+      cue.endTime=Math.max(0,cue.endTime+seconds);
     });
-    if (seasons.length) await loadEps(tvId, 1);
-  } catch(e) { console.error("loadSeasons error:", e); }
+  });
+  toast(`Sub offset ${seconds>0?"+":""}${seconds}s applied`);
 }
 
-async function loadEps(tvId, s) {
-  const wrap = $("ebns"); wrap.innerHTML = "";
-  try {
-    const d = await tmdb(`/tv/${tvId}/season/${s}`);
-    (d.episodes || []).forEach(ep => {
-      const b = document.createElement("button");
-      b.className = "epbtn" + (ep.episode_number === curE ? " on" : "");
-      b.textContent = ep.episode_number;
-      b.title = ep.name;
-      b.onclick = () => {
-        document.querySelectorAll(".epbtn").forEach(x => x.classList.remove("on"));
-        b.classList.add("on");
-        curE = ep.episode_number;
-        updateMmeta();
-        loadSource(srcIdx);
-        loadDirectStreams();
-      };
-      wrap.appendChild(b);
-    });
-  } catch(e) { console.error("loadEps error:", e); }
-}
-
-// ── MODAL ─────────────────────────────────────────────────────────
-function openModal(item, type) {
-  // Reset state
-  cur = { ...item, mediaType: type };
-  cur._year   = (item.release_date || item.first_air_date || "").slice(0,4);
-  cur._rating = item.vote_average?.toFixed(1) || "—";
-  curS = 1; curE = 1; srcIdx = 0;
-  _cachedStreams = []; _cacheKey = "";
-  stopVideo();
-
-  const isTv = type === "tv" || type === "series";
-
-  // Populate modal header
-  $("mtitle").textContent = item.title || item.name;
-  $("mdesc").textContent  = item.overview || "";
-  $("mbg").src            = back(item.backdrop_path);
-  updateMmeta();
-
-  // Reset player area
-  // Safe reset: don't wipe pwrap innerHTML (kills element refs) — just update pph
-  clearPlayer();
-  const _pph = $("pph");
-  if (_pph) { _pph.classList.remove("hidden"); _pph.innerHTML = '<div class="pph-icon">⏳</div><div>Fetching info…</div>'; }
-  $("stream-name-bar").classList.remove("on");
-  $("streambns").innerHTML = "";
-  $("stream-loading").style.display = "block";
-  $("stream-loading").textContent = "🔄 Loading streams…";
-  $("stream-picker").style.display = "block";
-  $("tv-ctrl").style.display = isTv ? "block" : "none";
-  if (isTv) { $("sbns").innerHTML = ""; $("ebns").innerHTML = ""; }
-
-  buildSources();
-  $("modal").classList.add("on");
-  document.body.style.overflow = "hidden";
-
-  // Immediately load source 0 if it doesn't need IMDb ID (2Embed = TMDB id only)
-  // This makes video start playing right away without waiting for IMDb fetch
-  if (!SOURCES[0].useImdb) loadSource(0);
-
-  // Async: fetch IMDb ID in background, then seasons + streams
-  (async () => {
-    // Step 1: IMDb ID (needed for some sources + all stream fetching)
-    if (!cur.imdb_id) {
-      try {
-        const ext = await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
-        cur.imdb_id = ext.imdb_id || null;
-      } catch(e) { console.error("IMDb fetch failed:", e); }
-    }
-
-    // Step 2: TV seasons/episodes (populates season/episode buttons)
-    if (isTv) await loadSeasons(item.id);
-
-    // Step 3: If source 0 needed IMDb (or wasn't loaded yet), load it now
-    if (SOURCES[0].useImdb) loadSource(0);
-
-    // Step 4: Fetch torrent streams (IMDb ID now resolved)
-    loadDirectStreams();
-  })();
-}
-
-$("mclose").onclick = closeModal;
-$("modal").onclick = e => { if (e.target === $("modal")) closeModal(); };
-
-function closeModal() {
-  $("modal").classList.remove("on");
-  // Stop iframe
-  const pf = document.getElementById("pframe");
-  if (pf) pf.src = "about:blank";
-  stopVideo();
-  document.body.style.overflow = "";
-  $("stream-name-bar").classList.remove("on");
-}
-
-// ── SUBTITLE SYSTEM ─────────────────────────────────────────────────
-// Video.js handles all sync natively via its TextTrack engine.
-// addRemoteTextTrack() adds tracks to the CC/Subtitles menu button.
-let _subOffset = 0;
-
-function buildVTTBlobUrl(cues) {
-  const pad = (n,w=2) => String(Math.floor(n)).padStart(w,"0");
-  const hms = s => `${pad(s/3600)}:${pad((s%3600)/60)}:${pad(s%60)}.${String(Math.round((s%1)*1000)).padStart(3,"0")}`;
-  const body = cues.map((c,i) => `${i+1}\n${hms(c.start)} --> ${hms(c.end)}\n${c.text}`).join("\n\n");
-  return URL.createObjectURL(new Blob(["WEBVTT\n\n"+body], {type:"text/vtt"}));
-}
-
-async function switchSubLang(lang) {
-  if (!cur?.imdb_id || !vjsPlayer) { toast("No player active"); return; }
-  const names = {en:"English",hi:"Hindi",ar:"Arabic",fr:"French",es:"Spanish",
-                 de:"German",pt:"Portuguese",it:"Italian",ja:"Japanese",ko:"Korean",zh:"Chinese"};
-  toast("🔤 Fetching " + (names[lang]||lang) + "…");
-  try {
-    const cues = await fetchSubCues(cur.imdb_id, curS, curE, lang);
-    if (!cues.length) { toast("⚠️ No subs found"); return; }
-    const vttUrl = buildVTTBlobUrl(cues);
-    // Remove existing remote tracks for this lang
-    const existing = vjsPlayer.remoteTextTracks();
-    for (let i = existing.length - 1; i >= 0; i--) {
-      if (existing[i].language === lang) vjsPlayer.removeRemoteTextTrack(existing[i]);
-    }
-    vjsPlayer.addRemoteTextTrack({
-      kind: "subtitles", label: names[lang]||lang.toUpperCase(),
-      srclang: lang, src: vttUrl, default: true,
-    }, false);
-    _subOffset = 0;
-    toast("🔤 " + (names[lang]||lang) + " subtitles active");
-  } catch(e) { toast("⚠️ Subtitle error"); console.error(e); }
-}
-
-function offsetSubtitles(seconds) {
-  // Shift cues on all active TextTracks
-  if (!currentVideo) return;
-  _subOffset += seconds;
-  for (let i = 0; i < currentVideo.textTracks.length; i++) {
-    const tt = currentVideo.textTracks[i];
-    if (!tt.cues) continue;
-    for (let j = 0; j < tt.cues.length; j++) {
-      tt.cues[j].startTime += seconds;
-      tt.cues[j].endTime   += seconds;
-    }
-  }
-  toast(`Sub ${_subOffset>=0?"+":""}${_subOffset.toFixed(1)}s`);
-}
-
-async function fetchSubCues(imdbId, season, episode, lang) {
-  const langMap = {en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",
-                   pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
-  const num = imdbId.replace("tt","");
-  let url = `https://rest.opensubtitles.org/search/imdbid-${num}/sublanguageid-${langMap[lang]||"eng"}`;
-  if (season)  url += `/season-${season}`;
-  if (episode) url += `/episode-${episode}`;
-  const r = await fetch(url, {headers:{"X-User-Agent":"TemporaryUserAgent"}});
-  if (!r.ok) return [];
-  const subs = await r.json();
-  if (!Array.isArray(subs)||!subs.length) return [];
-  const ep = season?"S"+String(season).padStart(2,"0")+"E"+String(episode).padStart(2,"0"):"";
-  const sub = ep
+// ── SUBTITLE FETCH ────────────────────────────────────────────────
+async function fetchSubCues(imdbId,season,episode,lang){
+  const langMap={en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
+  const num=imdbId.replace("tt","");
+  let url=`https://rest.opensubtitles.org/search/imdbid-${num}/sublanguageid-${langMap[lang]||"eng"}`;
+  if(season)  url+=`/season-${season}`;
+  if(episode) url+=`/episode-${episode}`;
+  const r=await fetch(url,{headers:{"X-User-Agent":"TemporaryUserAgent"}});
+  if(!r.ok) return[];
+  const subs=await r.json();
+  if(!Array.isArray(subs)||!subs.length) return[];
+  const ep=season?"S"+String(season).padStart(2,"0")+"E"+String(episode).padStart(2,"0"):"";
+  const sub=ep
     ?(subs.find(s=>s.SubFormat==="srt"&&(s.SubFileName||"").toUpperCase().includes(ep))
       ||subs.find(s=>s.SubFormat==="srt")||subs[0])
     :(subs.find(s=>s.SubFormat==="srt")||subs[0]);
-  if (!sub?.SubDownloadLink) return [];
+  if(!sub?.SubDownloadLink) return[];
   return parseSRT(await downloadAndDecompress(sub.SubDownloadLink)||"");
 }
 
-async function downloadAndDecompress(url) {
-  const r = await fetch(url); if (!r.ok) throw new Error("failed");
-  const buf = await r.arrayBuffer();
-  try {
+async function downloadAndDecompress(url){
+  const r=await fetch(url);if(!r.ok)throw new Error("failed");
+  const buf=await r.arrayBuffer();
+  try{
     const ds=new DecompressionStream("gzip"),w=ds.writable.getWriter();
     w.write(new Uint8Array(buf));w.close();
     const chunks=[],rd=ds.readable.getReader();
@@ -1141,12 +605,12 @@ async function downloadAndDecompress(url) {
     const out=new Uint8Array(chunks.reduce((n,c)=>n+c.length,0));
     let p=0;chunks.forEach(ch=>{out.set(ch,p);p+=ch.length;});
     return new TextDecoder().decode(out);
-  } catch { return new TextDecoder().decode(buf); }
+  }catch{return new TextDecoder().decode(buf);}
 }
 
-function parseSRT(text) {
+function parseSRT(text){
   const cues=[];
-  for (const block of text.replace(/\r/g,"").trim().split(/\n\s*\n/)) {
+  for(const block of text.replace(/\r/g,"").trim().split(/\n\s*\n/)){
     const lines=block.trim().split("\n");
     const tl=lines.find(l=>l.includes("-->"));if(!tl)continue;
     const[s1,s2]=tl.split("-->").map(s=>s.trim());
@@ -1157,173 +621,306 @@ function parseSRT(text) {
   return cues.sort((a,b)=>a.start-b.start);
 }
 
-// Language bar shown below player during torrent playback
-function showSubLangBar(activeLang, loaded) {
-  let bar = $("sub-lang-bar"); if(bar) bar.remove();
-  bar = document.createElement("div"); bar.id="sub-lang-bar";
-  bar.style.cssText="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;padding:8px 12px;background:var(--s2);border-radius:10px;border:1px solid var(--border)";
-  const lbl=document.createElement("span");
-  lbl.style.cssText="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;flex-shrink:0";
-  lbl.textContent="🔤 Subs"; bar.appendChild(lbl);
-  [{c:"en",n:"EN"},{c:"hi",n:"HI"},{c:"ar",n:"AR"},{c:"fr",n:"FR"},{c:"es",n:"ES"},
-   {c:"de",n:"DE"},{c:"pt",n:"PT"},{c:"ja",n:"JA"},{c:"ko",n:"KO"},{c:"zh",n:"ZH"}
-  ].forEach(({c,n})=>{
-    const btn=document.createElement("button");
-    btn.className="cbtn"+(c===activeLang&&loaded?" on":"");
-    btn.textContent=n; btn.style.cssText="padding:3px 8px;font-size:10px";
-    btn.onclick=()=>{bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));btn.classList.add("on");switchSubLang(c);};
-    bar.appendChild(btn);
-  });
-  const sp=document.createElement("span");sp.style.flex="1";bar.appendChild(sp);
-  [{t:"−0.5s",v:-0.5},{t:"+0.5s",v:0.5},{t:"✕ Off",v:null}].forEach(({t,v})=>{
-    const btn=document.createElement("button");btn.className="cbtn";btn.textContent=t;
-    btn.style.cssText="padding:3px 8px;font-size:10px";
-    btn.onclick=()=>{
-      if(v===null){
-        if(vjsPlayer){const tts=vjsPlayer.textTracks();for(let i=0;i<tts.length;i++)tts[i].mode="disabled";}
-        bar.querySelectorAll(".cbtn").forEach(b=>b.classList.remove("on"));toast("🔤 Subs off");
-      } else offsetSubtitles(v);
+// ── STREAMS ───────────────────────────────────────────────────────
+async function fetchStreams(imdbId,isTv,s,e){
+  const type=isTv?"series":"movie";
+  const stremioId=isTv?`${imdbId}:${s}:${e}`:imdbId;
+  const primaryUrl=`${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`;
+  const fallbackUrl=`https://torrentio.strem.fun/stream/${type}/${stremioId}.json`;
+  for(const url of[primaryUrl,fallbackUrl]){
+    try{
+      const ctrl=new AbortController();
+      const t=setTimeout(()=>ctrl.abort(),25000);
+      const r=await fetch(url,{signal:ctrl.signal});
+      clearTimeout(t);
+      if(!r.ok) continue;
+      const d=await r.json();
+      const streams=Array.isArray(d.streams)?d.streams:[];
+      const real=streams.filter(s=>s.infoHash&&!/^0+$/.test(s.infoHash)&&s.infoHash.length===40);
+      if(real.length) return real.slice(0,15);
+    }catch{continue;}
+  }
+  return[];
+}
+
+function buildStreamPicker(streams){
+  const wrap=$("streambns"); wrap.innerHTML="";
+  $("stream-loading").style.display="none";
+  if(!streams.length){$("stream-picker").style.display="none";return;}
+  $("stream-picker").style.display="block";
+  const lbl=$("stream-label");
+  if(lbl) lbl.textContent="📊 AVAILABLE TORRENTS — tap to play";
+  streams.forEach(s=>{
+    const lines=(s.title||s.name||"").split("\n");
+    const fname=lines[0]||"Unknown";
+    const meta=lines.slice(1).join(" ");
+    const seeds=(meta.match(/👤\s*(\d+)/)||[])[1]||"";
+    const size=(meta.match(/💾\s*([\d.]+\s*(?:GB|MB|KB|B))/)||[])[1]||"";
+    const[ql,qc]=qClass(fname);
+    let lang="";
+    if(/hindi/i.test(fname+meta))    lang="🇮🇳 ";
+    else if(/korean/i.test(fname+meta))   lang="🇰🇷 ";
+    else if(/japanese/i.test(fname+meta)) lang="🇯🇵 ";
+    const row=document.createElement("div");
+    row.className="stream-row";
+    row.innerHTML=
+      `<div class="stream-row-left">` +
+        `<span class="qlabel ${qc}">${ql}</span>` +
+        `<span class="stream-name">${lang}${fname}</span>` +
+      `</div>` +
+      `<div class="stream-row-right">` +
+        (seeds?`<span class="stream-seeds">👤${seeds}</span>`:"") +
+        (size?`<span class="stream-size">💾${size}</span>`:"") +
+        `<span class="stream-play-btn">▶</span>` +
+      `</div>`;
+    row._hash=s.infoHash||"";
+    row._fileIdx=typeof s.fileIdx==="number"?s.fileIdx:0;
+    row._title=fname;
+    row.onclick=()=>{
+      document.querySelectorAll(".stream-row").forEach(x=>x.classList.remove("active"));
+      row.classList.add("active");
+      if(row._hash){
+        const title=(cur.title||cur.name||"")+(cur.mediaType==="movie"?"":` S${curS}E${curE}`);
+        playTorrent(row._hash,row._fileIdx,title);
+      }else loadSource(srcIdx);
     };
-    bar.appendChild(btn);
+    wrap.appendChild(row);
   });
-  $("player-outer").insertAdjacentElement("afterend",bar);
 }
 
-function clearSubs() {
-  _subOffset=0;
-  const bar=$("sub-lang-bar");if(bar)bar.remove();
+async function loadDirectStreams(){
+  if(!cur||!cur.imdb_id){
+    $("stream-loading").style.display="block";
+    $("stream-loading").textContent="⚠️ No IMDb ID — streams unavailable";
+    return;
+  }
+  const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
+  const snapS=curS,snapE=curE;
+  const cacheKey=`${cur.imdb_id}|${snapS}|${snapE}`;
+  if(cacheKey===_cacheKey&&_cachedStreams.length){buildStreamPicker(_cachedStreams);return;}
+  $("stream-picker").style.display="block";
+  $("stream-loading").style.display="block";
+  $("stream-loading").textContent="🔄 Searching torrents… (may take 10-20s)";
+  $("streambns").innerHTML="";
+  let dots=0;
+  const pulse=setInterval(()=>{
+    dots=(dots+1)%4;
+    const el=$("stream-loading");
+    if(el&&el.style.display!=="none")
+      el.textContent="🔄 Searching torrents"+".".repeat(dots)+" (this can take ~15s)";
+  },1500);
+  try{
+    const streams=await fetchStreams(cur.imdb_id,isTv,snapS,snapE);
+    clearInterval(pulse);
+    if(snapS!==curS||snapE!==curE)return;
+    _cachedStreams=streams;_cacheKey=cacheKey;
+    if(!streams.length){
+      $("stream-loading").style.display="block";
+      $("stream-loading").textContent="⚠️ No torrents found — try a source above";
+    }else buildStreamPicker(streams);
+  }catch(err){
+    clearInterval(pulse);
+    $("stream-loading").style.display="block";
+    $("stream-loading").textContent="⚠️ Stream fetch failed — try again";
+  }
 }
 
+// ── SEASONS / EPISODES ────────────────────────────────────────────
+async function loadSeasons(tvId){
+  const wrap=$("sbns");wrap.innerHTML="";
+  try{
+    const d=await tmdb(`/tv/${tvId}`);
+    const seasons=(d.seasons||[]).filter(s=>s.season_number>0);
+    seasons.forEach(s=>{
+      const b=document.createElement("button");
+      b.className="cbtn"+(s.season_number===curS?" on":"");
+      b.textContent=`S${s.season_number}`;
+      b.onclick=async()=>{
+        document.querySelectorAll("#sbns .cbtn").forEach(x=>x.classList.remove("on"));
+        b.classList.add("on");
+        curS=s.season_number;curE=1;
+        updateMmeta();
+        await loadEps(tvId,curS);
+        loadSource(srcIdx);
+        loadDirectStreams();
+      };
+      wrap.appendChild(b);
+    });
+    if(seasons.length) await loadEps(tvId,1);
+  }catch(e){console.error("loadSeasons:",e);}
+}
+
+async function loadEps(tvId,s){
+  const wrap=$("ebns");wrap.innerHTML="";
+  try{
+    const d=await tmdb(`/tv/${tvId}/season/${s}`);
+    (d.episodes||[]).forEach(ep=>{
+      const b=document.createElement("button");
+      b.className="epbtn"+(ep.episode_number===curE?" on":"");
+      b.textContent=ep.episode_number;
+      b.title=ep.name;
+      b.onclick=()=>{
+        document.querySelectorAll(".epbtn").forEach(x=>x.classList.remove("on"));
+        b.classList.add("on");
+        curE=ep.episode_number;
+        updateMmeta();
+        loadSource(srcIdx);
+        loadDirectStreams();
+      };
+      wrap.appendChild(b);
+    });
+  }catch(e){console.error("loadEps:",e);}
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────
+function openModal(item,type){
+  cur={...item,mediaType:type};
+  cur._year=(item.release_date||item.first_air_date||"").slice(0,4);
+  cur._rating=item.vote_average?.toFixed(1)||"—";
+  curS=1;curE=1;srcIdx=0;
+  _cachedStreams=[];_cacheKey="";
+  stopVideo();
+  const isTv=type==="tv"||type==="series";
+  $("mtitle").textContent=item.title||item.name;
+  $("mdesc").textContent=item.overview||"";
+  $("mbg").src=back(item.backdrop_path);
+  updateMmeta();
+  clearPlayer();
+  const _pph=$("pph");
+  if(_pph){_pph.classList.remove("hidden");_pph.innerHTML='<div class="pph-icon">⏳</div><div>Fetching info…</div>';}
+  $("stream-name-bar").classList.remove("on");
+  $("streambns").innerHTML="";
+  $("stream-loading").style.display="block";
+  $("stream-loading").textContent="🔄 Loading streams…";
+  $("stream-picker").style.display="block";
+  $("tv-ctrl").style.display=isTv?"block":"none";
+  if(isTv){$("sbns").innerHTML="";$("ebns").innerHTML="";}
+  buildSources();
+  $("modal").classList.add("on");
+  document.body.style.overflow="hidden";
+  if(!SOURCES[0].useImdb) loadSource(0);
+  (async()=>{
+    if(!cur.imdb_id){
+      try{
+        const ext=await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
+        cur.imdb_id=ext.imdb_id||null;
+      }catch(e){console.error("IMDb fetch:",e);}
+    }
+    if(isTv) await loadSeasons(item.id);
+    if(SOURCES[0].useImdb) loadSource(0);
+    loadDirectStreams();
+  })();
+}
+
+$("mclose").onclick=closeModal;
+$("modal").onclick=e=>{if(e.target===$("modal"))closeModal();};
+
+function closeModal(){
+  $("modal").classList.remove("on");
+  const pf=document.getElementById("pframe");
+  if(pf)pf.src="about:blank";
+  stopVideo();
+  document.body.style.overflow="";
+  $("stream-name-bar").classList.remove("on");
+}
 
 // ── CARDS ─────────────────────────────────────────────────────────
-function makeCard(item, type) {
-  const title  = item.title || item.name || "Unknown";
-  const year   = (item.release_date || item.first_air_date || "").slice(0,4);
-  const rating = item.vote_average?.toFixed(1) || "—";
-  const d = document.createElement("div");
-  d.className = "card";
-  d.innerHTML =
+function makeCard(item,type){
+  const title=item.title||item.name||"Unknown";
+  const year=(item.release_date||item.first_air_date||"").slice(0,4);
+  const rating=item.vote_average?.toFixed(1)||"—";
+  const d=document.createElement("div");
+  d.className="card";
+  d.innerHTML=
     `<img class="cposter" src="${poster(item.poster_path)}" alt="${title}" loading="lazy">` +
     `<div class="cov"><div class="pbc">▶</div></div>` +
     `<div class="cinfo"><div class="ctitle">${title}</div>` +
     `<div class="cmeta"><span>${year}</span><span class="crating">⭐${rating}</span></div></div>`;
-  d.onclick = () => openModal(item, type);
+  d.onclick=()=>openModal(item,type);
   return d;
 }
 
-function skels(el, n=8) {
-  el.innerHTML = "";
-  for (let i=0;i<n;i++) { const d=document.createElement("div"); d.className="sk"; el.appendChild(d); }
+function skels(el,n=8){el.innerHTML="";for(let i=0;i<n;i++){const d=document.createElement("div");d.className="sk";el.appendChild(d);}}
+
+function setHero(item,type){
+  $("hero-bg").style.backgroundImage=`url(${back(item.backdrop_path)})`;
+  $("htitle").textContent=item.title||item.name;
+  $("hdesc").textContent=item.overview||"";
+  $("hyear").textContent=(item.release_date||item.first_air_date||"").slice(0,4);
+  $("hrating").textContent=`⭐ ${item.vote_average?.toFixed(1)||"—"}`;
+  $("hplay").onclick=()=>openModal(item,type);
+  $("hinfo").onclick=()=>openModal(item,type);
 }
 
-function setHero(item, type) {
-  $("hero-bg").style.backgroundImage = `url(${back(item.backdrop_path)})`;
-  $("htitle").textContent  = item.title || item.name;
-  $("hdesc").textContent   = item.overview || "";
-  $("hyear").textContent   = (item.release_date || item.first_air_date || "").slice(0,4);
-  $("hrating").textContent = `⭐ ${item.vote_average?.toFixed(1)||"—"}`;
-  $("hplay").onclick = () => openModal(item, type);
-  $("hinfo").onclick = () => openModal(item, type);
-}
-
-async function loadSec(gid, path, params, type, hero=false) {
-  const g = $(gid); skels(g);
-  try {
-    const d = await tmdb(path, params);
-    const items = d.results || [];
-    g.innerHTML = "";
-    if (hero && items.length) setHero(items[0], items[0].media_type || type);
-    items.slice(0,12).forEach(it => g.appendChild(makeCard(it, it.media_type || type)));
-  } catch(e) {
-    console.error("loadSec error:", e);
-    g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Failed to load</div>`;
+async function loadSec(gid,path,params,type,hero=false){
+  const g=$(gid);skels(g);
+  try{
+    const d=await tmdb(path,params);
+    const items=d.results||[];
+    g.innerHTML="";
+    if(hero&&items.length)setHero(items[0],items[0].media_type||type);
+    items.slice(0,12).forEach(it=>g.appendChild(makeCard(it,it.media_type||type)));
+  }catch(e){
+    g.innerHTML=`<div style="color:var(--muted);padding:20px;text-align:center">⚠️ Failed to load</div>`;
   }
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────
-const searchInput = $("sq");
-searchInput.addEventListener("input", e => {
-  const q = e.target.value.trim();
-  $("search-clear").style.display = q ? "block" : "none";
+const searchInput=$("sq");
+searchInput.addEventListener("input",e=>{
+  const q=e.target.value.trim();
+  $("search-clear").style.display=q?"block":"none";
   clearTimeout(searchTimer);
-  if (!q) { hideSearch(); return; }
-  searchTimer = setTimeout(() => showSearch(q), 350);
+  if(!q){hideSearch();return;}
+  searchTimer=setTimeout(()=>showSearch(q),350);
 });
-searchInput.addEventListener("keydown", e => { if(e.key==="Enter") { e.target.blur(); } });
-searchInput.addEventListener("focus",   () => { if(searchInput.value.trim()) showSearch(searchInput.value.trim()); });
+searchInput.addEventListener("keydown",e=>{if(e.key==="Enter")e.target.blur();});
+searchInput.addEventListener("focus",()=>{if(searchInput.value.trim())showSearch(searchInput.value.trim());});
 
-function clearSearch() {
-  searchInput.value = "";
-  $("search-clear").style.display = "none";
-  hideSearch();
+function clearSearch(){searchInput.value="";$("search-clear").style.display="none";hideSearch();}
+
+function showSearch(q){
+  $("main").style.display="none";$("hero").style.display="none";$("spage").classList.add("on");
+  $("stitle").textContent=`"${q}"`;
+  const g=$("sgrid");skels(g,6);
+  tmdb("/search/multi",{query:q}).then(d=>{
+    const items=(d.results||[]).filter(i=>i.media_type!=="person");
+    g.innerHTML="";
+    if(!items.length){g.innerHTML=`<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`;return;}
+    items.slice(0,20).forEach(it=>g.appendChild(makeCard(it,it.media_type||"movie")));
+  }).catch(()=>{g.innerHTML=`<div style="color:var(--muted);padding:20px">⚠️ Search failed</div>`;});
 }
 
-function showSearch(q) {
-  $("main").style.display = "none";
-  $("hero").style.display = "none";
-  $("spage").classList.add("on");
-  $("stitle").textContent = `"${q}"`;
-  const g = $("sgrid"); skels(g, 6);
-  tmdb("/search/multi", { query: q }).then(d => {
-    const items = (d.results||[]).filter(i => i.media_type!=="person");
-    g.innerHTML = "";
-    if (!items.length) {
-      g.innerHTML = `<div class="sempty"><div class="sempty-icon">🎬</div>No results for "${q}"</div>`;
-      return;
-    }
-    items.slice(0,20).forEach(it => g.appendChild(makeCard(it, it.media_type||"movie")));
-  }).catch(() => {
-    g.innerHTML = `<div class="sempty"><div class="sempty-icon">⚠️</div>Search failed</div>`;
-  });
-}
-
-function hideSearch() {
-  $("main").style.display = "block";
-  $("hero").style.display = "flex";
-  $("spage").classList.remove("on");
-}
+function hideSearch(){$("main").style.display="block";$("hero").style.display="flex";$("spage").classList.remove("on");}
 
 // ── TABS ──────────────────────────────────────────────────────────
-document.querySelectorAll(".tab").forEach(tab => {
-  tab.onclick = async () => {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
-    tab.classList.add("on");
-    clearSearch();
-    const c = tab.dataset.c;
-    const secs = document.querySelectorAll("#main .sec");
-    secs.forEach(s => s.style.display="none");
-    const show = id => document.querySelector(`#${id}`)?.closest(".sec")?.style.setProperty("display","block");
-    if (c==="home") {
-      secs.forEach(s => s.style.display="block");
-      $("hero").style.display="flex";
-    } else if (c==="movies") {
-      $("hero").style.display="flex"; show("g0");
-      $("t0").textContent="🎬 Popular Movies";
-      skels($("g0")); loadSec("g0","/discover/movie",{sort_by:"popularity.desc"},"movie",true);
-    } else if (c==="hindi") {
-      $("hero").style.display="none"; show("g1");
-    } else if (c==="tv") {
-      $("hero").style.display="flex"; show("g0");
-      $("t0").textContent="📺 Popular TV Shows";
-      skels($("g0")); loadSec("g0","/discover/tv",{sort_by:"popularity.desc"},"tv",true);
-    } else if (c==="anime") {
-      $("hero").style.display="none"; show("g2");
-    } else if (c==="korean") {
-      $("hero").style.display="none"; show("g3");
-    }
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=async()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+    tab.classList.add("on");clearSearch();
+    const c=tab.dataset.c;
+    const secs=document.querySelectorAll("#main .sec");
+    secs.forEach(s=>s.style.display="none");
+    const show=id=>document.querySelector(`#${id}`)?.closest(".sec")?.style.setProperty("display","block");
+    if(c==="home"){secs.forEach(s=>s.style.display="block");$("hero").style.display="flex";}
+    else if(c==="movies"){$("hero").style.display="flex";show("g0");$("t0").textContent="🎬 Popular Movies";skels($("g0"));loadSec("g0","/discover/movie",{sort_by:"popularity.desc"},"movie",true);}
+    else if(c==="hindi"){$("hero").style.display="none";show("g1");}
+    else if(c==="tv"){$("hero").style.display="flex";show("g0");$("t0").textContent="📺 Popular TV Shows";skels($("g0"));loadSec("g0","/discover/tv",{sort_by:"popularity.desc"},"tv",true);}
+    else if(c==="anime"){$("hero").style.display="none";show("g2");}
+    else if(c==="korean"){$("hero").style.display="none";show("g3");}
   };
 });
 
 // ── PWA ───────────────────────────────────────────────────────────
-if ("serviceWorker" in navigator) {
-  const swCode = `const CACHE="cv-v3";const SHELL=["/"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));self.addEventListener("fetch",e=>{if(["tmdb","opensubtitles","torrentio","vercel.app","workers.dev","apibay","torrents-csv","nyaa.si"].some(s=>e.request.url.includes(s)))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
-  const blob = new Blob([swCode],{type:"application/javascript"});
+if("serviceWorker" in navigator){
+  const swCode=`const CACHE="cv-v3";const SHELL=["/"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));self.addEventListener("fetch",e=>{if(["tmdb","opensubtitles","torrentio","vercel.app","workers.dev","apibay"].some(s=>e.request.url.includes(s)))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const blob=new Blob([swCode],{type:"application/javascript"});
   navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
-async function init() {
-  try { await tmdb("/configuration"); } catch(e) { toast("⚠️ TMDB connection failed"); return; }
+async function init(){
+  try{await tmdb("/configuration");}catch(e){toast("⚠️ TMDB connection failed");return;}
   await loadSec("g0","/trending/all/week",{},"movie",true);
   loadSec("g1","/discover/movie",{with_original_language:"hi",sort_by:"popularity.desc"},"movie");
   loadSec("g2","/discover/tv",{with_genres:"16",with_original_language:"ja",sort_by:"popularity.desc"},"tv");
