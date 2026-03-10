@@ -138,8 +138,7 @@ a{text-decoration:none;color:inherit}
 .player-outer{position:relative;width:100%;}
 .pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
 .pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;}
-/* Share button hider - positioned at left side center where 2embed renders it */
-.pwrap::after{content:"";position:absolute;left:0;top:40%;width:52px;height:52px;background:#000;z-index:10;pointer-events:none;}
+
 .pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
@@ -328,7 +327,7 @@ function stopVideo() {
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container, #ep-share-cover").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -751,6 +750,21 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
+  // Cover share button — real div always renders above iframe
+  const cover = document.createElement("div");
+  cover.id = "ep-share-cover";
+  cover.style.cssText = [
+    "position:absolute",
+    "left:0",
+    "top:35%",
+    "width:58px",
+    "height:58px",
+    "background:#000",
+    "z-index:2147483647",
+    "pointer-events:none",
+    "border-radius:0 4px 4px 0"
+  ].join(";");
+  pwrap.appendChild(cover);
 }
 
 function setNameBar(label, url = "") {
