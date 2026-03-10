@@ -137,8 +137,10 @@ a{text-decoration:none;color:inherit}
 /* PLAYER */
 .player-outer{position:relative;width:100%;}
 .pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
-/* Shift iframe slightly so top-left share/logo buttons are clipped outside */
-.pwrap iframe{position:absolute;top:-38px;left:-44px;width:calc(100% + 88px);height:calc(100% + 76px);border:none;display:block;background:#000;}
+.pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;
+  transform:scale(1.08) translate(2%, 2%);
+  transform-origin:top left;
+}
 .pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
