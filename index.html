@@ -1003,9 +1003,14 @@ function _playEpornerIdx(idx) {
 }
 
 function _injectEpornerIframe(container, v) {
+  // Try direct MP4 first (no X-Frame-Options issue)
+  if (v.mp4) {
+    _playEpornerMp4(container, v);
+    return;
+  }
+  // Fallback: iframe embed
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
-  // Eporner embed may be protocol-relative (//...) — force https
   const src = v.embed ? v.embed.replace(/^\/\//, "https://") : "";
   iframe.src = src;
   iframe.allowFullscreen = true;
@@ -1013,6 +1018,46 @@ function _injectEpornerIframe(container, v) {
   iframe.referrerPolicy = "no-referrer";
   iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
   container.appendChild(iframe);
+}
+
+function _playEpornerMp4(container, v) {
+  const vidId = "ep-vjs-" + Date.now();
+  const video = document.createElement("video");
+  video.id = vidId;
+  video.className = "video-js vjs-default-skin";
+  video.setAttribute("playsinline", "");
+  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+  container.appendChild(video);
+  const player = videojs(vidId, {
+    controls: true, autoplay: true, preload: "auto",
+    fluid: false, fill: true,
+    playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+    controlBar: {
+      children: ["playToggle","volumePanel","currentTimeDisplay","timeDivider",
+        "durationDisplay","progressControl","playbackRateMenuButton",
+        "pictureInPictureToggle","fullscreenToggle"],
+    },
+  });
+  player.src({ src: v.mp4, type: "video/mp4" });
+  player.play().catch(() => {});
+  // Store so stopVideo can dispose it
+  vjsPlayer = player;
+  player.on("error", () => {
+    // MP4 failed — try iframe embed as fallback
+    try { player.dispose(); } catch(e) {}
+    vjsPlayer = null;
+    video.remove();
+    const iframe = document.createElement("iframe");
+    iframe.id = "pframe";
+    const src = v.embed ? v.embed.replace(/^\/\//, "https://") : "";
+    iframe.src = src;
+    iframe.allowFullscreen = true;
+    iframe.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture";
+    iframe.referrerPolicy = "no-referrer";
+    iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
+    container.appendChild(iframe);
+    toast("📺 Switched to embed player");
+  });
 }
 
 // ── ADULT SEARCH ───────────────────────────────────────────────
