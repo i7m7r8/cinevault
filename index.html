@@ -296,9 +296,10 @@ let _subStartWall = null, _subMode = "off";
 let _subRafId = null;
 let _activeVttObjectUrl = null;
 
-// Adult content password protection
+// Adult content password protection – hashed password for slight obscurity
+// The hash below corresponds to "1234" (SHA‑256). You can change it by generating a new hash.
+const ADULT_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA‑256 of "1234"
 let adultUnlocked = false;
-const ADULT_PASSWORD = "1234"; // Change this to your desired password
 let _fullSearchResults = [];
 
 const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/444?text=No+Poster`;
@@ -309,6 +310,15 @@ function toast(msg, ms = 2500) {
   t.textContent = msg;
   t.classList.add("on");
   setTimeout(() => t.classList.remove("on"), ms);
+}
+
+// Simple SHA‑256 hash function (for password, not for crypto)
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
 }
 
 // ── TMDB (direct) ───────────────────────────────────────────────
@@ -362,7 +372,7 @@ function clearPlayer() {
 }
 
 // ── VIDEO.JS FOR DIRECT STREAMS (MP4/HLS) ──────────────────────
-function playDirectUrl(streamUrl, title) {
+function playDirectUrl(streamUrl, title, onErrorFallback) {
   clearPlayer();
   $("pph").classList.add("hidden");
   setNameBar(title);
@@ -400,9 +410,14 @@ function playDirectUrl(streamUrl, title) {
     const next = rows[idx + 1];
     if (next) { toast("⏭ Trying next stream…"); setTimeout(() => next.click(), 400); }
     else {
-      toast("❌ All streams failed");
-      $("pph").classList.remove("hidden");
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams worked.</div>';
+      // If there's a custom fallback, use it
+      if (onErrorFallback) {
+        onErrorFallback();
+      } else {
+        toast("❌ All streams failed");
+        $("pph").classList.remove("hidden");
+        $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams worked.</div>';
+      }
     }
   };
   const tryLoad = () => {
@@ -648,7 +663,7 @@ function buildStreamPicker(streams, autoPlay = false) {
       document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
       row.classList.add("active");
       const title = (cur.title || cur.name || "") + (cur.mediaType === "movie" ? "" : ` S${curS}E${curE}`);
-      if (row._url) playDirectUrl(row._url, title);
+      if (row._url) playDirectUrl(row._url, title, null);
       else loadSource(0);
     };
 
@@ -1015,10 +1030,19 @@ function _playEpornerVideo(container, v) {
   if (v.mp4) {
     // Use the stream-proxy to avoid CORS issues
     const proxyUrl = `${API}/stream-proxy?url=${encodeURIComponent(v.mp4)}`;
-    playDirectUrl(proxyUrl, v.title);
+    // Define a fallback: if MP4 fails, use iframe
+    const fallback = () => {
+      toast("⚠️ MP4 playback failed, switching to iframe…");
+      _playEpornerIframe(container, v);
+    };
+    playDirectUrl(proxyUrl, v.title, fallback);
     return;
   }
-  // Fallback: iframe embed – try to disable related videos
+  // No MP4, go directly to iframe
+  _playEpornerIframe(container, v);
+}
+
+function _playEpornerIframe(container, v) {
   let embedSrc = v.embed ? v.embed.replace(/^\/\//, "https://") : "";
   if (!embedSrc) {
     toast("⚠️ No playable source for this video");
@@ -1131,9 +1155,10 @@ function displaySearchResults() {
   }
 }
 
-function unlockAdult() {
+async function unlockAdult() {
   const pw = $("adult-pw").value;
-  if (pw === ADULT_PASSWORD) {
+  const hash = await sha256(pw);
+  if (hash === ADULT_PASSWORD_HASH) {
     adultUnlocked = true;
     displaySearchResults();
     toast("🔓 Adult content unlocked");
