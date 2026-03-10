@@ -137,10 +137,8 @@ a{text-decoration:none;color:inherit}
 /* PLAYER */
 .player-outer{position:relative;width:100%;}
 .pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
-/* Invisible overlay to block iframe share/logo buttons in top-left corner */
-.iframe-cover-tl{position:absolute;top:0;left:0;width:60px;height:50px;z-index:10;background:transparent;pointer-events:all;}
-.iframe-cover-tr{position:absolute;top:0;right:0;width:60px;height:50px;z-index:10;background:transparent;pointer-events:all;}
-.pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;}
+/* Shift iframe slightly so top-left share/logo buttons are clipped outside */
+.pwrap iframe{position:absolute;top:-38px;left:-44px;width:calc(100% + 88px);height:calc(100% + 76px);border:none;display:block;background:#000;}
 .pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
@@ -752,9 +750,6 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
-  // Cover iframe corners to block share/logo buttons
-  const tl = document.createElement("div"); tl.className = "iframe-cover-tl"; pwrap.appendChild(tl);
-  const tr = document.createElement("div"); tr.className = "iframe-cover-tr"; pwrap.appendChild(tr);
 }
 
 function setNameBar(label, url = "") {
