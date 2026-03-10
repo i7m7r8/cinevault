@@ -138,7 +138,6 @@ a{text-decoration:none;color:inherit}
 .player-outer{position:relative;width:100%;}
 .pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
 .pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;}
-
 .pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
 .pph-icon{font-size:40px}
@@ -327,7 +326,7 @@ function stopVideo() {
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container, #ep-share-cover").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -699,7 +698,7 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "2Embed",     useImdb: false, movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://www.2embed.cc/embed/"+id)}`,  tv: (id, s, e) => `${API}/embed-proxy?url=${encodeURIComponent("https://www.2embed.cc/embedtv/"+id+"&s="+s+"&e="+e)}` },
   { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                             tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
   { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                    tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
@@ -750,21 +749,6 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
-  // Cover share button — real div always renders above iframe
-  const cover = document.createElement("div");
-  cover.id = "ep-share-cover";
-  cover.style.cssText = [
-    "position:absolute",
-    "left:0",
-    "top:35%",
-    "width:58px",
-    "height:58px",
-    "background:#000",
-    "z-index:2147483647",
-    "pointer-events:none",
-    "border-radius:0 4px 4px 0"
-  ].join(";");
-  pwrap.appendChild(cover);
 }
 
 function setNameBar(label, url = "") {
