@@ -326,7 +326,7 @@ function stopVideo() {
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container, #share-patch").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -746,43 +746,14 @@ function showIframe(url, label) {
   iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
   iframe.referrerPolicy = "no-referrer";
   iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none; display:block;";
-
-  // For 2embed: wrap in srcdoc to inject CSS that hides share button
-  if (/2embed/i.test(url)) {
-    const srcdoc = `<!DOCTYPE html><html><head><style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body,html{width:100%;height:100%;overflow:hidden;background:#000}
-      iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
-    </style></head><body>
-    <iframe src="${url}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
-    <script>
-      // Repeatedly try to reach into nested iframe and hide share button
-      function hideShare() {
-        const f = document.querySelector('iframe');
-        try {
-          const doc = f.contentDocument || f.contentWindow.document;
-          const style = doc.createElement('style');
-          style.textContent = \`
-            [class*="share"],[id*="share"],[class*="Share"],[id*="Share"],
-            [class*="social"],[id*="social"],
-            a[href*="share"],a[href*="facebook"],a[href*="twitter"],
-            .jw-icon-sharing, .jw-sharing-skin,
-            button[aria-label*="share"],button[aria-label*="Share"],
-            [data-testid*="share"] { display:none!important; visibility:hidden!important; opacity:0!important; pointer-events:none!important; }
-          \`;
-          doc.head.appendChild(style);
-        } catch(e) {}
-      }
-      setInterval(hideShare, 500);
-    <\/script>
-    </body></html>`;
-    iframe.srcdoc = srcdoc;
-  } else {
-    iframe.src = url;
-  }
-
+  iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
+  // Black patch over the share button (top-left of iframe, ~40x40px)
+  const patch = document.createElement("div");
+  patch.id = "share-patch";
+  patch.style.cssText = "position:absolute;top:6px;left:6px;width:44px;height:44px;background:#000;z-index:9;border-radius:4px;pointer-events:none;";
+  pwrap.appendChild(patch);
 }
 
 function setNameBar(label, url = "") {
