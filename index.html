@@ -137,6 +137,9 @@ a{text-decoration:none;color:inherit}
 /* PLAYER */
 .player-outer{position:relative;width:100%;}
 .pwrap{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border);position:relative;}
+/* Invisible overlay to block iframe share/logo buttons in top-left corner */
+.iframe-cover-tl{position:absolute;top:0;left:0;width:60px;height:50px;z-index:10;background:transparent;pointer-events:all;}
+.iframe-cover-tr{position:absolute;top:0;right:0;width:60px;height:50px;z-index:10;background:transparent;pointer-events:all;}
 .pwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;}
 .pph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;background:#000;z-index:5;}
 .pph.hidden{display:none}
@@ -698,12 +701,12 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,   tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
-  { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                                tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
-  { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                       tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "EmbedSu",    useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                                 tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name: "AutoEmbed",  useImdb: true,  movie: id => `https://autoembed.cc/movie/imdb/${id}`,                              tv: (id, s, e) => `https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                  tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
+  { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                             tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
+  { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                    tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "EmbedSu",    useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                              tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name: "AutoEmbed",  useImdb: true,  movie: id => `https://autoembed.cc/movie/imdb/${id}`,                           tv: (id, s, e) => `https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
 ];
 
 function buildSources() {
@@ -749,6 +752,9 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
+  // Cover iframe corners to block share/logo buttons
+  const tl = document.createElement("div"); tl.className = "iframe-cover-tl"; pwrap.appendChild(tl);
+  const tr = document.createElement("div"); tr.className = "iframe-cover-tr"; pwrap.appendChild(tr);
 }
 
 function setNameBar(label, url = "") {
@@ -834,9 +840,6 @@ function openModal(item, type) {
   $("modal").classList.add("on");
   document.body.style.overflow = "hidden";
 
-  // VidLink (source 0) uses TMDB id — fire immediately, no imdb wait needed
-  loadSource(0);
-
   (async () => {
     if (!cur.imdb_id) {
       try {
@@ -845,6 +848,7 @@ function openModal(item, type) {
       } catch (e) {}
     }
     if (isTv) await loadSeasons(item.id);
+    loadSource(0);
     loadDirectStreams(false);
   })();
 }
