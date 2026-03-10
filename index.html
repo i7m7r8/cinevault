@@ -326,7 +326,7 @@ function stopVideo() {
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container, .share-patch").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -749,22 +749,6 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
-  // Patch: covers share button wherever 2embed puts it
-  // Top-left corner (logo/share area)
-  const p1 = document.createElement("div");
-  p1.className = "share-patch";
-  p1.style.cssText = "position:absolute;top:0;left:0;width:56px;height:56px;background:#000;z-index:9;pointer-events:none;";
-  // Bottom-left of control bar
-  const p2 = document.createElement("div");
-  p2.className = "share-patch";
-  p2.style.cssText = "position:absolute;bottom:0;left:0;width:56px;height:48px;background:#000;z-index:9;pointer-events:none;";
-  // Middle-left (where share icon showed in screenshot)
-  const p3 = document.createElement("div");
-  p3.className = "share-patch";
-  p3.style.cssText = "position:absolute;top:50%;left:0;transform:translateY(-50%);width:56px;height:56px;background:#000;z-index:9;pointer-events:none;";
-  pwrap.appendChild(p1);
-  pwrap.appendChild(p2);
-  pwrap.appendChild(p3);
 }
 
 function setNameBar(label, url = "") {
@@ -796,7 +780,8 @@ async function loadSeasons(tvId) {
         curS = s.season_number; curE = 1;
         updateMmeta();
         await loadEps(tvId, curS);
-        loadDirectStreams(true);
+        loadSource(srcIdx);
+        loadDirectStreams(false);
       };
       wrap.appendChild(b);
     });
@@ -818,7 +803,8 @@ async function loadEps(tvId, s) {
         b.classList.add("on");
         curE = ep.episode_number;
         updateMmeta();
-        loadDirectStreams(true);
+        loadSource(srcIdx);
+        loadDirectStreams(false);
       };
       wrap.appendChild(b);
     });
