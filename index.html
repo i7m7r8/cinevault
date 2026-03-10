@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -327,7 +326,7 @@ function stopVideo() {
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
-    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container").forEach(el => {
+    pwrap.querySelectorAll("iframe, video, .video-js, .vjs-hidden, #webtor-container, #ep-wrap").forEach(el => {
       try { el.remove(); } catch (e) {}
     });
   }
@@ -835,6 +834,7 @@ function openModal(item, type) {
   (async () => {
     if (item._isEporner) {
       $("stream-picker").style.display = "none";
+      $("stream-loading").style.display = "none";
       $("srcbns").innerHTML = "";
       openEpornerPlayer(item);
       return;
@@ -939,6 +939,7 @@ function _playEpornerIdx(idx) {
   setNameBar(v.title + " — Eporner");
   const pwrap = $("pwrap");
   const wrap = document.createElement("div");
+  wrap.id = "ep-wrap";
   wrap.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;background:#000;";
 
   // Player area with thumbnail → click to play
@@ -1004,9 +1005,12 @@ function _playEpornerIdx(idx) {
 function _injectEpornerIframe(container, v) {
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
-  iframe.src = v.embed;
+  // Eporner embed may be protocol-relative (//...) — force https
+  const src = v.embed ? v.embed.replace(/^\/\//, "https://") : "";
+  iframe.src = src;
   iframe.allowFullscreen = true;
   iframe.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture";
+  iframe.referrerPolicy = "no-referrer";
   iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
   container.appendChild(iframe);
 }
