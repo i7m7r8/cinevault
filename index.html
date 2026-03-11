@@ -744,8 +744,8 @@ function showIframe(url, label) {
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
-  iframe.referrerPolicy = "no-referrer";
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope";
+  iframe.referrerPolicy = "no-referrer-when-downgrade";
   iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none; display:block;";
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
