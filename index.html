@@ -178,6 +178,22 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
 #spage{display:none;padding:16px 14px}
 #spage.on{display:block}
 .spage-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-bottom:12px;}
+
+/* Magnet picker modal */
+#magnet-modal { display:none; position:fixed; inset:0; z-index:500; background:rgba(0,0,0,.85); align-items:center; justify-content:center; backdrop-filter:blur(12px); }
+#magnet-modal.open { display:flex; }
+#magnet-box { background:#16161e; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:24px; width:min(420px,92vw); max-height:85vh; overflow-y:auto; }
+#magnet-box h3 { margin:0 0 6px; font-size:15px; color:#e8173a; }
+#magnet-box p  { margin:0 0 16px; font-size:12px; color:#888; line-height:1.5; }
+.magnet-opt { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; transition:background .15s; text-decoration:none; color:inherit; }
+.magnet-opt:hover { background:rgba(232,23,58,.15); border-color:#e8173a; }
+.magnet-opt-icon { font-size:22px; flex-shrink:0; }
+.magnet-opt-info strong { display:block; font-size:13px; color:#fff; }
+.magnet-opt-info span { font-size:11px; color:#888; }
+#magnet-copy { width:100%; margin-top:4px; padding:10px; background:#e8173a; color:#fff; border:none; border-radius:8px; font-size:13px; cursor:pointer; }
+#magnet-copy:active { opacity:.8; }
+#magnet-close { position:absolute; top:14px; right:14px; background:none; border:none; color:#888; font-size:20px; cursor:pointer; }
+
 </style>
 </head>
 <body>
@@ -699,11 +715,11 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",    useImdb: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed",useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "VidSrc",   useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                     tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name: "VidLink",  useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?primaryColor=e8173a&autoplay=true`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e8173a&autoplay=true` },
-  { name: "Smashy",   useImdb: false, movie: id => `https://player.smashy.stream/movie/${id}`,                     tv: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name: "2Embed",    useImdb: false, magnet: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed",useImdb: false, magnet: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "VidSrc",   useImdb: true,  magnet: false, movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                     tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name: "VidLink",  useImdb: false, magnet: false, movie: id => `https://vidlink.pro/movie/${id}?primaryColor=e8173a&autoplay=true`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e8173a&autoplay=true` },
+  { name: "Torrent▶", useImdb: false, magnet: true,  movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -729,6 +745,7 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
+  if (src.magnet) { loadMagnet(); return; }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — ${src.name}`;
   showIframe(url, label);
@@ -749,6 +766,131 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
+}
+
+
+// ── MAGNET PICKER ────────────────────────────────────────────────
+let _currentMagnet = "";
+
+function closeMagnetModal() {
+  document.getElementById("magnet-modal").classList.remove("open");
+}
+
+function copyMagnet() {
+  if (!_currentMagnet) return;
+  navigator.clipboard.writeText(_currentMagnet).then(() => toast("📋 Magnet copied!")).catch(() => {
+    prompt("Copy this magnet link:", _currentMagnet);
+  });
+}
+
+async function loadMagnet() {
+  if (!cur) return;
+  clearPlayer();
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching torrents…</div>';
+
+  const isTv = cur.mediaType !== "movie";
+
+  if (!cur.imdb_id) {
+    try {
+      const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
+      cur.imdb_id = ext.imdb_id || null;
+    } catch(e) {}
+  }
+  if (!cur.imdb_id) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID found</div>';
+    return;
+  }
+
+  const type = isTv ? "series" : "movie";
+  const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
+  let streams = [];
+  for (const ep of [
+    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
+    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
+  ]) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(ep, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const d = await r.json();
+      streams = (d.streams || []).filter(s => s.infoHash);
+      if (streams.length) break;
+    } catch { continue; }
+  }
+
+  $("pph").classList.add("hidden");
+
+  if (!streams.length) {
+    $("pph").classList.remove("hidden");
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No torrents found</div>';
+    return;
+  }
+
+  // Sort: 1080p x264 first
+  const rank = s => { const t=(s.title||s.name||""); return (/1080/i.test(t)?0:/720/i.test(t)?10:20) + (/x264|h264|avc/i.test(t)?0:2); };
+  streams.sort((a,b) => rank(a)-rank(b));
+  const best = streams[0];
+  const infoHash = best.infoHash.toLowerCase();
+  const filename = (best.behaviorHints && best.behaviorHints.filename) || (cur.title || cur.name || "video");
+  const trackers = [
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "wss://tracker.btorrent.xyz",
+    "wss://tracker.openwebtorrent.com",
+  ];
+  const trStr = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(filename)}${trStr}`;
+  _currentMagnet = magnet;
+
+  const title = best.title || best.name || "";
+  const quality = title.split("\n")[0];
+
+  // Build option links
+  const encodedMagnet = encodeURIComponent(magnet);
+  const opts = [
+    {
+      icon: "🌐",
+      name: "instant.io",
+      desc: "WebTorrent web player (opens new tab)",
+      url: `https://instant.io/#${magnet}`,
+    },
+    {
+      icon: "🎬",
+      name: "Magnet Player",
+      desc: "ferrolho.github.io — browser torrent player",
+      url: `https://ferrolho.github.io/magnet-player/#${magnet}`,
+    },
+    {
+      icon: "📱",
+      name: "Open in App",
+      desc: "Opens native torrent app (Android/desktop)",
+      url: magnet,
+    },
+  ];
+
+  const linksDiv = document.getElementById("magnet-links");
+  linksDiv.innerHTML = `<div style="font-size:11px;color:#aaa;margin-bottom:10px;">Best match: <strong style="color:#fff">${quality.slice(0,60)}</strong></div>` +
+    opts.map(o => `
+      <a class="magnet-opt" href="${o.url}" target="_blank" rel="noopener">
+        <div class="magnet-opt-icon">${o.icon}</div>
+        <div class="magnet-opt-info">
+          <strong>${o.name}</strong>
+          <span>${o.desc}</span>
+        </div>
+      </a>`).join("");
+
+  document.getElementById("magnet-modal").classList.add("open");
+
+  // Close on backdrop click
+  document.getElementById("magnet-modal").onclick = e => {
+    if (e.target === document.getElementById("magnet-modal")) closeMagnetModal();
+  };
 }
 
 function setNameBar(label, url = "") {
@@ -971,5 +1113,17 @@ async function init() {
 }
 init();
 </script>
+
+<!-- Magnet Picker Modal -->
+<div id="magnet-modal">
+  <div id="magnet-box" style="position:relative;">
+    <button id="magnet-close" onclick="closeMagnetModal()">✕</button>
+    <h3>🧲 Open Torrent Stream</h3>
+    <p>Browser torrent clients need WebRTC peers which are rare.<br>These external apps connect to real UDP seeders:</p>
+    <div id="magnet-links"></div>
+    <button id="magnet-copy" onclick="copyMagnet()">📋 Copy Magnet Link</button>
+  </div>
+</div>
+
 </body>
 </html>
