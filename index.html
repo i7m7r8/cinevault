@@ -969,28 +969,11 @@ function playBestStream(stream) {
   const filename = stream.behaviorHints?.filename || stream.name || "video.mp4";
   const qualityLabel = (stream.title || stream.name || "").split("\n")[0];
 
+  $("torrent-hud").classList.remove("on");
   $("pph").classList.add("hidden");
   setNameBar((cur?.title || cur?.name || "") + " — " + qualityLabel.slice(0, 50));
 
-  // Strategy 1: Torrentio gave a direct HTTP URL (debrid / cached)
-  if (stream.url && /^https?:\/\//.test(stream.url)) {
-    $("torrent-hud").classList.remove("on");
-    const proxied = `https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(stream.url)}`;
-    launchVjs(proxied, "video/mp4", filename);
-    if (cur?.imdb_id) loadAndStartSubs("vjs");
-    return;
-  }
-
-  // Strategy 2+: embed instant.io as in-page iframe — FOSS, free, real UDP peers
-  playViaInstantIo(hash, fileIdx, filename, qualityLabel);
-}
-
-function playViaInstantIo(hash, fileIdx, filename, qualityLabel) {
-  stopTorrent();
-  $("torrent-hud").classList.remove("on");
-  $("pph").classList.add("hidden");
-
-  // Build full magnet
+  // Build magnet with all tracker types
   const trackers = [
     "udp://tracker.opentrackr.org:1337/announce",
     "udp://open.demonii.com:1337/announce",
@@ -1003,29 +986,126 @@ function playViaInstantIo(hash, fileIdx, filename, qualityLabel) {
   ];
   _currentMagnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(filename)}${trackers.map(t => "&tr=" + encodeURIComponent(t)).join("")}`;
 
-  // instant.io is fully FOSS (WebTorrent), free, handles UDP via their tracker infrastructure
-  // We embed it directly as an iframe — it streams inside the player box
-  clearPlayer();
+  // Strategy 1: direct HTTP URL from Torrentio (debrid/cached) — proxy through worker
+  if (stream.url && /^https?:\/\//.test(stream.url)) {
+    const proxied = `https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(stream.url)}`;
+    launchVjs(proxied, "video/mp4", filename);
+    if (cur?.imdb_id) loadAndStartSubs("vjs");
+    return;
+  }
+
+  // Strategy 2: WebTorrent with createServer() — serves a local HTTP stream
+  // Video.js hits localhost HTTP → full seeking, no blob issues
+  playViaWebTorrentServer(hash, fileIdx, filename);
+}
+
+function playViaWebTorrentServer(hash, fileIdx, filename) {
+  // Show HUD
   $("pph").classList.add("hidden");
+  $("thud-title").textContent = "🌐 Connecting to peers…";
+  $("thud-file").textContent = filename.slice(0, 80);
+  $("thud-bar").style.width = "0%";
+  $("thud-peers").textContent = "0";
+  $("thud-dl").textContent = "0";
+  $("thud-prog").textContent = "0%";
+  $("torrent-hud").classList.add("on");
 
-  const pwrap = $("pwrap");
-  const iframe = document.createElement("iframe");
-  iframe.id = "pframe";
-  iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; microphone; camera";
-  iframe.referrerPolicy = "no-referrer-when-downgrade";
-  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  // instant.io accepts the magnet in the hash — opens and starts streaming immediately
-  iframe.src = `https://instant.io/#${_currentMagnet}`;
-  pwrap.appendChild(iframe);
+  if (!_wtClient) _wtClient = new WebTorrent();
 
-  toast("🌐 Loading instant.io player…");
+  const wssTrackers = [
+    "wss://tracker.btorrent.xyz",
+    "wss://tracker.openwebtorrent.com",
+    "wss://tracker.fastcast.nz",
+    "wss://tracker.webtorrent.dev",
+  ];
+
+  // Remove existing torrent with same hash if any
+  const existing = _wtClient.get(_currentMagnet);
+  if (existing) { try { _wtClient.remove(existing); } catch(e) {} }
+
+  let peakPeers = 0;
+  const nopeersTimeout = setTimeout(() => {
+    if (peakPeers === 0 && $("torrent-hud").classList.contains("on")) {
+      stopTorrent();
+      // Show inline fallback — no external site, fully self-contained
+      showTorrentFallback();
+    }
+  }, 22000);
+
+  _wtClient.add(_currentMagnet, { announce: wssTrackers }, torrent => {
+    _wtTorrent = torrent;
+
+    _hudInterval = setInterval(() => {
+      updateHud(torrent);
+      peakPeers = Math.max(peakPeers, torrent.numPeers);
+    }, 800);
+
+    // Pick the right video file
+    const vids = torrent.files
+      .filter(f => /\.(mp4|mkv|webm|avi|mov|m4v)$/i.test(f.name))
+      .sort((a, b) => b.length - a.length);
+
+    if (!vids.length) {
+      clearTimeout(nopeersTimeout);
+      stopTorrent();
+      showTorrentFallback();
+      return;
+    }
+
+    const file = vids[Math.min(fileIdx, vids.length - 1)];
+    $("thud-file").textContent = file.name.slice(0, 80);
+    $("thud-title").textContent = "⏳ Buffering…";
+    clearTimeout(nopeersTimeout);
+
+    // createServer gives a real localhost HTTP URL — Video.js can seek properly
+    if (_wtClient.createServer) {
+      const server = _wtClient.createServer();
+      server.listen(0, () => {
+        const port = server.address().port;
+        const fileIndex = torrent.files.indexOf(file);
+        const streamUrl = `http://localhost:${port}/${fileIndex}/${encodeURIComponent(file.name)}`;
+        clearInterval(_hudInterval); _hudInterval = null;
+        $("torrent-hud").classList.remove("on");
+        launchVjs(streamUrl, "video/mp4", file.name);
+        if (cur?.imdb_id) loadAndStartSubs("vjs");
+        toast("▶ Playing via WebTorrent");
+      });
+    } else {
+      // createServer not available in browser build — use renderTo
+      renderTorrentToVjs(file, torrent);
+      clearTimeout(nopeersTimeout);
+    }
+  });
+}
+
+function showTorrentFallback() {
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = `
+    <div style="text-align:center;padding:10px 20px;max-width:320px">
+      <div style="font-size:30px;margin-bottom:10px">🧲</div>
+      <div style="font-weight:700;color:#fff;font-size:13px;margin-bottom:6px">No WebRTC peers found</div>
+      <div style="font-size:11px;color:#888;line-height:1.7;margin-bottom:14px">
+        Browser torrents need WebRTC seeders.<br>
+        Copy the magnet and open in VLC,<br>
+        nPlayer, or any torrent app.
+      </div>
+      <button onclick="copyMagnetFallback()" style="width:100%;background:#e8173a;color:#fff;border:none;padding:10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">
+        📋 Copy Magnet Link
+      </button>
+      <button onclick="openMagnetApp()" style="width:100%;background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.15);padding:10px;border-radius:8px;font-size:12px;cursor:pointer">
+        📱 Open in Torrent App
+      </button>
+    </div>`;
+}
+
+function openMagnetApp() {
+  if (_currentMagnet) window.location.href = _currentMagnet;
 }
 
 function copyMagnetFallback() {
   if (!_currentMagnet) return;
   navigator.clipboard.writeText(_currentMagnet)
-    .then(() => toast("📋 Magnet copied! Open in VLC or BitTorrent"))
+    .then(() => toast("📋 Magnet copied!"))
     .catch(() => prompt("Copy this magnet:", _currentMagnet));
 }
 
