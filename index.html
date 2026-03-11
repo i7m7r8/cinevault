@@ -699,10 +699,11 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
-  { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                             tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
-  { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                    tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "VidSrc",     useImdb: false, movie: id => `https://vidsrc.cc/v2/embed/movie/${id}`,                          tv: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` },
+  { name: "VidSrc2",    useImdb: false, movie: id => `https://vidsrc.me/embed/movie?tmdb=${id}`,                        tv: (id, s, e) => `https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
+  { name: "Smashy",     useImdb: false, movie: id => `https://player.smashy.stream/movie/${id}`,                        tv: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
+  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                               tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                   tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
   { name: "EmbedSu",    useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                              tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
   { name: "AutoEmbed",  useImdb: true,  movie: id => `https://autoembed.cc/movie/imdb/${id}`,                           tv: (id, s, e) => `https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
 ];
@@ -744,7 +745,7 @@ function showIframe(url, label) {
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope";
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
   iframe.referrerPolicy = "no-referrer-when-downgrade";
   iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none; display:block;";
   iframe.src = url;
