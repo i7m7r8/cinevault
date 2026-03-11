@@ -15,7 +15,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
 /* Your existing CSS – unchanged */
@@ -285,8 +284,6 @@ const IMG = "https://image.tmdb.org/t/p/";
 let cur = null, curS = 1, curE = 1, srcIdx = 0;
 let searchTimer = null, _cachedStreams = [], _cacheKey = "";
 let vjsPlayer = null;
-let wtClient = null;
-let wtTorrent = null;
 
 // Subtitle state
 let _subCues = [], _subOffset = 0, _subVisible = true;
@@ -327,8 +324,6 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
-  if (wtClient)  { try { wtClient.destroy();  } catch(e) {} wtClient = null; }
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
@@ -704,9 +699,9 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",      useImdb: false, wt: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                    tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed",  useImdb: false, wt: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "WebTorrent",  useImdb: false, wt: true,  movie: null, tv: null },
+  { name: "2Embed",     useImdb: false, webtor: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed", useImdb: false, webtor: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "Webtor",     useImdb: false, webtor: true,  movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -732,7 +727,7 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
-  if (src.wt) { loadWebTorrent(); return; }
+  if (src.webtor) { loadWebtor(); return; }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — ${src.name}`;
   showIframe(url, label);
@@ -756,12 +751,13 @@ function showIframe(url, label) {
 }
 
 
-// ── WEBTORRENT PLAYER with apibay peers ─────────────────────────
-async function loadWebTorrent() {
+// ── WEBTOR PLAYER ───────────────────────────────────────────────
+// Webtor.io streams any magnet via HTTP on their servers (real seeders, not WebRTC)
+async function loadWebtor() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Searching torrents…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Finding best torrent…</div>';
 
   const isTv = cur.mediaType !== "movie";
 
@@ -781,7 +777,10 @@ async function loadWebTorrent() {
   const type = isTv ? "series" : "movie";
   const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
   let streams = [];
-  for (const ep of [`${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`, `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`]) {
+  for (const ep of [
+    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
+    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
+  ]) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 20000);
@@ -799,114 +798,29 @@ async function loadWebTorrent() {
     return;
   }
 
-  // Sort: 1080p > 720p > rest
-  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:2; };
-  streams.sort((a,b) => rank(a)-rank(b));
+  // Sort: prefer x264/x265 mp4/mkv, 1080p first, pick smaller sizes for faster start
+  const rank = s => {
+    const t = (s.title || s.name || "");
+    const q = /1080/i.test(t) ? 0 : /720/i.test(t) ? 1 : 2;
+    // Prefer x264 over x265/HEVC/AV1 — broader codec support in webtor
+    const codec = /x264|h264|avc/i.test(t) ? 0 : 1;
+    return q * 10 + codec;
+  };
+  streams.sort((a, b) => rank(a) - rank(b));
   const best = streams[0];
+
   const infoHash = best.infoHash.toLowerCase();
+  const fileIdx = best.fileIdx != null ? best.fileIdx : 0;
+  const filename = (best.behaviorHints && best.behaviorHints.filename) || "";
 
-  $("pph").innerHTML = '<div class="pph-icon">🔍</div><div>Fetching peers from apibay…</div>';
+  // Build webtor.io embed URL
+  // Format: https://webtor.io/get/{infoHash}/{fileIdx}/{filename}?embed&ui=true
+  const encodedName = encodeURIComponent(filename || "video.mkv");
+  const webtorUrl = `https://webtor.io/#/get/${infoHash}/${fileIdx}/${encodedName}?embed`;
 
-  // Fetch peers from apibay via our proxy
-  let peers = [];
-  try {
-    const pbUrl = `${API}/proxy?url=${encodeURIComponent("https://apibay.org/t.php?h=" + infoHash)}`;
-    const pr = await fetch(pbUrl);
-    if (pr.ok) {
-      const pd = await pr.json();
-      // apibay returns trackers in the "trackers" field or we use known wss trackers
-      if (pd && pd.trackers) {
-        // trackers is a string of announce URLs separated by newline
-        peers = pd.trackers.split("\n").filter(t => t.startsWith("udp://") || t.startsWith("http://")).slice(0, 5);
-      }
-    }
-  } catch(e) {}
-
-  // Always include WebRTC trackers — these are the ones WebTorrent can use
-  const wsTrackers = [
-    "wss://tracker.btorrent.xyz",
-    "wss://tracker.openwebtorrent.com",
-    "wss://tracker.webtorrent.dev",
-    "wss://tracker.files.fm:7073/announce",
-    "wss://spacetradersapi-chatbot.herokuapp.com:443/announce",
-  ];
-
-  // Build magnet with both wss and any http trackers from apibay
-  const allTrackers = [...wsTrackers, ...peers];
-  const trStr = allTrackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(cur.title||cur.name||"")}&xl=0${trStr}`;
-
-  $("pph").innerHTML = '<div class="pph-icon">🔗</div><div>Connecting to peers…</div>';
-
-  const pwrap = $("pwrap");
-  if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
-  if (wtClient)  { try { wtClient.destroy();  } catch(e) {} wtClient = null; }
-
-  wtClient = new WebTorrent();
-  wtClient.on("error", err => {
-    console.error("WebTorrent error:", err);
-    $("pph").classList.remove("hidden");
-    $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Error: ${err.message}</div>`;
-  });
-
-  // Progress update interval
-  let progInterval = setInterval(() => {
-    if (!wtTorrent) return;
-    const pct = (wtTorrent.progress * 100).toFixed(1);
-    const peers = wtTorrent.numPeers;
-    const speed = (wtTorrent.downloadSpeed / 1024).toFixed(0);
-    const el = $("pph");
-    if (el && !el.classList.contains("hidden")) {
-      el.innerHTML = `<div class="pph-icon">📡</div><div>${peers} peers · ${speed} KB/s · ${pct}%</div>`;
-    }
-  }, 1000);
-
-  wtClient.add(magnet, { announce: allTrackers }, torrent => {
-    clearInterval(progInterval);
-    wtTorrent = torrent;
-
-    // Find video file
-    const videoExts = /\.(mp4|mkv|webm|avi|mov|m4v)$/i;
-    let files = torrent.files.filter(f => videoExts.test(f.name));
-    if (!files.length) files = torrent.files;
-
-    // Pick by fileIdx or largest
-    let file = (best.fileIdx != null && torrent.files[best.fileIdx])
-      ? torrent.files[best.fileIdx]
-      : files.sort((a,b) => b.length - a.length)[0];
-
-    if (!file) {
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file in torrent</div>';
-      return;
-    }
-
-    $("pph").classList.add("hidden");
-    const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — WebTorrent`;
-    setNameBar(label);
-
-    const vid = document.createElement("video");
-    vid.controls = true;
-    vid.autoplay = true;
-    vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
-    pwrap.appendChild(vid);
-
-    file.renderTo(vid, { autoplay: true }, err => {
-      if (err) {
-        $("pph").classList.remove("hidden");
-        $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Render error: ${err.message}</div>`;
-      }
-    });
-
-    toast("▶ WebTorrent — " + file.name.slice(0,40));
-
-    // Live peer/speed display in name bar
-    setInterval(() => {
-      if (!wtTorrent) return;
-      const speed = (wtTorrent.downloadSpeed/1024).toFixed(0);
-      const peers = wtTorrent.numPeers;
-      $("stream-name-source").textContent = `📡 ${peers} peers · ⬇ ${speed} KB/s`;
-    }, 2000);
-  });
+  const label = `${cur.title || cur.name || ""}${isTv ? ` · S${curS}E${curE}` : ""} — Webtor`;
+  showIframe(webtorUrl, label);
+  toast("▶ Webtor — " + (best.title || "").split("\n")[0].slice(0, 40));
 }
 
 function setNameBar(label, url = "") {
