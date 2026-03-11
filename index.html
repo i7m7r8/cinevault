@@ -699,10 +699,11 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                               tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name: "SuperEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                   tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                        tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name: "EmbedSu",    useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                              tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name: "2Embed",    useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                  tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "Videasy",   useImdb: false, movie: id => `https://player.videasy.net/movie/${id}`,                             tv: (id, s, e) => `https://player.videasy.net/tv/${id}/${s}/${e}` },
+  { name: "VidFast",   useImdb: false, movie: id => `https://vidfast.pro/movie/${id}?autoPlay=true`,                      tv: (id, s, e) => `https://vidfast.pro/tv/${id}/${s}/${e}?autoPlay=true` },
+  { name: "AutoEmbed", useImdb: false, movie: id => `https://player.autoembed.cc/embed/movie/${id}`,                      tv: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` },
+  { name: "PStream",   useImdb: false, movie: id => `https://iframe.pstream.org/media/tmdb-movie-${id}`,                  tv: (id, s, e) => `https://iframe.pstream.org/media/tmdb-tv-${id}-${s}-${e}` },
 ];
 
 function buildSources() {
@@ -743,9 +744,8 @@ function showIframe(url, label) {
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
   iframe.setAttribute("allowfullscreen", "");
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope; payment";
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope";
   iframe.referrerPolicy = "no-referrer-when-downgrade";
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-top-navigation-by-user-activation");
   iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none; display:block;";
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
