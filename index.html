@@ -760,11 +760,9 @@ async function tryFluidPlayer() {
   const type = isMovie ? "movie" : "tv";
   const sParam = isMovie ? "" : `&s=${curS}&e=${curE}`;
 
-  // /direct-stream tries seapi → vidsrc.net → vidsrc.me server-side, returns normalized result
+  // /direct-stream is an exact port of vidsrc.ts — returns plain array [{stream, name, mediaId, referer}]
   const apiUrls = [
     `${API}/direct-stream?tmdb=${tmdbId}&type=${type}${sParam}`,
-    `${API}/seapi?tmdb=${tmdbId}${sParam}`,
-    `${API}/vidsrc?tmdb=${tmdbId}&type=${type}${sParam}`,
   ];
 
   let streamUrl = null;
