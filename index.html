@@ -16,6 +16,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
+<link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
+<script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <style>
 /* Your existing CSS – unchanged */
 :root{--bg:#0d0d14;--s1:#13131e;--s2:#1a1a28;--s3:#222235;--border:rgba(255,255,255,0.07);--accent:#e8173a;--accent-dim:rgba(232,23,58,0.15);--gold:#fbbf24;--green:#10b981;--text:#f2f2f8;--muted:#6b6b8a;--r:10px;--nav-h:58px;}
@@ -731,37 +733,123 @@ function buildSources() {
 }
 
 // ── FLUID PLAYER — extract real m3u8 via /vidsrc API ───────────
+let _fpInstance = null;
+
+function destroyFluidPlayer() {
+  if (_fpInstance) {
+    try { _fpInstance.destroy(); } catch(e) {}
+    _fpInstance = null;
+  }
+  // Remove any leftover fp video element
+  const old = document.getElementById("fp-video");
+  if (old) old.remove();
+}
+
 async function tryFluidPlayer() {
   if (!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
   const fpBtn = $("fp-btn");
-  if (fpBtn) { fpBtn.classList.add("on"); fpBtn.innerHTML = "⏳ Extracting…"; }
+  if (fpBtn) { fpBtn.classList.add("on"); fpBtn.textContent = "⏳ Extracting…"; }
+
+  clearPlayer();
+  $("pph").classList.remove("hidden");
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching direct stream…</div>';
 
   const isMovie = cur.mediaType === "movie";
   const tmdbId = cur.id;
   const type = isMovie ? "movie" : "tv";
   const sParam = isMovie ? "" : `&s=${curS}&e=${curE}`;
-  const apiUrl = `${API}/vidsrc?tmdb=${tmdbId}&type=${type}${sParam}`;
 
-  try {
-    const r = await fetch(apiUrl);
-    const data = await r.json();
-    if (data.streams && data.streams.length > 0) {
-      const stream = data.streams[0];
-      const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — FluidPlayer`;
-      if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✓";
-      toast("🎬 FluidPlayer: Ad-free stream loaded!");
-      playDirectUrl(stream.url, label, () => { loadSource(0); });
-    } else {
-      if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✗";
-      toast("⚠️ No direct stream — falling back to VidSrc iframe");
-      loadSource(0);
-    }
-  } catch(e) {
-    if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✗";
-    toast("⚠️ Extraction failed — using VidSrc iframe");
-    loadSource(0);
+  // Try seapi first (faster), then vidsrc extractor
+  const apiUrls = [
+    `${API}/seapi?tmdb=${tmdbId}&type=${type}${sParam}`,
+    `${API}/vidsrc?tmdb=${tmdbId}&type=${type}${sParam}`,
+  ];
+
+  let streamUrl = null;
+  let referer = null;
+  let isHLS = false;
+
+  for (const apiUrl of apiUrls) {
+    try {
+      const r = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) continue;
+      const data = await r.json();
+      // seapi returns { url, quality } array; vidsrc returns { streams: [{url, referer}] }
+      const streams = data.streams || (Array.isArray(data) ? data : [data]);
+      const valid = streams.filter(s => s.url && /^https?:\/\//.test(s.url));
+      if (valid.length) {
+        streamUrl = valid[0].url;
+        referer   = valid[0].referer || null;
+        isHLS     = /m3u8/i.test(streamUrl);
+        break;
+      }
+    } catch(e) { continue; }
   }
+
+  if (!streamUrl) {
+    if (fpBtn) fpBtn.textContent = "🎬 FluidPlayer ✗";
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No direct stream found.<br>Switching to iframe…</div>';
+    toast("⚠️ No stream — using iframe fallback");
+    setTimeout(() => loadSource(0), 1200);
+    return;
+  }
+
+  // Proxy through worker to fix CORS & add Range headers
+  const WORKER = "https://cinevault-api.imrannn68d-de2.workers.dev";
+  const proxied = `${WORKER}/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+
+  if (fpBtn) fpBtn.textContent = "🎬 FluidPlayer ✓";
+  toast("🎬 FluidPlayer — ad-free stream!");
+
+  playWithFluidPlayer(proxied, isHLS, cur.title || cur.name || "");
+}
+
+function playWithFluidPlayer(streamUrl, isHLS, title) {
+  destroyFluidPlayer();
+  stopVideo();
+
+  $("pph").classList.add("hidden");
+  setNameBar(title + " — FluidPlayer");
+
+  const pwrap = $("pwrap");
+
+  // Create a plain <video> — FluidPlayer takes it over
+  const vid = document.createElement("video");
+  vid.id = "fp-video";
+  vid.setAttribute("playsinline", "");
+  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+
+  // Add source
+  const source = document.createElement("source");
+  source.src = streamUrl;
+  source.type = isHLS ? "application/x-mpegURL" : "video/mp4";
+  vid.appendChild(source);
+  pwrap.appendChild(vid);
+
+  // Init FluidPlayer
+  _fpInstance = fluidPlayer("fp-video", {
+    layoutControls: {
+      primaryColor: "#e8173a",
+      playButtonShowing: true,
+      playPauseAnimation: true,
+      fillToContainer: true,
+      autoPlay: true,
+      mute: false,
+      keyboardControl: true,
+      loop: false,
+      allowTheatre: false,
+      controlBar: {
+        autoHide: true,
+        autoHideTimeout: 3,
+        animated: true,
+      },
+      contextMenu: { controls: true },
+      persistentSettings: { volume: true, quality: true },
+    },
+    vastLoadedCallback: () => {},
+    pauseAdvertisement: false,
+  });
 }
 
 function loadSource(i) {
