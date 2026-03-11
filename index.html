@@ -699,12 +699,13 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.skin/embed/movie/${id}`,                    tv: (id, s, e) => `https://www.2embed.skin/embed/tv/${id}/${s}/${e}` },
-  { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                    tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name: "VidSrc.icu", useImdb: false, movie: id => `https://vidsrc.icu/embed/movie/${id}`,                        tv: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
-  { name: "GoDrive",    useImdb: true,  movie: id => `https://godriveplayer.com/player.php?imdb=${id}`,             tv: (id, s, e) => `https://godriveplayer.com/player.php?imdb=${id}&s=${s}&e=${e}` },
+  { name: "VidSrc",     useImdb: false, movie: id => `https://vidsrc.icu/embed/movie/${id}`,                              tv: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
+  { name: "EmbedAPI",   useImdb: false, movie: id => `https://player.embed-api.stream/?id=${id}`,                        tv: (id, s, e) => `https://player.embed-api.stream/?id=${id}&s=${s}&e=${e}` },
+  { name: "MoviesAPI",  useImdb: false, movie: id => `https://moviesapi.club/movie/${id}`,                               tv: (id, s, e) => `https://moviesapi.club/tv/${id}-${s}-${e}` },
+  { name: "NontonGo",   useImdb: false, movie: id => `https://www.nontongo.win/embed/movie/${id}`,                       tv: (id, s, e) => `https://www.nontongo.win/embed/tv/${id}/${s}/${e}` },
   { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?primaryColor=e8173a&autoplay=true`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e8173a&autoplay=true` },
-  { name: "SuperEmbed", useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "VidSrc.me",  useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                        tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name: "SuperEmbed", useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,   tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
 ];
 
 function buildSources() {
