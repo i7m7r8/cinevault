@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
 /* Your existing CSS – unchanged */
@@ -284,7 +285,8 @@ const IMG = "https://image.tmdb.org/t/p/";
 let cur = null, curS = 1, curE = 1, srcIdx = 0;
 let searchTimer = null, _cachedStreams = [], _cacheKey = "";
 let vjsPlayer = null;
-let fluidInstance = null;
+let wtClient = null;
+let wtTorrent = null;
 
 // Subtitle state
 let _subCues = [], _subOffset = 0, _subVisible = true;
@@ -325,10 +327,9 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  if (fluidInstance) {
-    try { fluidInstance.destroy(); } catch (e) {}
-    fluidInstance = null;
-  }
+  // Destroy WebTorrent
+  if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
+  if (wtClient)  { try { wtClient.destroy(); }  catch(e) {} wtClient = null; }
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
@@ -704,9 +705,9 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, fluid: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,              tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed", useImdb: false, fluid: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "FluidPlay",  useImdb: false, fluid: true,  movie: null, tv: null },
+  { name: "2Embed",      useImdb: false, wt: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                    tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed",  useImdb: false, wt: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "WebTorrent",  useImdb: false, wt: true,  movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -732,8 +733,8 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
-  if (src.fluid) {
-    loadFluidSource();
+  if (src.wt) {
+    loadWebTorrent();
     return;
   }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
@@ -759,16 +760,16 @@ function showIframe(url, label) {
 }
 
 
-// ── FLUIDPLAY — fetches ALL streams, picks best direct URL, plays in Video.js ──
-async function loadFluidSource() {
+// ── WEBTORRENT PLAYER ───────────────────────────────────────────
+async function loadWebTorrent() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Searching streams…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Searching torrents…</div>';
 
   const isTv = cur.mediaType !== "movie";
 
-  // Ensure imdb_id
+  // Get imdb_id
   if (!cur.imdb_id) {
     try {
       const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
@@ -780,10 +781,10 @@ async function loadFluidSource() {
     return;
   }
 
-  // Fetch ALL streams (not just direct)
+  // Fetch streams from torrentio — include infoHash streams this time
   const type = isTv ? "series" : "movie";
   const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
-  let allStreams = [];
+  let streams = [];
   const endpoints = [
     `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
     `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
@@ -796,28 +797,93 @@ async function loadFluidSource() {
       clearTimeout(t);
       if (!r.ok) continue;
       const d = await r.json();
-      allStreams = Array.isArray(d.streams) ? d.streams : [];
-      if (allStreams.length) break;
+      streams = Array.isArray(d.streams) ? d.streams : [];
+      if (streams.length) break;
     } catch { continue; }
   }
 
-  // Filter to direct HTTP streams only (these can be played without debrid)
-  const direct = allStreams.filter(s => s.url && /^https?:\/\//i.test(s.url) && !s.infoHash);
-
-  if (!direct.length) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No direct streams available — try 2Embed or SuperEmbed</div>';
+  // Prefer streams with infoHash (magnets) — sort by quality
+  const magnetStreams = streams.filter(s => s.infoHash);
+  if (!magnetStreams.length) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No torrents found</div>';
     return;
   }
 
-  // Sort by quality
-  const rank = s => { const t=(s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
-  direct.sort((a,b) => rank(a)-rank(b));
-  const best = direct[0];
+  // Sort: 1080p > 720p > rest
+  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
+  magnetStreams.sort((a,b) => rank(a)-rank(b));
+  const best = magnetStreams[0];
 
-  const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — FluidPlay`;
-  const streamUrl = `${API}/stream-proxy?url=${encodeURIComponent(best.url)}`;
-  playDirectUrl(streamUrl, label, null);
-  toast("▶ FluidPlay — " + (best.title||best.name||"").split("\n")[0].slice(0,40));
+  // Build magnet URI
+  const trackers = [
+    "wss://tracker.btorrent.xyz",
+    "wss://tracker.openwebtorrent.com",
+    "wss://tracker.fastcast.nz",
+  ];
+  const trStr = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
+  const magnet = `magnet:?xt=urn:btih:${best.infoHash}${trStr}`;
+
+  $("pph").innerHTML = '<div class="pph-icon">🔗</div><div>Connecting to peers…</div>';
+
+  const pwrap = $("pwrap");
+
+  // Destroy previous client
+  if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
+  if (wtClient)  { try { wtClient.destroy();  } catch(e) {} wtClient = null; }
+
+  wtClient = new WebTorrent();
+
+  wtClient.on("error", err => {
+    $("pph").classList.remove("hidden");
+    $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Torrent error: ${err.message}</div>`;
+  });
+
+  wtClient.add(magnet, { announce: trackers }, torrent => {
+    wtTorrent = torrent;
+
+    // Find best video file
+    const videoExts = /\.(mp4|mkv|webm|avi|mov|m4v)$/i;
+    const files = torrent.files.filter(f => videoExts.test(f.name));
+    if (!files.length) {
+      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file found in torrent</div>';
+      return;
+    }
+
+    // Pick by fileIdx hint or largest file
+    let file = best.fileIdx != null ? (torrent.files[best.fileIdx] || files[0]) : files[0];
+    if (!file) file = files.sort((a,b) => b.length - a.length)[0];
+
+    $("pph").classList.add("hidden");
+    const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — WebTorrent`;
+    setNameBar(label);
+
+    // Create video element
+    const vid = document.createElement("video");
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+    pwrap.appendChild(vid);
+
+    // Stream file directly into video element
+    file.renderTo(vid, { autoplay: true, muted: false }, err => {
+      if (err) {
+        $("pph").classList.remove("hidden");
+        $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Stream error: ${err.message}</div>`;
+      }
+    });
+
+    toast("▶ WebTorrent — " + file.name.slice(0,40));
+  });
+
+  // Timeout if no peers in 30s
+  setTimeout(() => {
+    if (wtClient && !wtTorrent?.progress) {
+      const el = $("pph");
+      if (el && !el.classList.contains("hidden")) {
+        el.innerHTML = '<div class="pph-icon">⏳</div><div>Still searching peers… please wait</div>';
+      }
+    }
+  }, 30000);
 }
 
 function setNameBar(label, url = "") {
