@@ -812,10 +812,9 @@ async function loadMagnet() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching torrents…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">🔍</div><div>Searching streams…</div>';
 
   const isTv = cur.mediaType !== "movie";
-
   if (!cur.imdb_id) {
     try {
       const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
@@ -829,133 +828,188 @@ async function loadMagnet() {
 
   const type = isTv ? "series" : "movie";
   const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
-  let streams = [];
-  for (const ep of [
-    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
-    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
-  ]) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 20000);
-      const r = await fetch(ep, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!r.ok) continue;
-      const d = await r.json();
-      streams = (Array.isArray(d.streams) ? d.streams : []).filter(s => s.infoHash && s.infoHash.length === 40);
-      if (streams.length) break;
-    } catch { continue; }
-  }
+
+  // Fetch streams + apibay search in parallel for speed
+  const [torrentioStreams, apibayStreams] = await Promise.all([
+    fetchTorrentioStreams(type, stremioId),
+    searchApibay(cur.title || cur.name || "", isTv ? curS : null, isTv ? curE : null),
+  ]);
+
+  // Prefer Torrentio (has quality metadata), fallback to apibay
+  let streams = torrentioStreams.length ? torrentioStreams : apibayStreams;
 
   $("pph").classList.add("hidden");
 
   if (!streams.length) {
     $("pph").classList.remove("hidden");
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No torrents found</div>';
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found</div>';
     return;
   }
 
   // Sort: prefer 1080p x264
   const rank = s => { const t = (s.title || s.name || ""); return (/1080/i.test(t)?0:/720/i.test(t)?10:20) + (/x264|h264|avc/i.test(t)?0:2); };
   streams.sort((a,b) => rank(a)-rank(b));
-  const best = streams[0];
 
-  const infoHash = best.infoHash.toLowerCase();
-  const filename = (best.behaviorHints?.filename) || (cur.title || cur.name || "video");
+  buildTorrentPicker(streams);
+  playBestStream(streams[0]);
+}
+
+async function fetchTorrentioStreams(type, stremioId) {
+  const urls = [
+    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
+    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
+  ];
+  for (const url of urls) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      const r = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const d = await r.json();
+      const valid = (Array.isArray(d.streams) ? d.streams : []).filter(s => s.infoHash && s.infoHash.length >= 32);
+      if (valid.length) return valid;
+    } catch { continue; }
+  }
+  return [];
+}
+
+async function searchApibay(title, season, episode) {
+  try {
+    let q = title;
+    if (season != null) q += ` S${String(season).padStart(2,"0")}E${String(episode).padStart(2,"0")}`;
+    // apibay.org - public TPB API, no key needed
+    const r = await fetch(`https://apibay.org/q.php?q=${encodeURIComponent(q)}&cat=200`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return [];
+    const data = await r.json();
+    if (!Array.isArray(data) || !data[0]?.info_hash) return [];
+    return data
+      .filter(t => t.info_hash && !/^0+$/.test(t.info_hash))
+      .slice(0, 12)
+      .map(t => ({
+        infoHash: t.info_hash.toLowerCase(),
+        fileIdx: 0,
+        title: t.name + "\n\ud83d\udc64 " + t.seeders + " seeders · \ud83d\udcbe " + formatBytes(t.size),
+        name: t.name,
+        behaviorHints: { filename: t.name + ".mp4" },
+        _seeders: parseInt(t.seeders) || 0,
+      }))
+      .sort((a,b) => b._seeders - a._seeders);
+  } catch { return []; }
+}
+
+function formatBytes(b) {
+  b = parseInt(b) || 0;
+  if (b > 1e9) return (b/1e9).toFixed(1) + " GB";
+  if (b > 1e6) return (b/1e6).toFixed(1) + " MB";
+  return b + " B";
+}
+
+function buildTorrentPicker(streams) {
+  const wrap = $("streambns"); wrap.innerHTML = "";
+  $("stream-loading").style.display = "none";
+  $("stream-picker").style.display = "block";
+  $("stream-label").textContent = "🧲 TORRENT STREAMS — tap to play";
+  streams.forEach((s, idx) => {
+    const lines = (s.title || s.name || "").split("\n");
+    const fname = lines[0] || "Unknown";
+    const meta = lines.slice(1).join(" ");
+    const seeds = (meta.match(/\ud83d\udc64\s*(\d+)/) || [])[1] || "";
+    const size  = (meta.match(/\ud83d\udcbe\s*([\d.]+\s*(?:GB|MB|KB|B))/) || [])[1] || "";
+    const [ql, qc] = qClass(fname);
+    const row = document.createElement("div");
+    row.className = "stream-row" + (idx === 0 ? " active" : "");
+    row.innerHTML =
+      `<div class="stream-row-left"><span class="qlabel ${qc}">${ql}</span><span class="stream-name">${fname}</span></div>` +
+      `<div class="stream-row-right">${seeds?`<span class="stream-seeds">\ud83d\udc64${seeds}</span>`:""}${size?`<span class="stream-size">\ud83d\udcbe${size}</span>`:""}<span class="stream-play-btn">\u25b6</span></div>`;
+    row.onclick = () => {
+      document.querySelectorAll(".stream-row").forEach(x => x.classList.remove("active"));
+      row.classList.add("active");
+      playBestStream(s);
+    };
+    wrap.appendChild(row);
+  });
+}
+
+function playBestStream(stream) {
+  stopTorrent();
+  const hash = stream.infoHash.toLowerCase();
+  const fileIdx = stream.fileIdx ?? 0;
+  const filename = stream.behaviorHints?.filename || stream.name || "video.mp4";
+  const qualityLabel = (stream.title || stream.name || "").split("\n")[0];
+
+  $("pph").classList.add("hidden");
+  setNameBar((cur?.title || cur?.name || "") + " — " + qualityLabel.slice(0,50));
+
+  // Strategy 1: Torrentio direct HTTP stream (fastest, no P2P)
+  // https://torrentio.strem.fun/{hash}/{fileIdx}/{filename}
+  const torrentioUrl = `https://torrentio.strem.fun/${hash}/${fileIdx}/${encodeURIComponent(filename)}`;
+
+  $("thud-title").textContent = "⚡ Trying direct stream…";
+  $("thud-file").textContent = filename.slice(0, 80);
+  $("thud-bar").style.width = "30%";
+  $("torrent-hud").classList.add("on");
+
+  // Race: try Torrentio HTTP first (3s), then fall back to WebTorrent
+  const httpRace = new Promise(resolve => {
+    const vid = document.createElement("video");
+    vid.src = torrentioUrl;
+    vid.onloadedmetadata = () => resolve(true);
+    vid.onerror = () => resolve(false);
+    setTimeout(() => resolve(false), 4000);
+  });
+
+  httpRace.then(ok => {
+    if (ok) {
+      $("torrent-hud").classList.remove("on");
+      toast("⚡ Direct stream active");
+      launchVjs(torrentioUrl, "video/mp4", filename);
+      if (cur?.imdb_id) loadAndStartSubs("vjs");
+    } else {
+      // Strategy 2: WebTorrent P2P
+      $("thud-title").textContent = "🌐 Connecting via P2P…";
+      $("thud-bar").style.width = "0%";
+      playViaWebTorrent(hash, fileIdx, filename);
+    }
+  });
+}
+
+function playViaWebTorrent(hash, fileIdx, filename) {
+  if (!_wtClient) _wtClient = new WebTorrent();
   const trackers = [
-    "udp://tracker.opentrackr.org:1337/announce",
-    "udp://open.demonii.com:1337/announce",
-    "udp://exodus.desync.com:6969/announce",
-    "udp://open.stealth.si:80/announce",
-    "udp://tracker.torrent.eu.org:451/announce",
     "wss://tracker.btorrent.xyz",
     "wss://tracker.openwebtorrent.com",
     "wss://tracker.fastcast.nz",
+    "wss://tracker.webtorrent.dev",
   ];
-  _currentMagnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(filename)}${trackers.map(t=>`&tr=${encodeURIComponent(t)}`).join("")}`;
+  _currentMagnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(filename)}&tr=${trackers.map(encodeURIComponent).join("&tr=")}`;
 
-  playMagnetInPage(_currentMagnet, filename, best.title || best.name || "");
-}
-
-function playMagnetInPage(magnet, filename, qualityLabel) {
-  stopTorrent();
-
-  // Show torrent HUD inside player
-  $("pph").classList.add("hidden");
-  $("thud-title").textContent = "🌐 Connecting to peers…";
-  $("thud-file").textContent = filename.slice(0, 80);
-  $("thud-bar").style.width = "0%";
-  $("thud-peers").textContent = "0";
-  $("thud-dl").textContent = "0";
-  $("thud-prog").textContent = "0%";
-  $("torrent-hud").classList.add("on");
-
-  setNameBar((cur?.title || cur?.name || "") + " — Torrent (" + qualityLabel.split("\n")[0].slice(0,40) + ")");
-
-  if (!_wtClient) _wtClient = new WebTorrent();
-
-  const pwrap = $("pwrap");
-
-  _wtClient.add(magnet, {
-    announce: [
-      "wss://tracker.btorrent.xyz",
-      "wss://tracker.openwebtorrent.com",
-      "wss://tracker.fastcast.nz",
-    ]
-  }, torrent => {
-    _wtTorrent = torrent;
-
-    // Pick largest video file
-    const videoFiles = torrent.files
-      .filter(f => /\.(mp4|mkv|webm|avi|mov|m4v)$/i.test(f.name))
-      .sort((a,b) => b.length - a.length);
-
-    if (!videoFiles.length) {
-      $("torrent-hud").classList.remove("on");
-      $("pph").classList.remove("hidden");
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file in torrent</div>';
-      toast("❌ No video file found");
-      return;
-    }
-
-    const file = videoFiles[0];
-    $("thud-title").textContent = "⏳ Buffering…";
-    $("thud-file").textContent = file.name.slice(0, 80);
-    toast("🎬 " + file.name.slice(0, 40));
-
-    // Update HUD stats every second
-    _hudInterval = setInterval(() => updateHud(torrent), 1000);
-
-    // Get a streaming URL from WebTorrent
-    file.getBlobURL((err, url) => {
-      if (err) {
-        // getBlobURL failed — fall back to renderTo approach
-        renderTorrentToVjs(file, torrent);
-        return;
-      }
-      // We got a blob URL — feed it to Video.js directly
-      clearInterval(_hudInterval); _hudInterval = null;
-      $("torrent-hud").classList.remove("on");
-      launchVjs(url, "video/mp4", file.name);
-
-      // Start subs in parallel
-      if (cur?.imdb_id) loadAndStartSubs("vjs");
-    });
-  });
-
-  // 45s timeout
   const tOut = setTimeout(() => {
     if ($("torrent-hud").classList.contains("on")) {
       stopTorrent();
       $("pph").classList.remove("hidden");
-      $("pph").innerHTML = '<div class="pph-icon">⏱️</div><div>Timed out — no peers found.<br>Try another source.</div>';
-      toast("❌ No peers found");
+      $("pph").innerHTML = '<div class="pph-icon">⏱️</div><div>No peers found.<br><small>Try a different quality above.</small></div>';
+      toast("❌ No peers — try another quality");
     }
-  }, 45000);
+  }, 30000);
 
-  // Clear timeout once torrent metadata arrives
-  const origAdd = _wtClient.add.bind(_wtClient);
-  if (_wtTorrent) clearTimeout(tOut);
-  else setTimeout(() => clearTimeout(tOut), 0);
+  _wtClient.add(_currentMagnet, { announce: trackers }, torrent => {
+    clearTimeout(tOut);
+    _wtTorrent = torrent;
+    const vids = torrent.files
+      .filter(f => /\.(mp4|mkv|webm|avi|mov|m4v)$/i.test(f.name))
+      .sort((a,b) => b.length - a.length);
+    if (!vids.length) {
+      stopTorrent();
+      $("pph").classList.remove("hidden");
+      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file in torrent</div>';
+      return;
+    }
+    const file = vids[Math.min(fileIdx, vids.length - 1)];
+    $("thud-file").textContent = file.name.slice(0, 80);
+    _hudInterval = setInterval(() => updateHud(torrent), 1000);
+    renderTorrentToVjs(file, torrent);
+  });
 }
 
 function renderTorrentToVjs(file, torrent) {
