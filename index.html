@@ -778,16 +778,18 @@ async function tryFluidPlayer() {
       const data = await r.json();
 
       // Normalize all known response shapes:
+      // vidsrc.ts:   [{ stream, name, image, mediaId }]  <- plain array, key=stream
+      // /direct-stream: { streams: [{ stream, provider }] }
       // seapi.link:  { streams: [{ stream_url, quality }] }
-      // /vidsrc:     { streams: [{ url, referer, quality }] }
-      // plain array: [{ url }] or [{ stream_url }]
+      // /vidsrc:     { streams: [{ url, referer }] }
       let candidates = [];
       if (data.streams && Array.isArray(data.streams)) candidates = data.streams;
       else if (Array.isArray(data)) candidates = data;
-      else if (data.url) candidates = [data];
+      else if (data.stream || data.url) candidates = [data];
 
       for (const s of candidates) {
-        const u = s.url || s.stream_url || s.src || s.link || "";
+        // Check all possible stream URL field names
+        const u = s.stream || s.url || s.stream_url || s.src || s.link || "";
         if (u && /^https?:\/\//.test(u)) {
           streamUrl = u;
           referer   = s.referer || s.headers?.Referer || null;
