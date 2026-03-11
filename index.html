@@ -134,6 +134,7 @@ a{text-decoration:none;color:inherit}
 .cbtn{padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--s2);color:var(--text);transition:all .15s;white-space:nowrap;}
 .cbtn:active{transform:scale(.94)}
 .cbtn.on,.cbtn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.fp-btn{background:linear-gradient(135deg,#1a472a,#2d6a4f);border-color:#2d6a4f;color:#a8f5c0;}
 
 /* PLAYER */
 .player-outer{position:relative;width:100%;}
@@ -700,17 +701,26 @@ async function loadDirectStreams(autoPlay = false) {
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
   { name: "VidSrc",     useImdb: false, movie: id => `https://vidsrc.icu/embed/movie/${id}`,                              tv: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
-  { name: "EmbedAPI",   useImdb: false, movie: id => `https://player.embed-api.stream/?id=${id}`,                        tv: (id, s, e) => `https://player.embed-api.stream/?id=${id}&s=${s}&e=${e}` },
-  { name: "MoviesAPI",  useImdb: false, movie: id => `https://moviesapi.club/movie/${id}`,                               tv: (id, s, e) => `https://moviesapi.club/tv/${id}-${s}-${e}` },
-  { name: "NontonGo",   useImdb: false, movie: id => `https://www.nontongo.win/embed/movie/${id}`,                       tv: (id, s, e) => `https://www.nontongo.win/embed/tv/${id}/${s}/${e}` },
+  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                       tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
   { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?primaryColor=e8173a&autoplay=true`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e8173a&autoplay=true` },
-  { name: "VidSrc.me",  useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                        tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name: "SuperEmbed", useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,   tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "VidSrc.me",  useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                         tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name: "NontonGo",   useImdb: false, movie: id => `https://www.nontongo.win/embed/movie/${id}`,                       tv: (id, s, e) => `https://www.nontongo.win/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed", useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,    tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
 ];
 
 function buildSources() {
   const wrap = $("srcbns");
   wrap.innerHTML = "";
+
+  // Add Fluid Player button first
+  const fpBtn = document.createElement("button");
+  fpBtn.className = "cbtn fp-btn";
+  fpBtn.id = "fp-btn";
+  fpBtn.innerHTML = "🎬 FluidPlayer";
+  fpBtn.title = "Ad-free direct stream (extracts real m3u8)";
+  fpBtn.onclick = () => tryFluidPlayer();
+  wrap.appendChild(fpBtn);
+
   SOURCES.forEach((src, i) => {
     const b = document.createElement("button");
     b.className = "cbtn" + (i === 0 ? " on" : "");
@@ -720,6 +730,40 @@ function buildSources() {
   });
 }
 
+// ── FLUID PLAYER — extract real m3u8 via /vidsrc API ───────────
+async function tryFluidPlayer() {
+  if (!cur) return;
+  document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
+  const fpBtn = $("fp-btn");
+  if (fpBtn) { fpBtn.classList.add("on"); fpBtn.innerHTML = "⏳ Extracting…"; }
+
+  const isMovie = cur.mediaType === "movie";
+  const tmdbId = cur.id;
+  const type = isMovie ? "movie" : "tv";
+  const sParam = isMovie ? "" : `&s=${curS}&e=${curE}`;
+  const apiUrl = `${API}/vidsrc?tmdb=${tmdbId}&type=${type}${sParam}`;
+
+  try {
+    const r = await fetch(apiUrl);
+    const data = await r.json();
+    if (data.streams && data.streams.length > 0) {
+      const stream = data.streams[0];
+      const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — FluidPlayer`;
+      if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✓";
+      toast("🎬 FluidPlayer: Ad-free stream loaded!");
+      playDirectUrl(stream.url, label, () => { loadSource(0); });
+    } else {
+      if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✗";
+      toast("⚠️ No direct stream — falling back to VidSrc iframe");
+      loadSource(0);
+    }
+  } catch(e) {
+    if (fpBtn) fpBtn.innerHTML = "🎬 FluidPlayer ✗";
+    toast("⚠️ Extraction failed — using VidSrc iframe");
+    loadSource(0);
+  }
+}
+
 function loadSource(i) {
   if (!cur) return;
   srcIdx = i;
@@ -727,7 +771,9 @@ function loadSource(i) {
   if (!src) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b => b.classList.remove("on"));
   const srcBtns = [...document.querySelectorAll("#srcbns .cbtn")];
-  if (srcBtns[i]) srcBtns[i].classList.add("on");
+  // offset by 1 because FP button is first
+  const offset = $("fp-btn") ? 1 : 0;
+  if (srcBtns[i + offset]) srcBtns[i + offset].classList.add("on");
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
@@ -745,7 +791,7 @@ function showIframe(url, label) {
   const iframe = document.createElement("iframe");
   iframe.id = "pframe";
   iframe.allowFullscreen = true;
-  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write";
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope";
   iframe.referrerPolicy = "no-referrer-when-downgrade";
   iframe.style.cssText = "position:absolute; inset:0; width:100%; height:100%; border:none; display:block;";
   iframe.src = url;
@@ -782,7 +828,7 @@ async function loadSeasons(tvId) {
         curS = s.season_number; curE = 1;
         updateMmeta();
         await loadEps(tvId, curS);
-        loadSource(srcIdx);
+        tryFluidPlayer();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -805,7 +851,7 @@ async function loadEps(tvId, s) {
         b.classList.add("on");
         curE = ep.episode_number;
         updateMmeta();
-        loadSource(srcIdx);
+        tryFluidPlayer();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -846,7 +892,7 @@ function openModal(item, type) {
       } catch (e) {}
     }
     if (isTv) await loadSeasons(item.id);
-    loadSource(0);
+    tryFluidPlayer();  // Try ad-free direct stream first; falls back to loadSource(0) if fails
     loadDirectStreams(false);
   })();
 }
