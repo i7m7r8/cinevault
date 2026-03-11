@@ -698,7 +698,7 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://www.2embed.cc/embed/"+id)}`,  tv: (id, s, e) => `${API}/embed-proxy?url=${encodeURIComponent("https://www.2embed.cc/embedtv/"+id+"&s="+s+"&e="+e)}` },
+  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
   { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                             tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
   { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                    tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
@@ -956,7 +956,95 @@ document.querySelectorAll(".tab").forEach(tab => {
 
 // ── PWA ────────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
-  const swCode = `const CACHE="cv-v3";const SHELL=["/"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})));self.addEventListener("fetch",e=>{if(["tmdb","opensubtitles","torrentio","vercel.app","workers.dev","apibay"].some(s=>e.request.url.includes(s)))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const swCode = `
+const CACHE = "cv-v4";
+const SHELL = ["/"];
+
+// CSS+JS to inject into 2embed pages to kill share button
+const SHARE_BLOCKER = \`
+<style>
+  .jw-icon-sharing, .jw-sharing-skin, .jw-button-container .jw-icon-sharing,
+  [class*="share"], [class*="Share"], [id*="share"], [id*="Share"],
+  [class*="social"], [id*="social"],
+  [aria-label*="hare"], [data-sharing],
+  a[href*="facebook.com/sharer"], a[href*="twitter.com/intent"],
+  a[href*="whatsapp.com"], a[href*="t.me/share"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+</style>
+<script>
+(function() {
+  function nuke() {
+    document.querySelectorAll(
+      '.jw-icon-sharing,.jw-sharing-skin,[class*="share"],[id*="share"],' +
+      '[class*="Share"],[id*="Share"],[class*="social"],[id*="social"],' +
+      '[aria-label*="hare"],[data-sharing],' +
+      'a[href*="facebook.com/sharer"],a[href*="twitter.com/intent"],' +
+      'a[href*="whatsapp.com"],a[href*="t.me/share"]'
+    ).forEach(function(el) {
+      if (el.tagName !== "VIDEO" && el.tagName !== "SOURCE" && el.tagName !== "BODY" && el.tagName !== "HTML") {
+        el.style.setProperty("display","none","important");
+        el.style.setProperty("visibility","hidden","important");
+        el.style.setProperty("opacity","0","important");
+        el.style.setProperty("pointer-events","none","important");
+      }
+    });
+  }
+  nuke();
+  setInterval(nuke, 500);
+  new MutationObserver(nuke).observe(document.documentElement, { childList: true, subtree: true });
+})();
+<\/script>
+\`;
+
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", e => {
+  e.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", e => {
+  const url = e.request.url;
+
+  // Intercept 2embed HTML pages and inject share blocker
+  if (url.includes("2embed.cc") && e.request.headers.get("accept") && e.request.headers.get("accept").includes("text/html")) {
+    e.respondWith(
+      fetch(e.request).then(async res => {
+        const ct = res.headers.get("content-type") || "";
+        if (!ct.includes("text/html")) return res;
+        let body = await res.text();
+        // Inject before </head> or at top
+        if (body.includes("</head>")) {
+          body = body.replace("</head>", SHARE_BLOCKER + "</head>");
+        } else {
+          body = SHARE_BLOCKER + body;
+        }
+        return new Response(body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: res.headers
+        });
+      }).catch(() => fetch(e.request))
+    );
+    return;
+  }
+
+  // Skip dynamic APIs
+  if (["tmdb","opensubtitles","torrentio","vercel.app","workers.dev","apibay"].some(s => url.includes(s))) return;
+
+  // Cache-first for everything else
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
+`;
   const blob = new Blob([swCode], { type: "application/javascript" });
   navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
 }
