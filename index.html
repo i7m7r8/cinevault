@@ -698,7 +698,7 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}?share=0`, tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}&share=0` },
+  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}?share=0&ads=0&logo=0&related=0`, tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}&share=0&ads=0&logo=0&related=0` },
   { name: "VidLink",    useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
   { name: "VidSrc",     useImdb: true,  movie: id => `https://vidsrc.to/embed/movie/${id}`,                             tv: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}` },
   { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                    tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
