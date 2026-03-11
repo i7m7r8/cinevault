@@ -699,9 +699,11 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",    useImdb: false, webtor: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed",useImdb: false, webtor: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "Webtor",    useImdb: false, webtor: true,  movie: null, tv: null },
+  { name: "2Embed",    useImdb: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed",useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "VidSrc",   useImdb: true,  movie: id => `https://vidsrc.me/embed/movie?imdb=${id}`,                     tv: (id, s, e) => `https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
+  { name: "VidLink",  useImdb: false, movie: id => `https://vidlink.pro/movie/${id}?primaryColor=e8173a&autoplay=true`, tv: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e8173a&autoplay=true` },
+  { name: "Smashy",   useImdb: false, movie: id => `https://player.smashy.stream/movie/${id}`,                     tv: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
 ];
 
 function buildSources() {
@@ -727,7 +729,6 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
-  if (src.webtor) { loadWebtor(); return; }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — ${src.name}`;
   showIframe(url, label);
@@ -748,120 +749,6 @@ function showIframe(url, label) {
   iframe.src = url;
   iframe.onerror = () => toast("⚠️ Iframe failed to load");
   pwrap.appendChild(iframe);
-}
-
-
-// ── WEBTOR PLAYER (player-sdk-js) ───────────────────────────────
-async function loadWebtor() {
-  if (!cur) return;
-  clearPlayer();
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Finding best torrent…</div>';
-
-  const isTv = cur.mediaType !== "movie";
-
-  // Get imdb_id
-  if (!cur.imdb_id) {
-    try {
-      const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
-      cur.imdb_id = ext.imdb_id || null;
-    } catch(e) {}
-  }
-  if (!cur.imdb_id) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID found</div>';
-    return;
-  }
-
-  // Fetch streams from torrentio
-  const type = isTv ? "series" : "movie";
-  const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
-  let streams = [];
-  for (const ep of [
-    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
-    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
-  ]) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 20000);
-      const r = await fetch(ep, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!r.ok) continue;
-      const d = await r.json();
-      streams = (d.streams || []).filter(s => s.infoHash);
-      if (streams.length) break;
-    } catch { continue; }
-  }
-
-  if (!streams.length) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No torrents found</div>';
-    return;
-  }
-
-  // Sort: prefer x264/h264 for broadest codec support, 1080p first
-  const rank = s => {
-    const t = (s.title || s.name || "");
-    const q = /1080/i.test(t) ? 0 : /720/i.test(t) ? 1 : 2;
-    const codec = /x264|h264|avc/i.test(t) ? 0 : 1;
-    return q * 10 + codec;
-  };
-  streams.sort((a, b) => rank(a) - rank(b));
-  const best = streams[0];
-  const infoHash = best.infoHash.toLowerCase();
-  const filename = (best.behaviorHints && best.behaviorHints.filename) || "";
-  const title = cur.title || cur.name || "";
-
-  // Build magnet with trackers from sources[] if present, else defaults
-  const srcTrackers = (best.sources || [])
-    .filter(s => s.startsWith("tracker:"))
-    .map(s => s.replace("tracker:", ""))
-    .slice(0, 10);
-  const defaultTrackers = [
-    "udp://tracker.opentrackr.org:1337/announce",
-    "udp://open.demonii.com:1337/announce",
-    "udp://exodus.desync.com:6969/announce",
-    "udp://open.stealth.si:80/announce",
-    "udp://tracker.torrent.eu.org:451/announce",
-  ];
-  const allTrackers = srcTrackers.length ? srcTrackers : defaultTrackers;
-  const trStr = allTrackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(filename || title)}${trStr}`;
-
-  $("pph").classList.add("hidden");
-  const label = `${title}${isTv ? ` · S${curS}E${curE}` : ""} — Webtor`;
-  setNameBar(label);
-
-  const pwrap = $("pwrap");
-
-  // Remove any old webtor script
-  const oldScript = document.getElementById("webtor-sdk");
-  if (oldScript) oldScript.remove();
-
-  // Reset webtor queue
-  window.webtor = [];
-
-  // Create the player div
-  const playerDiv = document.createElement("div");
-  playerDiv.id = "webtor-player";
-  playerDiv.className = "webtor";
-  playerDiv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
-  pwrap.appendChild(playerDiv);
-
-  // Push config — webtor SDK picks this up on load
-  window.webtor.push({
-    id: "webtor-player",
-    magnet: magnet,
-    lang: "en",
-  });
-
-  // Load the SDK — it finds #webtor-player.webtor and initializes
-  const sdk = document.createElement("script");
-  sdk.id = "webtor-sdk";
-  sdk.src = "https://cdn.jsdelivr.net/npm/@webtor/player-sdk-js/dist/index.min.js";
-  sdk.charset = "utf-8";
-  sdk.async = true;
-  document.body.appendChild(sdk);
-
-  toast("▶ Webtor — " + (filename || title).slice(0, 40));
 }
 
 function setNameBar(label, url = "") {
