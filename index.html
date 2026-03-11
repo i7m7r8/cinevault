@@ -327,9 +327,8 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  // Destroy WebTorrent
   if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
-  if (wtClient)  { try { wtClient.destroy(); }  catch(e) {} wtClient = null; }
+  if (wtClient)  { try { wtClient.destroy();  } catch(e) {} wtClient = null; }
   // Remove any video elements, iframes, and Webtor containers
   const pwrap = $("pwrap");
   if (pwrap) {
@@ -733,10 +732,7 @@ function loadSource(i) {
   const isMovie = cur.mediaType === "movie";
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
-  if (src.wt) {
-    loadWebTorrent();
-    return;
-  }
+  if (src.wt) { loadWebTorrent(); return; }
   const url = isMovie ? src.movie(id) : src.tv(id, curS, curE);
   const label = `${cur.title || cur.name || ""}${isMovie ? "" : ` · S${curS}E${curE}`} — ${src.name}`;
   showIframe(url, label);
@@ -760,7 +756,7 @@ function showIframe(url, label) {
 }
 
 
-// ── WEBTORRENT PLAYER ───────────────────────────────────────────
+// ── WEBTORRENT PLAYER with apibay peers ─────────────────────────
 async function loadWebTorrent() {
   if (!cur) return;
   clearPlayer();
@@ -781,15 +777,11 @@ async function loadWebTorrent() {
     return;
   }
 
-  // Fetch streams from torrentio — include infoHash streams this time
+  // Fetch streams from torrentio
   const type = isTv ? "series" : "movie";
   const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
   let streams = [];
-  const endpoints = [
-    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
-    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
-  ];
-  for (const ep of endpoints) {
+  for (const ep of [`${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`, `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`]) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 20000);
@@ -797,93 +789,124 @@ async function loadWebTorrent() {
       clearTimeout(t);
       if (!r.ok) continue;
       const d = await r.json();
-      streams = Array.isArray(d.streams) ? d.streams : [];
+      streams = (d.streams || []).filter(s => s.infoHash);
       if (streams.length) break;
     } catch { continue; }
   }
 
-  // Prefer streams with infoHash (magnets) — sort by quality
-  const magnetStreams = streams.filter(s => s.infoHash);
-  if (!magnetStreams.length) {
+  if (!streams.length) {
     $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No torrents found</div>';
     return;
   }
 
   // Sort: 1080p > 720p > rest
-  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
-  magnetStreams.sort((a,b) => rank(a)-rank(b));
-  const best = magnetStreams[0];
+  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:2; };
+  streams.sort((a,b) => rank(a)-rank(b));
+  const best = streams[0];
+  const infoHash = best.infoHash.toLowerCase();
 
-  // Build magnet URI
-  const trackers = [
+  $("pph").innerHTML = '<div class="pph-icon">🔍</div><div>Fetching peers from apibay…</div>';
+
+  // Fetch peers from apibay via our proxy
+  let peers = [];
+  try {
+    const pbUrl = `${API}/proxy?url=${encodeURIComponent("https://apibay.org/t.php?h=" + infoHash)}`;
+    const pr = await fetch(pbUrl);
+    if (pr.ok) {
+      const pd = await pr.json();
+      // apibay returns trackers in the "trackers" field or we use known wss trackers
+      if (pd && pd.trackers) {
+        // trackers is a string of announce URLs separated by newline
+        peers = pd.trackers.split("\n").filter(t => t.startsWith("udp://") || t.startsWith("http://")).slice(0, 5);
+      }
+    }
+  } catch(e) {}
+
+  // Always include WebRTC trackers — these are the ones WebTorrent can use
+  const wsTrackers = [
     "wss://tracker.btorrent.xyz",
     "wss://tracker.openwebtorrent.com",
-    "wss://tracker.fastcast.nz",
+    "wss://tracker.webtorrent.dev",
+    "wss://tracker.files.fm:7073/announce",
+    "wss://spacetradersapi-chatbot.herokuapp.com:443/announce",
   ];
-  const trStr = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
-  const magnet = `magnet:?xt=urn:btih:${best.infoHash}${trStr}`;
+
+  // Build magnet with both wss and any http trackers from apibay
+  const allTrackers = [...wsTrackers, ...peers];
+  const trStr = allTrackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(cur.title||cur.name||"")}&xl=0${trStr}`;
 
   $("pph").innerHTML = '<div class="pph-icon">🔗</div><div>Connecting to peers…</div>';
 
   const pwrap = $("pwrap");
-
-  // Destroy previous client
   if (wtTorrent) { try { wtTorrent.destroy(); } catch(e) {} wtTorrent = null; }
   if (wtClient)  { try { wtClient.destroy();  } catch(e) {} wtClient = null; }
 
   wtClient = new WebTorrent();
-
   wtClient.on("error", err => {
+    console.error("WebTorrent error:", err);
     $("pph").classList.remove("hidden");
-    $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Torrent error: ${err.message}</div>`;
+    $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Error: ${err.message}</div>`;
   });
 
-  wtClient.add(magnet, { announce: trackers }, torrent => {
+  // Progress update interval
+  let progInterval = setInterval(() => {
+    if (!wtTorrent) return;
+    const pct = (wtTorrent.progress * 100).toFixed(1);
+    const peers = wtTorrent.numPeers;
+    const speed = (wtTorrent.downloadSpeed / 1024).toFixed(0);
+    const el = $("pph");
+    if (el && !el.classList.contains("hidden")) {
+      el.innerHTML = `<div class="pph-icon">📡</div><div>${peers} peers · ${speed} KB/s · ${pct}%</div>`;
+    }
+  }, 1000);
+
+  wtClient.add(magnet, { announce: allTrackers }, torrent => {
+    clearInterval(progInterval);
     wtTorrent = torrent;
 
-    // Find best video file
+    // Find video file
     const videoExts = /\.(mp4|mkv|webm|avi|mov|m4v)$/i;
-    const files = torrent.files.filter(f => videoExts.test(f.name));
-    if (!files.length) {
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file found in torrent</div>';
+    let files = torrent.files.filter(f => videoExts.test(f.name));
+    if (!files.length) files = torrent.files;
+
+    // Pick by fileIdx or largest
+    let file = (best.fileIdx != null && torrent.files[best.fileIdx])
+      ? torrent.files[best.fileIdx]
+      : files.sort((a,b) => b.length - a.length)[0];
+
+    if (!file) {
+      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No video file in torrent</div>';
       return;
     }
-
-    // Pick by fileIdx hint or largest file
-    let file = best.fileIdx != null ? (torrent.files[best.fileIdx] || files[0]) : files[0];
-    if (!file) file = files.sort((a,b) => b.length - a.length)[0];
 
     $("pph").classList.add("hidden");
     const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — WebTorrent`;
     setNameBar(label);
 
-    // Create video element
     const vid = document.createElement("video");
     vid.controls = true;
     vid.autoplay = true;
     vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
     pwrap.appendChild(vid);
 
-    // Stream file directly into video element
-    file.renderTo(vid, { autoplay: true, muted: false }, err => {
+    file.renderTo(vid, { autoplay: true }, err => {
       if (err) {
         $("pph").classList.remove("hidden");
-        $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Stream error: ${err.message}</div>`;
+        $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Render error: ${err.message}</div>`;
       }
     });
 
     toast("▶ WebTorrent — " + file.name.slice(0,40));
-  });
 
-  // Timeout if no peers in 30s
-  setTimeout(() => {
-    if (wtClient && !wtTorrent?.progress) {
-      const el = $("pph");
-      if (el && !el.classList.contains("hidden")) {
-        el.innerHTML = '<div class="pph-icon">⏳</div><div>Still searching peers… please wait</div>';
-      }
-    }
-  }, 30000);
+    // Live peer/speed display in name bar
+    setInterval(() => {
+      if (!wtTorrent) return;
+      const speed = (wtTorrent.downloadSpeed/1024).toFixed(0);
+      const peers = wtTorrent.numPeers;
+      $("stream-name-source").textContent = `📡 ${peers} peers · ⬇ ${speed} KB/s`;
+    }, 2000);
+  });
 }
 
 function setNameBar(label, url = "") {
