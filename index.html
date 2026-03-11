@@ -327,7 +327,6 @@ function stopVideo() {
     try { vjsPlayer.dispose(); } catch (e) {}
     vjsPlayer = null;
   }
-  // Dispose Fluid Player
   if (fluidInstance) {
     try { fluidInstance.destroy(); } catch (e) {}
     fluidInstance = null;
@@ -707,10 +706,9 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",      useImdb: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                    tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed",  useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "EmbedSu",     useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                             tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name: "FluidPlay",   useImdb: false, fluid: true, movie: null, tv: null },
+  { name: "2Embed",     useImdb: false, fluid: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,               tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed", useImdb: false, fluid: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "FluidPlay",  useImdb: false, fluid: true,  movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -763,15 +761,16 @@ function showIframe(url, label) {
 }
 
 
-// ── FLUID PLAYER — uses cached Torrentio streams ────────────────
+// ── FLUID PLAYER ────────────────────────────────────────────────
 async function loadFluidSource() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching best stream…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching streams…</div>';
 
-  // Reuse cached streams or fetch fresh
   const isTv = cur.mediaType !== "movie";
+
+  // Ensure imdb_id
   if (!cur.imdb_id) {
     try {
       const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
@@ -779,40 +778,49 @@ async function loadFluidSource() {
     } catch(e) {}
   }
   if (!cur.imdb_id) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID found</div>';
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID — cannot load streams</div>';
     return;
   }
 
-  let streams = _cachedStreams;
+  // Fetch or reuse cached streams
+  let streams = _cachedStreams.length ? _cachedStreams : [];
   if (!streams.length) {
-    try {
-      streams = await fetchStreams(cur.imdb_id, isTv, curS, curE);
-      _cachedStreams = streams;
-    } catch(e) {}
+    try { streams = await fetchStreams(cur.imdb_id, isTv, curS, curE); _cachedStreams = streams; }
+    catch(e) {}
   }
 
-  // Pick best stream — prefer 1080p then 720p then first
-  const pick = streams.find(s => /1080/i.test(s.title||s.name||""))
-             || streams.find(s => /720/i.test(s.title||s.name||""))
-             || streams[0];
-
-  if (!pick?.url) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found — try another source</div>';
+  if (!streams.length) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found — try 2Embed</div>';
     return;
   }
+
+  // Sort: prefer 1080p > 720p > rest
+  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
+  streams = [...streams].sort((a,b) => rank(a) - rank(b));
 
   $("pph").classList.add("hidden");
-  const isHLS = /m3u8/i.test(pick.url);
   const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — FluidPlay`;
   setNameBar(label);
 
   const pwrap = $("pwrap");
+  const vidId = "fp-" + Date.now();
+
+  // Build <video> with <source> tags — required by Fluid Player
   const vid = document.createElement("video");
-  vid.id = "fp-vid-" + Date.now();
+  vid.id = vidId;
   vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+
+  streams.slice(0, 5).forEach(s => {
+    const src = document.createElement("source");
+    src.src = s.url;
+    src.type = /m3u8/i.test(s.url) ? "application/x-mpegURL" : "video/mp4";
+    src.title = (s.title||s.name||"Stream").split("\n")[0];
+    vid.appendChild(src);
+  });
+
   pwrap.appendChild(vid);
 
-  fluidInstance = fluidPlayer(vid.id, {
+  fluidInstance = fluidPlayer(vidId, {
     layoutControls: {
       primaryColor: "#e8173a",
       fillToContainer: true,
@@ -822,21 +830,12 @@ async function loadFluidSource() {
       loop: false,
       mute: false,
       doubleclickFullscreen: true,
-      subtitlesEnabled: false,
-      title: label,
-      posterImage: cur.backdrop_path ? `https://image.tmdb.org/t/p/w780${cur.backdrop_path}` : "",
+      controlBar: { autoHide: true, autoHideTimeout: 3 },
     },
+    hls: { overrideNative: true },
   });
 
-  const sources = [{ title: pick.title||"Stream", url: pick.url, mimeType: isHLS ? "application/x-mpegURL" : "video/mp4" }];
-  // Add quality options from other streams
-  streams.slice(0, 5).forEach(s => {
-    if (s.url !== pick.url) {
-      sources.push({ title: s.title||"Alt", url: s.url, mimeType: /m3u8/i.test(s.url) ? "application/x-mpegURL" : "video/mp4" });
-    }
-  });
-  fluidInstance.addStreamSource(sources[0].url, sources[0].mimeType);
-  toast("▶ FluidPlay — " + (pick.title||"").split("\n")[0]);
+  toast("▶ FluidPlay — " + (streams[0].title||"").split("\n")[0].slice(0,40));
 }
 
 function setNameBar(label, url = "") {
