@@ -699,13 +699,12 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "VidSrc",     useImdb: false, movie: id => `https://vidsrc.cc/v2/embed/movie/${id}`,                          tv: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` },
-  { name: "VidSrc2",    useImdb: false, movie: id => `https://vidsrc.me/embed/movie?tmdb=${id}`,                        tv: (id, s, e) => `https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
-  { name: "Smashy",     useImdb: false, movie: id => `https://player.smashy.stream/movie/${id}`,                        tv: (id, s, e) => `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}` },
-  { name: "2Embed",     useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                               tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
-  { name: "MultiEmbed", useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                   tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "EmbedSu",    useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                              tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { name: "AutoEmbed",  useImdb: true,  movie: id => `https://autoembed.cc/movie/imdb/${id}`,                           tv: (id, s, e) => `https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
+  { name: "2Embed",      useImdb: false, movie: id => `https://www.2embed.cc/embed/${id}`,                                    tv: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` },
+  { name: "SuperEmbed",  useImdb: false, movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,                        tv: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "MovieWP",     useImdb: false, movie: id => `https://moviewp.com/se.php?video_id=${id}&tmdb=1`,                     tv: (id, s, e) => `https://moviewp.com/se.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "DBPlayer",    useImdb: false, movie: id => `https://databasegdriveplayer.co/player.php?tmdb=${id}`,                tv: (id, s, e) => `https://databasegdriveplayer.co/player.php?type=series&tmdb=${id}&season=${s}&episode=${e}` },
+  { name: "EmbedSu",     useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                                   tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name: "AutoEmbed",   useImdb: true,  movie: id => `https://autoembed.cc/movie/imdb/${id}`,                                tv: (id, s, e) => `https://autoembed.cc/tv/imdb/${id}-${s}-${e}` },
 ];
 
 function buildSources() {
