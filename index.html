@@ -15,8 +15,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
-<link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
-<script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
 /* Your existing CSS – unchanged */
@@ -706,7 +704,7 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, fluid: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,               tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "2Embed",     useImdb: false, fluid: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,              tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
   { name: "SuperEmbed", useImdb: false, fluid: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
   { name: "FluidPlay",  useImdb: false, fluid: true,  movie: null, tv: null },
 ];
@@ -761,12 +759,12 @@ function showIframe(url, label) {
 }
 
 
-// ── FLUID PLAYER ────────────────────────────────────────────────
+// ── FLUIDPLAY — fetches ALL streams, picks best direct URL, plays in Video.js ──
 async function loadFluidSource() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching streams…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Searching streams…</div>';
 
   const isTv = cur.mediaType !== "movie";
 
@@ -778,64 +776,48 @@ async function loadFluidSource() {
     } catch(e) {}
   }
   if (!cur.imdb_id) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID — cannot load streams</div>';
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID found</div>';
     return;
   }
 
-  // Fetch or reuse cached streams
-  let streams = _cachedStreams.length ? _cachedStreams : [];
-  if (!streams.length) {
-    try { streams = await fetchStreams(cur.imdb_id, isTv, curS, curE); _cachedStreams = streams; }
-    catch(e) {}
+  // Fetch ALL streams (not just direct)
+  const type = isTv ? "series" : "movie";
+  const stremioId = isTv ? `${cur.imdb_id}:${curS}:${curE}` : cur.imdb_id;
+  let allStreams = [];
+  const endpoints = [
+    `${API}/stream/${type}/${encodeURIComponent(stremioId)}.json`,
+    `https://torrentio.strem.fun/stream/${type}/${stremioId}.json`,
+  ];
+  for (const ep of endpoints) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(ep, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const d = await r.json();
+      allStreams = Array.isArray(d.streams) ? d.streams : [];
+      if (allStreams.length) break;
+    } catch { continue; }
   }
 
-  if (!streams.length) {
-    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found — try 2Embed</div>';
+  // Filter to direct HTTP streams only (these can be played without debrid)
+  const direct = allStreams.filter(s => s.url && /^https?:\/\//i.test(s.url) && !s.infoHash);
+
+  if (!direct.length) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No direct streams available — try 2Embed or SuperEmbed</div>';
     return;
   }
 
-  // Sort: prefer 1080p > 720p > rest
-  const rank = s => { const t = (s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
-  streams = [...streams].sort((a,b) => rank(a) - rank(b));
+  // Sort by quality
+  const rank = s => { const t=(s.title||s.name||""); return /1080/i.test(t)?0:/720/i.test(t)?1:/480/i.test(t)?2:3; };
+  direct.sort((a,b) => rank(a)-rank(b));
+  const best = direct[0];
 
-  $("pph").classList.add("hidden");
   const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — FluidPlay`;
-  setNameBar(label);
-
-  const pwrap = $("pwrap");
-  const vidId = "fp-" + Date.now();
-
-  // Build <video> with <source> tags — required by Fluid Player
-  const vid = document.createElement("video");
-  vid.id = vidId;
-  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
-
-  streams.slice(0, 5).forEach(s => {
-    const src = document.createElement("source");
-    src.src = s.url;
-    src.type = /m3u8/i.test(s.url) ? "application/x-mpegURL" : "video/mp4";
-    src.title = (s.title||s.name||"Stream").split("\n")[0];
-    vid.appendChild(src);
-  });
-
-  pwrap.appendChild(vid);
-
-  fluidInstance = fluidPlayer(vidId, {
-    layoutControls: {
-      primaryColor: "#e8173a",
-      fillToContainer: true,
-      autoPlay: true,
-      playbackRateEnabled: true,
-      allowTheatre: false,
-      loop: false,
-      mute: false,
-      doubleclickFullscreen: true,
-      controlBar: { autoHide: true, autoHideTimeout: 3 },
-    },
-    hls: { overrideNative: true },
-  });
-
-  toast("▶ FluidPlay — " + (streams[0].title||"").split("\n")[0].slice(0,40));
+  const streamUrl = `${API}/stream-proxy?url=${encodeURIComponent(best.url)}`;
+  playDirectUrl(streamUrl, label, null);
+  toast("▶ FluidPlay — " + (best.title||best.name||"").split("\n")[0].slice(0,40));
 }
 
 function setNameBar(label, url = "") {
