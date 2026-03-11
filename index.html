@@ -760,9 +760,10 @@ async function tryFluidPlayer() {
   const type = isMovie ? "movie" : "tv";
   const sParam = isMovie ? "" : `&s=${curS}&e=${curE}`;
 
-  // Try seapi first (faster), then vidsrc extractor
+  // /direct-stream tries seapi → vidsrc.net → vidsrc.me server-side, returns normalized result
   const apiUrls = [
-    `${API}/seapi?tmdb=${tmdbId}&type=${type}${sParam}`,
+    `${API}/direct-stream?tmdb=${tmdbId}&type=${type}${sParam}`,
+    `${API}/seapi?tmdb=${tmdbId}${sParam}`,
     `${API}/vidsrc?tmdb=${tmdbId}&type=${type}${sParam}`,
   ];
 
@@ -775,15 +776,26 @@ async function tryFluidPlayer() {
       const r = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
       if (!r.ok) continue;
       const data = await r.json();
-      // seapi returns { url, quality } array; vidsrc returns { streams: [{url, referer}] }
-      const streams = data.streams || (Array.isArray(data) ? data : [data]);
-      const valid = streams.filter(s => s.url && /^https?:\/\//.test(s.url));
-      if (valid.length) {
-        streamUrl = valid[0].url;
-        referer   = valid[0].referer || null;
-        isHLS     = /m3u8/i.test(streamUrl);
-        break;
+
+      // Normalize all known response shapes:
+      // seapi.link:  { streams: [{ stream_url, quality }] }
+      // /vidsrc:     { streams: [{ url, referer, quality }] }
+      // plain array: [{ url }] or [{ stream_url }]
+      let candidates = [];
+      if (data.streams && Array.isArray(data.streams)) candidates = data.streams;
+      else if (Array.isArray(data)) candidates = data;
+      else if (data.url) candidates = [data];
+
+      for (const s of candidates) {
+        const u = s.url || s.stream_url || s.src || s.link || "";
+        if (u && /^https?:\/\//.test(u)) {
+          streamUrl = u;
+          referer   = s.referer || s.headers?.Referer || null;
+          isHLS     = /m3u8/i.test(streamUrl);
+          break;
+        }
       }
+      if (streamUrl) break;
     } catch(e) { continue; }
   }
 
