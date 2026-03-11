@@ -300,6 +300,9 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
         <div class="clabel" id="stream-label" style="margin-bottom:8px">📊 AVAILABLE STREAMS — tap to play</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
+        <button id="magnet-copy-btn" onclick="copyMagnetFallback()" style="display:none;width:100%;margin-top:10px;padding:9px;background:rgba(255,255,255,0.07);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer;">
+          📋 Copy magnet → open in VLC / BitTorrent
+        </button>
       </div>
     </div>
   </div>
@@ -928,6 +931,7 @@ function buildTorrentPicker(streams) {
   $("stream-loading").style.display = "none";
   $("stream-picker").style.display = "block";
   $("stream-label").textContent = "🧲 TORRENT STREAMS — tap to play";
+  const mcb = $("magnet-copy-btn"); if (mcb) mcb.style.display = "block";
   streams.forEach((s, idx) => {
     const lines = (s.title || s.name || "").split("\n");
     const fname = lines[0] || "Unknown";
@@ -966,143 +970,56 @@ function playBestStream(stream) {
   const qualityLabel = (stream.title || stream.name || "").split("\n")[0];
 
   $("pph").classList.add("hidden");
-  setNameBar((cur?.title || cur?.name || "") + " — " + qualityLabel.slice(0,50));
+  setNameBar((cur?.title || cur?.name || "") + " — " + qualityLabel.slice(0, 50));
 
-  // ── Strategy 1: stream has a direct HTTP URL from Torrentio ──
+  // Strategy 1: Torrentio gave a direct HTTP URL (debrid / cached)
   if (stream.url && /^https?:\/\//.test(stream.url)) {
     $("torrent-hud").classList.remove("on");
-    toast("⚡ Direct stream");
-    launchVjs(stream.url, "video/mp4", filename);
+    const proxied = `https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(stream.url)}`;
+    launchVjs(proxied, "video/mp4", filename);
     if (cur?.imdb_id) loadAndStartSubs("vjs");
     return;
   }
 
-  // ── Strategy 2: Worker /torrent-stream/ — server-side Torrentio proxy ──
-  const WORKER = "https://cinevault-api.imrannn68d-de2.workers.dev";
-  const workerStreamUrl = `${WORKER}/torrent-stream/${hash}/${fileIdx}`;
-
-  $("thud-title").textContent = "⚡ Connecting via server…";
-  $("thud-file").textContent = filename.slice(0, 80);
-  $("thud-bar").style.width = "15%";
-  $("torrent-hud").classList.add("on");
-
-  fetch(workerStreamUrl, { method: "HEAD", signal: AbortSignal.timeout(5000) })
-    .then(r => {
-      if (r.ok) {
-        $("torrent-hud").classList.remove("on");
-        toast("⚡ Server stream active");
-        launchVjs(workerStreamUrl, "video/mp4", filename);
-        if (cur?.imdb_id) loadAndStartSubs("vjs");
-      } else {
-        tryApibayDirect(hash, fileIdx, filename);
-      }
-    })
-    .catch(() => tryApibayDirect(hash, fileIdx, filename));
-}
-// ── Strategy 3: Try jackalt.net server-side torrent streaming ──
-function tryApibayDirect(hash, fileIdx, filename) {
-  $("thud-title").textContent = "🌐 Trying torrent stream servers…";
-  $("thud-bar").style.width = "35%";
-
-  // jackalt.net: free server-side webtorrent streaming (Node.js, has UDP)
-  const jackalt = `https://jackalt.net/api/v1/stream?hash=${hash}&fileIndex=${fileIdx}`;
-
-  fetch(jackalt, { method: "HEAD", signal: AbortSignal.timeout(5000) })
-    .then(r => {
-      if (r.ok) {
-        $("torrent-hud").classList.remove("on");
-        toast("🌐 Streaming via jackalt");
-        launchVjs(jackalt, "video/mp4", filename);
-        if (cur?.imdb_id) loadAndStartSubs("vjs");
-      } else {
-        tryWebTorrent(hash, fileIdx, filename);
-      }
-    })
-    .catch(() => tryWebTorrent(hash, fileIdx, filename));
+  // Strategy 2+: embed instant.io as in-page iframe — FOSS, free, real UDP peers
+  playViaInstantIo(hash, fileIdx, filename, qualityLabel);
 }
 
-// ── Strategy 4: WebTorrent browser P2P (WSS only, last resort) ──
-function tryWebTorrent(hash, fileIdx, filename) {
-  $("thud-title").textContent = "🌐 Trying browser P2P…";
-  $("thud-bar").style.width = "0%";
-  $("thud-peers").textContent = "0";
-  $("thud-dl").textContent = "0";
-  $("thud-prog").textContent = "0%";
+function playViaInstantIo(hash, fileIdx, filename, qualityLabel) {
+  stopTorrent();
+  $("torrent-hud").classList.remove("on");
+  $("pph").classList.add("hidden");
 
-  if (!_wtClient) _wtClient = new WebTorrent();
+  // Build full magnet
   const trackers = [
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://tracker.tiny-vps.com:6969/announce",
     "wss://tracker.btorrent.xyz",
     "wss://tracker.openwebtorrent.com",
-    "wss://tracker.fastcast.nz",
-    "wss://tracker.webtorrent.dev",
   ];
-  _currentMagnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(filename)}&tr=${trackers.map(encodeURIComponent).join("&tr=")}`;
+  _currentMagnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(filename)}${trackers.map(t => "&tr=" + encodeURIComponent(t)).join("")}`;
 
-  let peakPeers = 0;
-  let torrentAdded = false;
+  // instant.io is fully FOSS (WebTorrent), free, handles UDP via their tracker infrastructure
+  // We embed it directly as an iframe — it streams inside the player box
+  clearPlayer();
+  $("pph").classList.add("hidden");
 
-  const failTimeout = setTimeout(() => {
-    if ($("torrent-hud").classList.contains("on")) {
-      stopTorrent();
-      showMagnetFallback(hash, filename);
-    }
-  }, 20000);
+  const pwrap = $("pwrap");
+  const iframe = document.createElement("iframe");
+  iframe.id = "pframe";
+  iframe.allowFullscreen = true;
+  iframe.allow = "autoplay; fullscreen; picture-in-picture; microphone; camera";
+  iframe.referrerPolicy = "no-referrer-when-downgrade";
+  iframe.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
+  // instant.io accepts the magnet in the hash — opens and starts streaming immediately
+  iframe.src = `https://instant.io/#${_currentMagnet}`;
+  pwrap.appendChild(iframe);
 
-  _wtClient.add(_currentMagnet, { announce: trackers }, torrent => {
-    torrentAdded = true;
-    _wtTorrent = torrent;
-
-    _hudInterval = setInterval(() => {
-      updateHud(torrent);
-      if (torrent.numPeers > peakPeers) peakPeers = torrent.numPeers;
-    }, 800);
-
-    const vids = torrent.files
-      .filter(f => /\.(mp4|mkv|webm|avi|mov|m4v)$/i.test(f.name))
-      .sort((a,b) => b.length - a.length);
-
-    if (!vids.length) {
-      clearTimeout(failTimeout);
-      stopTorrent();
-      showMagnetFallback(hash, filename);
-      return;
-    }
-
-    const file = vids[Math.min(fileIdx, vids.length - 1)];
-    $("thud-file").textContent = file.name.slice(0, 80);
-    $("thud-title").textContent = "⏳ Buffering…";
-    clearTimeout(failTimeout);
-
-    renderTorrentToVjs(file, torrent);
-  });
-}
-
-// ── Final fallback: show magnet copy + instant.io embed ──
-function showMagnetFallback(hash, filename) {
-  $("pph").classList.remove("hidden");
-  const magnet = _currentMagnet || `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(filename)}`;
-  $("pph").innerHTML = `
-    <div style="text-align:center;padding:10px 16px;max-width:340px">
-      <div style="font-size:28px;margin-bottom:8px">🧲</div>
-      <div style="font-weight:700;color:#fff;margin-bottom:6px">Open in torrent player</div>
-      <div style="font-size:11px;color:#888;margin-bottom:14px;line-height:1.6">
-        Browser P2P needs WebRTC peers which are rare.<br>
-        These options use real UDP seeders:
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button onclick="openInstantIo('${hash}')" style="background:#e8173a;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:700">
-          🌐 Open in instant.io (browser)
-        </button>
-        <button onclick="copyMagnetFallback()" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:9px 16px;border-radius:8px;font-size:12px;cursor:pointer">
-          📋 Copy Magnet → open in VLC / BitTorrent
-        </button>
-      </div>
-    </div>`;
-}
-
-function openInstantIo(hash) {
-  const url = _currentMagnet || `magnet:?xt=urn:btih:${hash}`;
-  window.open(`https://instant.io/#${url}`, "_blank");
+  toast("🌐 Loading instant.io player…");
 }
 
 function copyMagnetFallback() {
