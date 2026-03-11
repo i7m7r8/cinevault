@@ -699,9 +699,9 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",     useImdb: false, webtor: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "SuperEmbed", useImdb: false, webtor: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { name: "Webtor",     useImdb: false, webtor: true,  movie: null, tv: null },
+  { name: "2Embed",    useImdb: false, webtor: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                   tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed",useImdb: false, webtor: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`, tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "Webtor",    useImdb: false, webtor: true,  movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -751,8 +751,7 @@ function showIframe(url, label) {
 }
 
 
-// ── WEBTOR PLAYER ───────────────────────────────────────────────
-// Webtor.io streams any magnet via HTTP on their servers (real seeders, not WebRTC)
+// ── WEBTOR PLAYER (player-sdk-js) ───────────────────────────────
 async function loadWebtor() {
   if (!cur) return;
   clearPlayer();
@@ -798,29 +797,71 @@ async function loadWebtor() {
     return;
   }
 
-  // Sort: prefer x264/x265 mp4/mkv, 1080p first, pick smaller sizes for faster start
+  // Sort: prefer x264/h264 for broadest codec support, 1080p first
   const rank = s => {
     const t = (s.title || s.name || "");
     const q = /1080/i.test(t) ? 0 : /720/i.test(t) ? 1 : 2;
-    // Prefer x264 over x265/HEVC/AV1 — broader codec support in webtor
     const codec = /x264|h264|avc/i.test(t) ? 0 : 1;
     return q * 10 + codec;
   };
   streams.sort((a, b) => rank(a) - rank(b));
   const best = streams[0];
-
   const infoHash = best.infoHash.toLowerCase();
-  const fileIdx = best.fileIdx != null ? best.fileIdx : 0;
   const filename = (best.behaviorHints && best.behaviorHints.filename) || "";
+  const title = cur.title || cur.name || "";
 
-  // Build webtor.io embed URL
-  // Format: https://webtor.io/get/{infoHash}/{fileIdx}/{filename}?embed&ui=true
-  const encodedName = encodeURIComponent(filename || "video.mkv");
-  const webtorUrl = `https://webtor.io/#/get/${infoHash}/${fileIdx}/${encodedName}?embed`;
+  // Build magnet with trackers from sources[] if present, else defaults
+  const srcTrackers = (best.sources || [])
+    .filter(s => s.startsWith("tracker:"))
+    .map(s => s.replace("tracker:", ""))
+    .slice(0, 10);
+  const defaultTrackers = [
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+  ];
+  const allTrackers = srcTrackers.length ? srcTrackers : defaultTrackers;
+  const trStr = allTrackers.map(t => `&tr=${encodeURIComponent(t)}`).join("");
+  const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(filename || title)}${trStr}`;
 
-  const label = `${cur.title || cur.name || ""}${isTv ? ` · S${curS}E${curE}` : ""} — Webtor`;
-  showIframe(webtorUrl, label);
-  toast("▶ Webtor — " + (best.title || "").split("\n")[0].slice(0, 40));
+  $("pph").classList.add("hidden");
+  const label = `${title}${isTv ? ` · S${curS}E${curE}` : ""} — Webtor`;
+  setNameBar(label);
+
+  const pwrap = $("pwrap");
+
+  // Remove any old webtor script
+  const oldScript = document.getElementById("webtor-sdk");
+  if (oldScript) oldScript.remove();
+
+  // Reset webtor queue
+  window.webtor = [];
+
+  // Create the player div
+  const playerDiv = document.createElement("div");
+  playerDiv.id = "webtor-player";
+  playerDiv.className = "webtor";
+  playerDiv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+  pwrap.appendChild(playerDiv);
+
+  // Push config — webtor SDK picks this up on load
+  window.webtor.push({
+    id: "webtor-player",
+    magnet: magnet,
+    lang: "en",
+  });
+
+  // Load the SDK — it finds #webtor-player.webtor and initializes
+  const sdk = document.createElement("script");
+  sdk.id = "webtor-sdk";
+  sdk.src = "https://cdn.jsdelivr.net/npm/@webtor/player-sdk-js/dist/index.min.js";
+  sdk.charset = "utf-8";
+  sdk.async = true;
+  document.body.appendChild(sdk);
+
+  toast("▶ Webtor — " + (filename || title).slice(0, 40));
 }
 
 function setNameBar(label, url = "") {
