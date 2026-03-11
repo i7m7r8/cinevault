@@ -15,9 +15,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
 <script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
 <style>
 /* Your existing CSS – unchanged */
 :root{--bg:#0d0d14;--s1:#13131e;--s2:#1a1a28;--s3:#222235;--border:rgba(255,255,255,0.07);--accent:#e8173a;--accent-dim:rgba(232,23,58,0.15);--gold:#fbbf24;--green:#10b981;--text:#f2f2f8;--muted:#6b6b8a;--r:10px;--nav-h:58px;}
@@ -707,8 +707,10 @@ async function loadDirectStreams(autoPlay = false) {
 
 // ── SOURCES BUTTONS (fallback iframes) ─────────────────────────
 const SOURCES = [
-  { name: "2Embed",   useImdb: false, fluid: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,  tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name: "FluidPlay", useImdb: false, fluid: true,  movie: null, tv: null },
+  { name: "2Embed",      useImdb: false, movie: id => `https://www.2embed.stream/embed/movie/${id}`,                    tv: (id, s, e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+  { name: "SuperEmbed",  useImdb: false, movie: id => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,  tv: (id, s, e) => `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { name: "EmbedSu",     useImdb: true,  movie: id => `https://embed.su/embed/movie/${id}`,                             tv: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
+  { name: "FluidPlay",   useImdb: false, fluid: true, movie: null, tv: null },
 ];
 
 function buildSources() {
@@ -735,7 +737,6 @@ function loadSource(i) {
   const id = src.useImdb ? (cur.imdb_id || cur.id) : cur.id;
   if (!id) { toast("⏳ IMDb ID not ready – try again"); return; }
   if (src.fluid) {
-    toast("▶ " + src.name);
     loadFluidSource();
     return;
   }
@@ -762,67 +763,80 @@ function showIframe(url, label) {
 }
 
 
-// ── FLUID PLAYER via seapi.link ─────────────────────────────────
+// ── FLUID PLAYER — uses cached Torrentio streams ────────────────
 async function loadFluidSource() {
   if (!cur) return;
   clearPlayer();
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching stream…</div>';
+  $("pph").innerHTML = '<div class="pph-icon">⏳</div><div>Fetching best stream…</div>';
+
+  // Reuse cached streams or fetch fresh
   const isTv = cur.mediaType !== "movie";
-  const tmdbId = cur.id;
-  let apiUrl = `${API}/seapi?tmdb=${tmdbId}`;
-  if (isTv) apiUrl += `&s=${curS}&e=${curE}`;
-  try {
-    const r = await fetch(apiUrl);
-    const data = await r.json();
-    // seapi returns array of servers each with array of streams
-    let streamUrl = null;
-    let streamType = "video/mp4";
-    if (Array.isArray(data)) {
-      for (const server of data) {
-        const streams = server.streams || [];
-        const best = streams.find(s => s.url && /m3u8/i.test(s.url))
-                  || streams.find(s => s.url && /mp4/i.test(s.url))
-                  || streams.find(s => s.url);
-        if (best?.url) {
-          streamUrl = best.url;
-          streamType = /m3u8/i.test(streamUrl) ? "application/x-mpegURL" : "video/mp4";
-          break;
-        }
-      }
-    }
-    if (!streamUrl) {
-      $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found — try 2Embed</div>';
-      return;
-    }
-    $("pph").classList.add("hidden");
-    const label = `${cur.title || cur.name || ""}${isTv ? ` · S${curS}E${curE}` : ""} — FluidPlay`;
-    setNameBar(label);
-    const pwrap = $("pwrap");
-    const vid = document.createElement("video");
-    vid.id = "fluid-vid-" + Date.now();
-    vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
-    pwrap.appendChild(vid);
-    fluidInstance = fluidPlayer(vid.id, {
-      layoutControls: {
-        primaryColor: "#e8173a",
-        fillToContainer: true,
-        autoPlay: true,
-        playbackRateEnabled: true,
-        allowTheatre: false,
-        title: label,
-        loop: false,
-        mute: false,
-        doubleclickFullscreen: true,
-        subtitlesEnabled: false,
-      },
-      vastLoadedCallback: function() {},
-      pauseAdvertisement: false,
-    });
-    fluidInstance.addStreamSource(streamUrl, streamType);
-  } catch(e) {
-    $("pph").innerHTML = `<div class="pph-icon">❌</div><div>Stream error: ${e.message}</div>`;
+  if (!cur.imdb_id) {
+    try {
+      const ext = await tmdb(`/${isTv ? "tv" : "movie"}/${cur.id}/external_ids`);
+      cur.imdb_id = ext.imdb_id || null;
+    } catch(e) {}
   }
+  if (!cur.imdb_id) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No IMDb ID found</div>';
+    return;
+  }
+
+  let streams = _cachedStreams;
+  if (!streams.length) {
+    try {
+      streams = await fetchStreams(cur.imdb_id, isTv, curS, curE);
+      _cachedStreams = streams;
+    } catch(e) {}
+  }
+
+  // Pick best stream — prefer 1080p then 720p then first
+  const pick = streams.find(s => /1080/i.test(s.title||s.name||""))
+             || streams.find(s => /720/i.test(s.title||s.name||""))
+             || streams[0];
+
+  if (!pick?.url) {
+    $("pph").innerHTML = '<div class="pph-icon">⚠️</div><div>No streams found — try another source</div>';
+    return;
+  }
+
+  $("pph").classList.add("hidden");
+  const isHLS = /m3u8/i.test(pick.url);
+  const label = `${cur.title||cur.name||""}${isTv?` · S${curS}E${curE}`:""} — FluidPlay`;
+  setNameBar(label);
+
+  const pwrap = $("pwrap");
+  const vid = document.createElement("video");
+  vid.id = "fp-vid-" + Date.now();
+  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+  pwrap.appendChild(vid);
+
+  fluidInstance = fluidPlayer(vid.id, {
+    layoutControls: {
+      primaryColor: "#e8173a",
+      fillToContainer: true,
+      autoPlay: true,
+      playbackRateEnabled: true,
+      allowTheatre: false,
+      loop: false,
+      mute: false,
+      doubleclickFullscreen: true,
+      subtitlesEnabled: false,
+      title: label,
+      posterImage: cur.backdrop_path ? `https://image.tmdb.org/t/p/w780${cur.backdrop_path}` : "",
+    },
+  });
+
+  const sources = [{ title: pick.title||"Stream", url: pick.url, mimeType: isHLS ? "application/x-mpegURL" : "video/mp4" }];
+  // Add quality options from other streams
+  streams.slice(0, 5).forEach(s => {
+    if (s.url !== pick.url) {
+      sources.push({ title: s.title||"Alt", url: s.url, mimeType: /m3u8/i.test(s.url) ? "application/x-mpegURL" : "video/mp4" });
+    }
+  });
+  fluidInstance.addStreamSource(sources[0].url, sources[0].mimeType);
+  toast("▶ FluidPlay — " + (pick.title||"").split("\n")[0]);
 }
 
 function setNameBar(label, url = "") {
