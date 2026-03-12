@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -447,13 +448,23 @@ function updateMmeta(){
 // ── SOURCE BUTTONS ───────────────────────────────────────────────
 function buildSources(){
   const wrap=$("srcbns"); wrap.innerHTML="";
-  // FluidPlayer button — tries autoembed/vixsrc APIs for ad-free direct stream
+  // FluidPlayer button
   const fp=document.createElement("button");
   fp.className="fp-btn"; fp.id="fp-btn";
   fp.textContent="🎬 FluidPlayer";
-  fp.title="Ad-free direct stream via AutoEmbed / VixSrc";
   fp.onclick=()=>tryFluidPlayer();
   wrap.appendChild(fp);
+  // Magnet button
+  const mg=document.createElement("button");
+  mg.className="cbtn";
+  mg.textContent="🧲 Magnet";
+  mg.title="Play via magnet link or infohash";
+  mg.onclick=()=>{
+    document.getElementById("magnet-box").style.display="block";
+    document.getElementById("magnet-input").focus();
+    document.getElementById("magnet-box").scrollIntoView({behavior:"smooth",block:"center"});
+  };
+  wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
     const b=document.createElement("button");
     b.className="cbtn"+(i===0?" on":"");
@@ -468,17 +479,17 @@ function tryFluidPlayer(){
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
   const fpBtn=$("fp-btn");
-  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="🎬 FluidPlayer"; }
+  if(fpBtn) fpBtn.classList.add("on");
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
   const tmdbId=cur.id;
   const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
 
-  // Build embed URL — vidlink has clean player with minimal ads, supports FluidPlayer iframe mode
+  // Use vidlink embed via showIframe — clean, reliable, no extraction needed
   const embedUrl = isTv
     ? `https://vidlink.pro/tv/${tmdbId}/${curS}/${curE}?autoplay=1&primaryColor=e8173a`
     : `https://vidlink.pro/movie/${tmdbId}?autoplay=1&primaryColor=e8173a`;
 
-  playWithFluidPlayer(embedUrl, title);
+  showIframe(embedUrl, title);
 }
 
 
