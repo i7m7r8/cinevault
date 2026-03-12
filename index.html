@@ -315,7 +315,7 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
         <div class="clabel" id="stream-label" style="margin-bottom:8px">📊 TORRENT QUALITY — tap to play</div>
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
-      </div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -435,6 +435,7 @@ function buildSources(){
   const mg=document.createElement("button");
   mg.className="cbtn";
   mg.textContent="🧲 Magnet";
+  mg.title="Play via magnet link or infohash";
   mg.onclick=()=>playBestMagnet();
   wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
@@ -447,50 +448,122 @@ function buildSources(){
 }
 
 // ── FLUID PLAYER — tries /direct-stream (vidsrc.ts port), fallback iframe
-// ── AD BLOCKER ───────────────────────────────────────────────────
-const AD_DOMAINS=[
+// ── FULL AD BLOCKER (EasyList-style) ─────────────────────────────
+// Covers network blocking + click hijack prevention + popup blocking
+const AD_HOSTS = [
+  // Trackers & redirectors
+  "gotrackier","clickadu","go.oclasrv","exosrv","exdynsrv",
+  "dtscout","clkrev","realsrv","hotcpx","adtng","trckng",
+  // Ad networks
   "popads","popcash","exoclick","juicyads","trafficjunky","trafficstars",
   "hilltopads","plugrush","adspyglass","adcash","adsterra","propellerads",
-  "clickadu","evadav","adpop","reporo","ero-advertising","a-ads","coinzilla",
-  "revcontent","outbrain","taboola","mgid","openx","appnexus","rubiconproject",
-  "pubmatic","adf.ly","shorte.st","ouo.io","bcvc.live","vads.tv","vidads",
-  "go.oclasrv","clicksfly","stream-ads","playerads","adnxs","doubleclick",
-  "googlesyndication","bidvertiser","valueclick","casalemedia","smartadserver"
+  "evadav","reporo","ero-advertising","a-ads","coinzilla","bidvertiser",
+  "revcontent","outbrain","taboola","mgid","openx","appnexus",
+  "rubiconproject","pubmatic","adf.ly","shorte.st","ouo.io",
+  "bcvc.live","vads.tv","vidads","stream-ads","playerads",
+  "adnxs","doubleclick","googlesyndication","valueclick",
+  "casalemedia","smartadserver","adskeeper","clicksfly",
+  "fc.lc","shortearn","adshrink","tinyurl.com/adrd",
+  // Popup/redirect domains seen in vidsrc
+  "sbm49","gotrackier","clck.ru","clkmon","clkrevenue",
+  "datadome","otracking","clicktrace","land.allvideos",
 ];
-const AD_CSS=`
-  div[id*="ad"],div[class*="ad-"],div[class*="ads-"],
-  div[id*="banner"],div[class*="banner"],
-  div[id*="popup"],div[class*="popup"],div[class*="pop-"],
-  div[id*="overlay"]:not(#sub-overlay),
-  iframe[src*="ad"],iframe[src*="pop"],
-  .ad,.ads,.adsbygoogle,.ad-container,.ad-wrap,
-  #ad,#ads,#banner,#popup,
-  [style*="z-index: 99999"],[style*="z-index:99999"]{
-    display:none!important;visibility:hidden!important;pointer-events:none!important;
-  }
-  video{width:100%!important;height:100%!important;}
+
+const AD_CSS = `
+*[href*="gotrackier"],*[href*="clickadu"],*[href*="exoclick"],
+*[href*="popads"],*[href*="popcash"],*[href*="adcash"],
+div[id*="ad"]:not(#modal):not(#stream-picker),
+div[class*="ad-"],div[class*="ads-"],div[class*="advert"],
+div[id*="banner"],div[class*="banner"],
+div[id*="popup"],div[class*="popup"],div[class*="pop-"],
+div[id*="overlay"]:not(#sub-overlay),
+.ad,.ads,.adsbygoogle,.ad-container,.ad-wrap,
+#ad,#ads,#banner,#popup,
+iframe[src*="ad"],iframe[src*="pop"],iframe[src*="click"],
+a[href*="gotrackier"],a[href*="tracker"],a[target="_blank"],
+[style*="z-index: 9999"],[style*="z-index:9999"]{
+  display:none!important;visibility:hidden!important;
+  pointer-events:none!important;opacity:0!important;
+}
+video{width:100%!important;height:100%!important;}
 `;
-const AD_BLOCK_SCRIPT=`
-<script>
-window.open=()=>null;
-const _oF=window.fetch;
-window.fetch=function(u,...a){
-  if(typeof u==="string"&&["${AD_DOMAINS.join('","')}"].some(d=>u.includes(d)))
-    return Promise.reject(new Error("blocked"));
-  return _oF.call(this,u,...a);
-};
-const _oX=XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open=function(m,u,...a){
-  if(typeof u==="string"&&["${AD_DOMAINS.join('","')}"].some(d=>u.includes(d)))return;
-  return _oX.call(this,m,u,...a);
-};
+
+// The injected script runs INSIDE the iframe — blocks all ad activity
+const AD_BLOCK_SCRIPT = `<script>
+(function(){
+  'use strict';
+  const BAD = ${JSON.stringify(AD_HOSTS)};
+  const isBad = u => typeof u==='string' && BAD.some(d=>u.includes(d));
+
+  // 1. Block window.open — kills all popups/popunders
+  window.open = () => null;
+  window.alert = () => {};
+  window.confirm = () => false;
+  window.prompt = () => null;
+
+  // 2. Block navigation to ad domains
+  const _pushState = history.pushState.bind(history);
+  const _replaceState = history.replaceState.bind(history);
+  history.pushState = (s,t,u) => { if(!isBad(u)) _pushState(s,t,u); };
+  history.replaceState = (s,t,u) => { if(!isBad(u)) _replaceState(s,t,u); };
+
+  // 3. Block fetch to ad domains
+  const _fetch = window.fetch;
+  window.fetch = (u,...a) => isBad(u&&u.url||u) ? Promise.reject(new Error('blocked')) : _fetch(u,...a);
+
+  // 4. Block XHR to ad domains
+  const _open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(m,u,...a){
+    if(isBad(u)) return;
+    return _open.call(this,m,u,...a);
+  };
+
+  // 5. Block click/touchstart hijacking — the main cause of popup tabs
+  // Intercept ALL clicks — if the resolved href points to an ad domain, kill it
+  document.addEventListener('click', e=>{
+    let el = e.target;
+    while(el && el.tagName !== 'A') el = el.parentElement;
+    if(el && isBad(el.href||'')) { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+  }, true);
+
+  document.addEventListener('touchstart', e=>{
+    let el = e.target;
+    while(el && el.tagName !== 'A') el = el.parentElement;
+    if(el && isBad(el.href||'')) { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+  }, true);
+
+  // 6. Block dynamic script injection of ad domains
+  const _appendChild = Element.prototype.appendChild;
+  Element.prototype.appendChild = function(node){
+    if(node && node.tagName==='SCRIPT' && isBad(node.src||'')) return node;
+    if(node && node.tagName==='IFRAME' && isBad(node.src||'')) return node;
+    return _appendChild.call(this, node);
+  };
+  const _insertBefore = Element.prototype.insertBefore;
+  Element.prototype.insertBefore = function(node,ref){
+    if(node && node.tagName==='SCRIPT' && isBad(node.src||'')) return node;
+    if(node && node.tagName==='IFRAME' && isBad(node.src||'')) return node;
+    return _insertBefore.call(this, node, ref);
+  };
+
+  // 7. Observe DOM for dynamically added ad elements and remove them
+  new MutationObserver(muts=>{
+    for(const m of muts) for(const n of m.addedNodes){
+      if(!n.tagName) continue;
+      const tag=n.tagName;
+      const src=n.src||n.href||'';
+      if((tag==='SCRIPT'||tag==='IFRAME')&&isBad(src)){ n.remove(); continue; }
+      if(tag==='A'&&isBad(n.href||'')){ n.style.pointerEvents='none'; n.href='#'; }
+    }
+  }).observe(document.documentElement,{childList:true,subtree:true});
+})();
 <\/script>`;
 
 async function tryFluidPlayer(){
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
   const fpBtn=$("fp-btn");
-  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Ad-Free…"; }
+  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Loading…"; }
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
   const tmdbId=cur.id;
   const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
@@ -502,28 +575,26 @@ async function tryFluidPlayer(){
   if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Loading ad-free…</div>';}
 
   try{
-    // Fetch vidsrc HTML through CF worker proxy
     const proxyUrl=`https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(embedUrl)}`;
     const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(15000)});
     if(!r.ok) throw new Error("proxy "+r.status);
     let html=await r.text();
 
-    // Strip ad scripts by src domain
-    html=html.replace(/<script[^>]+src=["'][^"']*["'][^>]*>\s*<\/script>/gi, m=>{
-      return AD_DOMAINS.some(d=>m.toLowerCase().includes(d))?"":m;
-    });
-    // Strip inline ad scripts
-    html=html.replace(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/gi,(m,code)=>{
-      return AD_DOMAINS.some(d=>code.toLowerCase().includes(d))?"":m;
-    });
-    // Block window.open popunders
+    // Remove script tags from ad domains
+    html=html.replace(/<script[^>]+src=["'][^"']*["'][^>]*>\s*<\/script>/gi, m=>
+      AD_HOSTS.some(d=>m.toLowerCase().includes(d)) ? "" : m
+    );
+    // Remove inline scripts with ad content
+    html=html.replace(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/gi,(m,code)=>
+      AD_HOSTS.some(d=>code.toLowerCase().includes(d)) ? "" : m
+    );
+    // Kill window.open in remaining scripts
     html=html.replace(/window\.open\s*\(/g,"void(0)&&(");
     // Fix relative URLs
-    html=html.replace(/<head>/i,`<head><base href="https://vidsrc.net/">`);
-    // Inject blocker + CSS
-    html=html.replace("</head>",`<style>${AD_CSS}</style>${AD_BLOCK_SCRIPT}</head>`);
+    html=html.replace(/<head[^>]*>/i, m=>`${m}<base href="https://vidsrc.net/">`);
+    // Inject blocker FIRST in head (before any other scripts run)
+    html=html.replace(/<head[^>]*>/i, m=>`${m}${AD_BLOCK_SCRIPT}<style>${AD_CSS}</style>`);
 
-    // Serve as blob — same-origin, no X-Frame-Options
     const blob=new Blob([html],{type:"text/html"});
     const blobUrl=URL.createObjectURL(blob);
     if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
@@ -541,7 +612,7 @@ async function tryFluidPlayer(){
 
   }catch(e){
     console.warn("[FP adblock]",e);
-    if(fpBtn) fpBtn.textContent="🎬 FluidPlayer";
+    if(fpBtn) fpBtn.textContent="🎬 Player";
     showIframe(embedUrl,title);
   }
 }
