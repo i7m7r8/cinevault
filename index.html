@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,8 +20,6 @@
 <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
 <script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
-<link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
-<script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
 <style>
 :root {
@@ -457,33 +456,48 @@ async function tryFluidPlayer(){
   // /direct-stream returns same
   // others may return {streams:[{url,...}]} or {url}
   function extractUrl(data){
-    const list = Array.isArray(data) ? data : (data.streams||data.results||[data]);
+    // Handle autoembed.cc: {stream_url: "..."} or {url: "..."}
+    if(data.stream_url && /^https?:\/\//.test(data.stream_url)) return data.stream_url;
+    if(data.source    && /^https?:\/\//.test(data.source))     return data.source;
+    // Handle arrays or streams arrays
+    const list = Array.isArray(data) ? data : (data.streams||data.results||data.sources||[data]);
     for(const s of list){
-      const u = s.stream || s.url || s.src || s.link || "";
+      const u = s.stream || s.url || s.stream_url || s.src || s.file || s.link || "";
       if(u && /^https?:\/\//.test(u)) return u;
     }
     return null;
   }
 
-  // Try endpoints in order — only /direct-stream and /vidsrc actually exist
-  const endpoints = [
-    { url:`${API}/direct-stream?tmdb=${tmdbId}&type=${typeParam}${epParams}`, label:"VidSrc" },
-    { url:`${API}/vidsrc?tmdb=${tmdbId}&type=${typeParam}${epParams}`,        label:"VidSrc" },
+  // Try direct REST APIs first (fast, no scraping), then fall back to our Vercel extractor
+  // autoembed.cc has a free JSON API that returns direct m3u8 URLs
+  const directApis = isTv ? [
+    { url:`https://autoembed.cc/api/tv/${tmdbId}/${curS}/${curE}`, label:"AutoEmbed" },
+    { url:`https://api.uniembed.stream/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}&api_key=uniembed`, label:"UniEmbed" },
+  ] : [
+    { url:`https://autoembed.cc/api/movies/${tmdbId}`, label:"AutoEmbed" },
+    { url:`https://api.uniembed.stream/embed/movie?tmdb=${tmdbId}&api_key=uniembed`, label:"UniEmbed" },
   ];
 
-  for(const ep of endpoints){
-    try{
-      const r = await fetch(ep.url, { signal: AbortSignal.timeout(18000) });
-      if(!r.ok) continue;
-      const data = await r.json();
-      const u = extractUrl(data);
-      if(u){
-        if(fpBtn) fpBtn.textContent="🎬 FluidPlayer";
-        toast(`▶ FluidPlayer · ${ep.label}`);
-        playWithFluidPlayer(u, `${title} [${ep.label}]`);
-        return;
-      }
-    }catch(e){ console.warn("[FP]", ep.url, e.message); }
+  // Also try our Vercel extractor (may be slow but worth trying in parallel)
+  const vercelApi = { url:`${API}/direct-stream?tmdb=${tmdbId}&type=${typeParam}${epParams}`, label:"VidSrc" };
+
+  // Race all APIs — use whichever responds first with a valid stream
+  const raceResult = await Promise.any([
+    ...directApis.map(ep => 
+      fetch(ep.url, { signal: AbortSignal.timeout(8000) })
+        .then(r => r.ok ? r.json() : Promise.reject("not ok"))
+        .then(data => { const u = extractUrl(data); if(u) return {u, label:ep.label}; throw new Error("no url"); })
+    ),
+    fetch(vercelApi.url, { signal: AbortSignal.timeout(15000) })
+      .then(r => r.ok ? r.json() : Promise.reject("not ok"))
+      .then(data => { const u = extractUrl(data); if(u) return {u, label:vercelApi.label}; throw new Error("no url"); })
+  ]).catch(() => null);
+
+  if(raceResult){
+    if(fpBtn) fpBtn.textContent="🎬 FluidPlayer";
+    toast(`▶ FluidPlayer · ${raceResult.label}`);
+    playWithFluidPlayer(raceResult.u, `${title} [${raceResult.label}]`);
+    return;
   }
 
   // All failed
