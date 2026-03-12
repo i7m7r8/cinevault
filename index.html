@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -377,7 +376,7 @@ function proxyUrl(url){ return `https://cinevault-api.imrannn68d-de2.workers.dev
 
 // Convert an infoHash into a direct HTTP stream URL using Torrentio's debrid-free HTTP endpoint
 function torrentioStreamUrl(infoHash, fileIdx=0){
-  return `https://torrentio.strem.fun/${infoHash}/${fileIdx}/stream`;
+  return `${API}/torrent-stream?hash=${infoHash}&idx=${fileIdx}`;
 }
 
 async function tmdb(path,params={}){
@@ -445,17 +444,10 @@ function updateMmeta(){
 // ── SOURCE BUTTONS ───────────────────────────────────────────────
 function buildSources(){
   const wrap=$("srcbns"); wrap.innerHTML="";
-  // "Ad-Free" button (tries direct HLS/MP4 via API)
-  const fp=document.createElement("button");
-  fp.className="fp-btn"; fp.id="fp-btn";
-  fp.textContent="🛡️ Ad-Free";
-  fp.onclick=()=>tryAdFreeStream();
-  wrap.appendChild(fp);
-  // Magnet button
+  // Torrent stream button (server-side, ad-free)
   const mg=document.createElement("button");
-  mg.className="cbtn";
-  mg.textContent="🧲 Magnet";
-  mg.title="Play via magnet link or infohash";
+  mg.className="fp-btn"; mg.id="torrent-btn";
+  mg.textContent="🧲 Torrent";
   mg.onclick=()=>playBestMagnet();
   wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
@@ -567,58 +559,6 @@ const AD_BLOCK_SCRIPT = `<script>
 })();<\/script>`;
 
 // ── TRY AD-FREE DIRECT STREAM ─────────────────────────────────
-async function tryAdFreeStream(){
-  if(!cur) return;
-  document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
-  const fpBtn=$("fp-btn");
-  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Loading…"; }
-  const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
-  const tmdbId=cur.id;
-  const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
-  const typeParam=isTv?"tv":"movie";
-  const epParams=isTv?`&s=${curS}&e=${curE}`:"";
-
-  const pph=$("pph");
-  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Finding ad-free stream…</div>';}
-
-  const sources = [
-    fetch(`${API}/autoembed?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-    fetch(`${API}/vixsrc?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-    fetch(`${API}/get-source?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-  ];
-
-  try {
-    const results = await Promise.allSettled(sources);
-    for (const res of results) {
-      if (res.status !== 'fulfilled' || !res.value) continue;
-      const data = res.value;
-      let best = null;
-      if (data.streams) {
-        best = data.streams.find(s=>s.url);
-      } else if (data.videos || data.results) {
-        best = (data.videos || data.results || [])[0];
-      }
-      if (best?.url) {
-        if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
-        toast("▶ Playing ad-free stream");
-        // Proxy through CF worker with referer if available
-        const ref = best.referer||best.origin||"";
-        const proxied = ref
-          ? `https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(best.url)}&referer=${encodeURIComponent(ref)}`
-          : proxyUrl(best.url);
-        playDirectVideo(proxied, title);
-        return;
-      }
-    }
-    console.warn("[Ad-Free] all sources failed, falling back to iframe");
-    if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
-    loadSource(0);
-  } catch(e) {
-    console.warn("[Ad-Free] error:", e);
-    loadSource(0);
-  }
-}
-
 function loadSource(i){
   if(!cur) return;
   srcIdx=i;
@@ -635,9 +575,8 @@ function loadSource(i){
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
 async function playTorrent(infoHash, fileIdx, title){
-  const rawUrl   = torrentioStreamUrl(infoHash, fileIdx);
-  const proxyUri = proxyUrl(rawUrl);
-  await playDirectVideo(proxyUri, title);
+  const streamUrl = torrentioStreamUrl(infoHash, fileIdx);
+  await playDirectVideo(streamUrl, title);
 }
 
 // ── SUBTITLE OVERLAY ENGINE ───────────────────────────────────────
@@ -860,11 +799,20 @@ function playDirectVideo(streamUrl, title) {
   video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
   pwrap.appendChild(video);
 
+  // First, test if the stream is reachable (optional, but helpful)
+  fetch(streamUrl, { method: 'HEAD', mode: 'cors' }).then(resp => {
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    console.log('[Video] Stream reachable, status:', resp.status);
+  }).catch(e => {
+    console.warn('[Video] Stream may be unreachable:', e);
+    toast("⚠️ Stream unreachable – trying fallback...");
+  });
+
   vjsPlayer = videojs("vjs-player", {
     controls: true,
     autoplay: true,
     preload: "auto",
-    fill: true,
+    fluid: true,
     playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
     html5: {
       vhs: {
@@ -1070,7 +1018,7 @@ async function loadSeasons(tvId){
         curS=s.season_number;curE=1;
         updateMmeta();
         await loadEps(tvId,curS);
-        tryAdFreeStream();
+        playBestMagnet();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -1093,7 +1041,7 @@ async function loadEps(tvId,s){
         b.classList.add("on");
         curE=ep.episode_number;
         updateMmeta();
-        tryAdFreeStream();
+        playBestMagnet();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -1135,8 +1083,8 @@ function openModal(item,type){
       }catch(e){console.error("IMDb fetch:",e);}
     }
     if(isTv) await loadSeasons(item.id);
-    tryAdFreeStream();
-    loadDirectStreams(false);
+    playBestMagnet();         // start torrent immediately
+    loadDirectStreams(false); // load stream list in background
   })();
 }
 
@@ -1257,14 +1205,6 @@ async function init(){
 init();
 
 // ── MAGNET / WEBTORRENT PLAYER ────────────────────────────────────
-let _wtClient = null;
-
-function destroyMagnetPlayer(){
-  if(_wtClient){ try{_wtClient.destroy();}catch(e){} _wtClient=null; }
-  const v=document.getElementById("wt-video");
-  if(v){v.pause();v.src="";}
-}
-
 function pickBestTorrent(){
   const streams=_cachedStreams.filter(s=>s.infoHash&&s.infoHash.length===40);
   if(!streams.length) return null;
@@ -1275,101 +1215,31 @@ function pickBestTorrent(){
 }
 
 function playBestMagnet(){
+  const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
+  const label=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
   const best=pickBestTorrent();
-  if(!best){ toast("⚠️ No torrents in stream list yet — wait for streams to load"); return; }
 
-  const hash=best.infoHash;
-  const label=(cur.title||cur.name||"")+(cur.mediaType!=="movie"?` S${curS}E${curE}`:"");
-  const magnet=`magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(label)}`
-    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Fopen.tracker.cl%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969%2Fannounce`
-    +`&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`
-    +`&tr=wss%3A%2F%2Ftracker.btorrent.xyz`
-    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`;
+  // Build server-side stream URL
+  let streamUrl;
+  if(best?.infoHash){
+    streamUrl=`${API}/torrent-stream?hash=${best.infoHash}&idx=${best.fileIdx||0}`;
+  } else if(cur?.imdb_id){
+    // No cached streams yet — let server fetch from Torrentio
+    streamUrl=`${API}/torrent-stream?imdb=${cur.imdb_id}&type=${isTv?"tv":"movie"}`;
+    if(isTv) streamUrl+=`&s=${curS}&e=${curE}`;
+  } else {
+    toast("⚠️ No IMDb ID — streams unavailable");
+    return;
+  }
 
-  if(!window.WebTorrent){ playMagnetIframe(magnet,label); return; }
+  // Mark torrent button active
+  document.querySelectorAll("#srcbns .cbtn, #srcbns .fp-btn").forEach(b=>b.classList.remove("on"));
+  const tb=document.getElementById("torrent-btn");
+  if(tb) tb.classList.add("on");
 
-  clearPlayer();
-  const pwrap=$("pwrap");
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML='<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>'+hash.slice(0,16)+'…</small></div>';
-  setNameBar("🧲 "+label);
-  toast("🧲 Connecting to peers…");
-
-  destroyMagnetPlayer();
-  _wtClient=new WebTorrent();
-  _wtClient.on("error", e=>{
-    console.warn("WT error:",e);
-    playMagnetIframe(magnet,label);
-  });
-
-  const timeout=setTimeout(()=>{
-    if(!_wtClient) return;
-    const t=_wtClient.torrents[0];
-    if(!t||t.numPeers===0){
-      console.warn("No peers — falling back to instant.io");
-      destroyMagnetPlayer();
-      playMagnetIframe(magnet,label);
-    }
-  },15000);
-
-  _wtClient.add(magnet, {
-    announce:[
-      "wss://tracker.openwebtorrent.com",
-      "wss://tracker.btorrent.xyz",
-      "wss://tracker.fastcast.nz",
-      "wss://tracker.webtorrent.dev",
-    ]
-  }, torrent=>{
-    clearTimeout(timeout);
-    const videoExts=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
-    const files=torrent.files.filter(f=>videoExts.test(f.name));
-    const file=files.sort((a,b)=>b.length-a.length)[0]||torrent.files[0];
-
-    if(!file){ playMagnetIframe(magnet,label); return; }
-
-    toast("🎬 "+file.name);
-    $("pph").classList.add("hidden");
-
-    const vid=document.createElement("video");
-    vid.id="wt-video";
-    vid.setAttribute("playsinline","");
-    vid.setAttribute("webkit-playsinline","");
-    vid.controls=true;
-    vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;background:#000;";
-    pwrap.appendChild(vid);
-
-    file.renderTo(vid,{autoplay:true},err=>{
-      if(err){ console.warn("renderTo failed:",err); playMagnetIframe(magnet,label); }
-    });
-
-    const timer=setInterval(()=>{
-      if(!_wtClient||torrent.done){clearInterval(timer);return;}
-      const pct=(torrent.progress*100).toFixed(1);
-      const dl=(torrent.downloadSpeed/1e6).toFixed(2);
-      setNameBar(`🧲 ${label} ⬇${pct}% ${dl}MB/s ${torrent.numPeers}peers`);
-    },3000);
-  });
+  playDirectVideo(streamUrl, "🧲 "+label);
 }
 
-function playMagnetIframe(magnet, label){
-  destroyMagnetPlayer();
-  clearPlayer();
-  toast("🔄 Opening in instant.io…");
-  const pwrap=$("pwrap");
-  $("pph").classList.add("hidden");
-  setNameBar("🧲 "+label+" (instant.io)");
-
-  const iframe=document.createElement("iframe");
-  iframe.id="pframe";
-  iframe.src="https://instant.io/#"+encodeURIComponent(magnet);
-  iframe.allowFullscreen=true;
-  iframe.allow="autoplay; fullscreen";
-  iframe.referrerPolicy="no-referrer-when-downgrade";
-  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  pwrap.appendChild(iframe);
-}
 
 </script>
 </body>
