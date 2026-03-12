@@ -15,6 +15,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
+<link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
+<script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
 <style>
 :root {
   --bg:#0d0d14;--s1:#13131e;--s2:#1a1a28;--s3:#222235;
@@ -452,7 +455,7 @@ async function tryFluidPlayer(){
       const best=(data.streams||[]).find(s=>s.lang==="en")
              ||(data.streams||[]).find(s=>s.lang==="hi")
              ||(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · AutoEmbed"); await playDirectUrl(best.url,`${title} [AutoEmbed·${best.lang}]`); return; }
+      if(best?.url){ toast("▶ FluidPlayer · AutoEmbed"); playWithFluidPlayer(best.url, `${title} [AutoEmbed·${best.lang}]`); return; }
     }
   }catch(e){console.warn("[FP] autoembed:",e.message);}
   // 2) VixSrc
@@ -461,7 +464,7 @@ async function tryFluidPlayer(){
     if(r.ok){
       const data=await r.json();
       const best=(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · VixSrc"); await playDirectUrl(best.url,`${title} [VixSrc·${best.quality}]`); return; }
+      if(best?.url){ toast("▶ FluidPlayer · VixSrc"); playWithFluidPlayer(best.url, `${title} [VixSrc·${best.quality}]`); return; }
     }
   }catch(e){console.warn("[FP] vixsrc:",e.message);}
   // 3) VidSrc.net extractor
@@ -470,7 +473,7 @@ async function tryFluidPlayer(){
     if(r.ok){
       const data=await r.json();
       const best=(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · VidSrc"); await playDirectUrl(best.url,`${title} [VidSrc]`); return; }
+      if(best?.url){ toast("▶ FluidPlayer · VidSrc"); playWithFluidPlayer(best.url, `${title} [VidSrc]`); return; }
     }
   }catch(e){console.warn("[FP] vidsrc:",e.message);}
   // All failed — fallback to first iframe
@@ -771,6 +774,81 @@ const CORS_PROXIES = [
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u=>`${API}/proxy?url=${encodeURIComponent(u)}`,  // your own Vercel addon as proxy
 ];
+
+// ── FLUID PLAYER ─────────────────────────────────────────────────
+let _fpInstance = null;
+
+function destroyFluidPlayer() {
+  if (_fpInstance) {
+    try { _fpInstance.destroy(); } catch(e) {}
+    _fpInstance = null;
+  }
+  const old = document.getElementById("fp-video");
+  if (old) old.parentNode && old.parentNode.removeChild(old);
+}
+
+function playWithFluidPlayer(streamUrl, title) {
+  clearPlayer();
+  destroyFluidPlayer();
+  const pwrap = $("pwrap");
+  $("pph").classList.add("hidden");
+  setNameBar(title);
+
+  const isHLS = /m3u8/i.test(streamUrl);
+
+  // Plain <video> — FluidPlayer takes it over completely
+  const vid = document.createElement("video");
+  vid.id = "fp-video";
+  vid.setAttribute("playsinline", "");
+  vid.setAttribute("webkit-playsinline", "");
+  vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;display:block;";
+
+  const src = document.createElement("source");
+  src.src = streamUrl;
+  src.type = isHLS ? "application/x-mpegURL" : "video/mp4";
+  vid.appendChild(src);
+  pwrap.appendChild(vid);
+
+  // Wait one frame so element is in DOM before FluidPlayer init
+  requestAnimationFrame(() => {
+    _fpInstance = fluidPlayer("fp-video", {
+      layoutControls: {
+        primaryColor: "#e8173a",
+        fillToContainer: true,
+        autoPlay: false,          // false avoids mobile autoplay block — user taps play
+        mute: false,
+        loop: false,
+        allowTheatre: false,
+        playButtonShowing: true,
+        playPauseAnimation: true,
+        keyboardControl: true,
+        title: title,
+        controlBar: {
+          autoHide: true,
+          autoHideTimeout: 3,
+          animated: true,
+        },
+        contextMenu: { controls: true, links: [] },
+        persistentSettings: { volume: true, quality: true },
+      },
+      // No VAST ads — fully ad-free
+      vastLoadedCallback: () => {},
+    });
+
+    // HLS needs hls.js since FluidPlayer doesn't bundle it
+    if (isHLS && window.Hls && Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(streamUrl);
+      hls.attachMedia(vid);
+    }
+
+    toast("🎬 FluidPlayer ready — tap ▶ to play");
+
+    if (cur?.imdb_id) {
+      setTimeout(() => loadAndStartSubs("vjs"), 1500);
+    }
+  });
+}
 
 async function playDirectUrl(streamUrl, title){
   clearPlayer();
