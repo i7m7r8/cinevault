@@ -23,8 +23,6 @@
 <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
 <script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
 <style>
 :root {
   --bg:#0d0d14;--s1:#13131e;--s2:#1a1a28;--s3:#222235;
@@ -567,56 +565,62 @@ async function tryFluidPlayer(){
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
   const tmdbId=cur.id;
   const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
-  const embedUrl=isTv
-    ? `https://vidsrc.net/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}`
-    : `https://vidsrc.net/embed/movie?tmdb=${tmdbId}`;
+  const typeParam=isTv?"tv":"movie";
+  const epParams=isTv?`&s=${curS}&e=${curE}`:"";
 
   const pph=$("pph");
-  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Loading ad-free…</div>';}
+  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Finding ad-free stream…</div>';}
 
+  // 1) AutoEmbed — servers 1-11, has Hindi (servers 4-5)
   try{
-    const proxyUrl=`https://cinevault-api.imrannn68d-de2.workers.dev/stream-proxy?url=${encodeURIComponent(embedUrl)}`;
-    const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(15000)});
-    if(!r.ok) throw new Error("proxy "+r.status);
-    let html=await r.text();
+    const r=await fetch(`${API}/autoembed?tmdb=${tmdbId}&type=${typeParam}${epParams}`,{signal:AbortSignal.timeout(15000)});
+    if(r.ok){
+      const data=await r.json();
+      const best=(data.streams||[]).find(s=>s.lang==="en")||(data.streams||[]).find(s=>s.lang==="hi")||(data.streams||[])[0];
+      if(best?.url){
+        if(fpBtn){ fpBtn.textContent="🛡️ Ad-Free"; }
+        toast("▶ FluidPlayer · AutoEmbed");
+        playWithFluidPlayer(best.url, `${title} [AutoEmbed·${best.lang||""}]`);
+        return;
+      }
+    }
+  }catch(e){ console.warn("[FP] autoembed:",e.message); }
 
-    // Remove script tags from ad domains
-    html=html.replace(/<script[^>]+src=["'][^"']*["'][^>]*>\s*<\/script>/gi, m=>
-      AD_HOSTS.some(d=>m.toLowerCase().includes(d)) ? "" : m
-    );
-    // Remove inline scripts with ad content
-    html=html.replace(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/gi,(m,code)=>
-      AD_HOSTS.some(d=>code.toLowerCase().includes(d)) ? "" : m
-    );
-    // Kill window.open in remaining scripts
-    html=html.replace(/window\.open\s*\(/g,"void(0)&&(");
-    // Fix relative URLs
-    html=html.replace(/<head[^>]*>/i, m=>`${m}<base href="https://vidsrc.net/">`);
-    // Inject blocker FIRST in head (before any other scripts run)
-    html=html.replace(/<head[^>]*>/i, m=>`${m}${AD_BLOCK_SCRIPT}<style>${AD_CSS}</style>`);
+  // 2) VixSrc
+  try{
+    const r=await fetch(`${API}/vixsrc?tmdb=${tmdbId}&type=${typeParam}${epParams}`,{signal:AbortSignal.timeout(15000)});
+    if(r.ok){
+      const data=await r.json();
+      const best=(data.streams||[])[0];
+      if(best?.url){
+        if(fpBtn){ fpBtn.textContent="🛡️ Ad-Free"; }
+        toast("▶ FluidPlayer · VixSrc");
+        playWithFluidPlayer(best.url, `${title} [VixSrc·${best.quality||""}]`);
+        return;
+      }
+    }
+  }catch(e){ console.warn("[FP] vixsrc:",e.message); }
 
-    const blob=new Blob([html],{type:"text/html"});
-    const blobUrl=URL.createObjectURL(blob);
-    if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
-    clearPlayer();
-    $("pph").classList.add("hidden");
-    setNameBar("🛡️ "+title+" [Ad-Free]");
-    const iframe=document.createElement("iframe");
-    iframe.id="pframe";
-    iframe.allowFullscreen=true;
-    iframe.allow="autoplay; fullscreen; picture-in-picture; encrypted-media";
-    iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;";
-    iframe.src=blobUrl;
-    $("pwrap").appendChild(iframe);
-    if(cur?.imdb_id) loadAndStartSubs("wall");
+  // 3) get-source (vidsrc.icu + vidsrc.me + vidsrc.net parallel)
+  try{
+    const r=await fetch(`${API}/get-source?tmdb=${tmdbId}&type=${typeParam}${epParams}`,{signal:AbortSignal.timeout(20000)});
+    if(r.ok){
+      const data=await r.json();
+      const best=(data.streams||[])[0];
+      if(best?.url){
+        if(fpBtn){ fpBtn.textContent="🛡️ Ad-Free"; }
+        toast("▶ FluidPlayer · "+best.provider);
+        playWithFluidPlayer(best.url, `${title} [${best.provider||"Direct"}]`);
+        return;
+      }
+    }
+  }catch(e){ console.warn("[FP] get-source:",e.message); }
 
-  }catch(e){
-    console.warn("[FP adblock]",e);
-    if(fpBtn) fpBtn.textContent="🎬 Player";
-    showIframe(embedUrl,title);
-  }
+  // All failed — fallback to first iframe source
+  console.warn("[FP] all sources failed, falling back to iframe");
+  if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
+  loadSource(0);
 }
-
 
 function loadSource(i){
   if(!cur) return;
