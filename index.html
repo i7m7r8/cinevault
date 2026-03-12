@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,6 +16,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
+<link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
+<script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
 <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css">
 <script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
@@ -378,6 +382,7 @@ function stopVideo(){
   _activeCues=[]; _subCues=[]; _subOffset=0;
   _activeVttUrl=null;
   if(_activeVttObjectUrl){try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){} _activeVttObjectUrl=null;}
+  if(typeof destroyFluidPlayer==="function") destroyFluidPlayer();
   if(vjsPlayer){
     try{ vjsPlayer.dispose(); }catch(e){}
     vjsPlayer=null;
@@ -433,52 +438,58 @@ function buildSources(){
   });
 }
 
-// ── FLUID PLAYER — try autoembed → vixsrc → vidsrc, fallback iframe
+// ── FLUID PLAYER — tries /direct-stream (vidsrc.ts port), fallback iframe
 async function tryFluidPlayer(){
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
   const fpBtn=$("fp-btn");
-  if(fpBtn) fpBtn.classList.add("on");
+  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Finding stream…"; }
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
-  const tmdb=cur.id;
+  const tmdbId=cur.id;
   const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
   const typeParam=isTv?"tv":"movie";
   const epParams=isTv?`&s=${curS}&e=${curE}`:"";
-  toast("🔍 Finding direct stream…");
   const pph=$("pph");
   if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">⏳</div><div>Finding ad-free stream…</div>';}
-  // 1) AutoEmbed — prefer English then Hindi
-  try{
-    const r=await fetch(`${API}/autoembed?tmdb=${tmdb}&type=${typeParam}${epParams}`);
-    if(r.ok){
-      const data=await r.json();
-      const best=(data.streams||[]).find(s=>s.lang==="en")
-             ||(data.streams||[]).find(s=>s.lang==="hi")
-             ||(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · AutoEmbed"); playWithFluidPlayer(best.url,`${title} [AutoEmbed·${best.lang}]`); return; }
+
+  // Helper: extract usable URL from any API response shape
+  // vidsrc.ts returns plain array [{stream, name, ...}]
+  // /direct-stream returns same
+  // others may return {streams:[{url,...}]} or {url}
+  function extractUrl(data){
+    const list = Array.isArray(data) ? data : (data.streams||data.results||[data]);
+    for(const s of list){
+      const u = s.stream || s.url || s.src || s.link || "";
+      if(u && /^https?:\/\//.test(u)) return u;
     }
-  }catch(e){console.warn("[FP] autoembed:",e.message);}
-  // 2) VixSrc
-  try{
-    const r=await fetch(`${API}/vixsrc?tmdb=${tmdb}&type=${typeParam}${epParams}`);
-    if(r.ok){
-      const data=await r.json();
-      const best=(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · VixSrc"); playWithFluidPlayer(best.url,`${title} [VixSrc·${best.quality}]`); return; }
-    }
-  }catch(e){console.warn("[FP] vixsrc:",e.message);}
-  // 3) VidSrc.net extractor
-  try{
-    const r=await fetch(`${API}/vidsrc?tmdb=${tmdb}&type=${typeParam}${epParams}`);
-    if(r.ok){
-      const data=await r.json();
-      const best=(data.streams||[])[0];
-      if(best?.url){ toast("▶ FluidPlayer · VidSrc"); playWithFluidPlayer(best.url,`${title} [VidSrc]`); return; }
-    }
-  }catch(e){console.warn("[FP] vidsrc:",e.message);}
-  // All failed — fallback to first iframe
-  toast("⚠️ No direct stream — falling back to embed");
-  if(fpBtn) fpBtn.classList.remove("on");
+    return null;
+  }
+
+  // Try endpoints in order — only /direct-stream and /vidsrc actually exist
+  const endpoints = [
+    { url:`${API}/direct-stream?tmdb=${tmdbId}&type=${typeParam}${epParams}`, label:"VidSrc" },
+    { url:`${API}/vidsrc?tmdb=${tmdbId}&type=${typeParam}${epParams}`,        label:"VidSrc" },
+  ];
+
+  for(const ep of endpoints){
+    try{
+      const r = await fetch(ep.url, { signal: AbortSignal.timeout(18000) });
+      if(!r.ok) continue;
+      const data = await r.json();
+      const u = extractUrl(data);
+      if(u){
+        if(fpBtn) fpBtn.textContent="🎬 FluidPlayer";
+        toast(`▶ FluidPlayer · ${ep.label}`);
+        playWithFluidPlayer(u, `${title} [${ep.label}]`);
+        return;
+      }
+    }catch(e){ console.warn("[FP]", ep.url, e.message); }
+  }
+
+  // All failed
+  if(fpBtn){ fpBtn.textContent="🎬 FluidPlayer"; fpBtn.classList.remove("on"); }
+  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🎬</div><div>Loading best source…</div>';}
+  toast("⚠️ No direct stream — using embed");
   loadSource(0);
 }
 
