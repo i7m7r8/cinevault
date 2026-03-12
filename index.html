@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -293,7 +294,7 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
 
       <div class="player-outer" id="player-outer">
         <div class="pwrap" id="pwrap">
-          <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Loading best source…</div></div>
+          <div class="pph" id="pph"><div class="pph-icon">🎬</div><div>Choose a source above to watch</div></div>
           <div id="sub-overlay"></div>
           <div id="sub-ctrl" class="hidden">
             <button onclick="shiftSub(-500)">◀ 0.5s</button>
@@ -1023,8 +1024,7 @@ async function loadSeasons(tvId){
         curS=s.season_number;curE=1;
         updateMmeta();
         await loadEps(tvId,curS);
-        loadDirectStreams(true);
-        tryFluidPlayer();
+        loadDirectStreams(false);
       };
       wrap.appendChild(b);
     });
@@ -1046,8 +1046,7 @@ async function loadEps(tvId,s){
         b.classList.add("on");
         curE=ep.episode_number;
         updateMmeta();
-        loadDirectStreams(true);
-        tryFluidPlayer();
+        loadDirectStreams(false);
       };
       wrap.appendChild(b);
     });
@@ -1089,8 +1088,7 @@ function openModal(item,type){
       }catch(e){console.error("IMDb fetch:",e);}
     }
     if(isTv) await loadSeasons(item.id);
-    loadDirectStreams(true);  // auto-play first torrent stream in Video.js
-    tryFluidPlayer();         // also try FluidPlayer direct stream in parallel
+    loadDirectStreams(false);  // load stream list but don't auto-play
   })();
 }
 
