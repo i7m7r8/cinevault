@@ -438,72 +438,104 @@ function buildSources(){
 }
 
 // ── FLUID PLAYER — tries /direct-stream (vidsrc.ts port), fallback iframe
+// ── INTERCEPT m3u8 FROM VIDSRC EMBED (client-side, no API needed) ─
+// Strategy: load vidsrc embed in hidden iframe, intercept XHR/fetch
+// requests using a ServiceWorker message bridge to catch the m3u8 URL,
+// then destroy the iframe and play in FluidPlayer.
+function interceptEmbedStream(embedUrl, timeoutMs=20000){
+  return new Promise((resolve) => {
+    // Inject a hidden iframe — vidsrc JS will run and fire XHR/fetch for m3u8
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;opacity:0;pointer-events:none;";
+    iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
+    iframe.allow = "autoplay";
+
+    let resolved = false;
+    const cleanup = (url) => {
+      if(resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      window.removeEventListener("message", onMsg);
+      try { iframe.remove(); } catch(e) {}
+      resolve(url || null);
+    };
+
+    // The iframe page will postMessage any m3u8/mp4 URLs it finds in network requests
+    // We inject a script via srcdoc that wraps fetch/XHR and posts back URLs
+    const interceptScript = `
+<script>
+(function(){
+  const send = url => window.parent.postMessage({type:"stream-intercept",url}, "*");
+  // Wrap fetch
+  const origFetch = window.fetch;
+  window.fetch = function(input, ...args){
+    const url = typeof input === "string" ? input : (input?.url || "");
+    if(/\.m3u8|playlist|master|stream/i.test(url) && /^https?:\/\//.test(url)) send(url);
+    return origFetch.call(this, input, ...args);
+  };
+  // Wrap XHR
+  const origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest){
+    if(/\.m3u8|playlist|master|stream/i.test(url) && /^https?:\/\//.test(url)) send(url);
+    return origOpen.call(this, method, url, ...rest);
+  };
+  // Load the embed
+  window.location.href = ${JSON.stringify(embedUrl)};
+})();
+<\/script>`;
+
+    // Listen for postMessage from iframe
+    const onMsg = (e) => {
+      const d = e.data;
+      if(d?.type === "stream-intercept" && d.url && /^https?:\/\//.test(d.url)){
+        cleanup(d.url);
+      }
+    };
+    window.addEventListener("message", onMsg);
+
+    const timer = setTimeout(() => cleanup(null), timeoutMs);
+    iframe.srcdoc = interceptScript;
+    document.body.appendChild(iframe);
+  });
+}
+
 async function tryFluidPlayer(){
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
   const fpBtn=$("fp-btn");
-  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Finding stream…"; }
+  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Intercepting…"; }
   const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
   const tmdbId=cur.id;
   const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
-  const typeParam=isTv?"tv":"movie";
-  const epParams=isTv?`&s=${curS}&e=${curE}`:"";
   const pph=$("pph");
-  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">⏳</div><div>Finding ad-free stream…</div>';}
+  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">⏳</div><div>Extracting ad-free stream…</div>';}
 
-  // Helper: extract usable URL from any API response shape
-  // vidsrc.ts returns plain array [{stream, name, ...}]
-  // /direct-stream returns same
-  // others may return {streams:[{url,...}]} or {url}
-  function extractUrl(data){
-    // Handle autoembed.cc: {stream_url: "..."} or {url: "..."}
-    if(data.stream_url && /^https?:\/\//.test(data.stream_url)) return data.stream_url;
-    if(data.source    && /^https?:\/\//.test(data.source))     return data.source;
-    // Handle arrays or streams arrays
-    const list = Array.isArray(data) ? data : (data.streams||data.results||data.sources||[data]);
-    for(const s of list){
-      const u = s.stream || s.url || s.stream_url || s.src || s.file || s.link || "";
-      if(u && /^https?:\/\//.test(u)) return u;
-    }
-    return null;
-  }
-
-  // Try direct REST APIs first (fast, no scraping), then fall back to our Vercel extractor
-  // autoembed.cc has a free JSON API that returns direct m3u8 URLs
-  const directApis = isTv ? [
-    { url:`https://autoembed.cc/api/tv/${tmdbId}/${curS}/${curE}`, label:"AutoEmbed" },
-    { url:`https://api.uniembed.stream/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}&api_key=uniembed`, label:"UniEmbed" },
+  // Build vidsrc embed URLs to try — these actually play content
+  const embedUrls = isTv ? [
+    `https://vidsrc.xyz/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}`,
+    `https://vidsrc.net/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}`,
+    `https://vidsrc.me/embed/tv?tmdb=${tmdbId}&season=${curS}&episode=${curE}`,
   ] : [
-    { url:`https://autoembed.cc/api/movies/${tmdbId}`, label:"AutoEmbed" },
-    { url:`https://api.uniembed.stream/embed/movie?tmdb=${tmdbId}&api_key=uniembed`, label:"UniEmbed" },
+    `https://vidsrc.xyz/embed/movie?tmdb=${tmdbId}`,
+    `https://vidsrc.net/embed/movie?tmdb=${tmdbId}`,
+    `https://vidsrc.me/embed/movie?tmdb=${tmdbId}`,
   ];
 
-  // Also try our Vercel extractor (may be slow but worth trying in parallel)
-  const vercelApi = { url:`${API}/direct-stream?tmdb=${tmdbId}&type=${typeParam}${epParams}`, label:"VidSrc" };
-
-  // Race all APIs — use whichever responds first with a valid stream
-  const raceResult = await Promise.any([
-    ...directApis.map(ep => 
-      fetch(ep.url, { signal: AbortSignal.timeout(8000) })
-        .then(r => r.ok ? r.json() : Promise.reject("not ok"))
-        .then(data => { const u = extractUrl(data); if(u) return {u, label:ep.label}; throw new Error("no url"); })
-    ),
-    fetch(vercelApi.url, { signal: AbortSignal.timeout(15000) })
-      .then(r => r.ok ? r.json() : Promise.reject("not ok"))
-      .then(data => { const u = extractUrl(data); if(u) return {u, label:vercelApi.label}; throw new Error("no url"); })
-  ]).catch(() => null);
-
-  if(raceResult){
-    if(fpBtn) fpBtn.textContent="🎬 FluidPlayer";
-    toast(`▶ FluidPlayer · ${raceResult.label}`);
-    playWithFluidPlayer(raceResult.u, `${title} [${raceResult.label}]`);
-    return;
+  for(const embedUrl of embedUrls){
+    toast(`⏳ Trying ${embedUrl.split("/")[2]}…`);
+    const streamUrl = await interceptEmbedStream(embedUrl, 18000);
+    if(streamUrl){
+      if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="🎬 FluidPlayer ✓"; }
+      toast("▶ FluidPlayer — ad-free!");
+      playWithFluidPlayer(streamUrl, title);
+      return;
+    }
   }
 
-  // All failed
+  // All failed — fall back to iframe
   if(fpBtn){ fpBtn.textContent="🎬 FluidPlayer"; fpBtn.classList.remove("on"); }
   if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🎬</div><div>Loading best source…</div>';}
-  toast("⚠️ No direct stream — using embed");
+  toast("⚠️ Could not extract stream — using embed");
   loadSource(0);
 }
 
