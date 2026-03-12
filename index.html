@@ -1,8 +1,3 @@
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -327,13 +322,46 @@ const API = "https://test-repo-six-sepia.vercel.app";
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
 const IMG = "https://image.tmdb.org/t/p/";
 
+// ── PROXIED SOURCES ───────────────────────────────────────────
+// All iframe‑based sources now go through the /embed-proxy endpoint
+// to block ads, pop‑ups, and overlays (like uBlock Origin built‑in).
 const SOURCES = [
-  { name:"VidSrc",     useImdb:false, movie:id=>`https://vidsrc.icu/embed/movie/${id}`,                                    tv:(id,s,e)=>`https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
-  { name:"2Embed",     useImdb:false, movie:id=>`https://www.2embed.stream/embed/movie/${id}`,                             tv:(id,s,e)=>`https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
-  { name:"VidLink",    useImdb:false, movie:id=>`https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=e8173a`,       tv:(id,s,e)=>`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a` },
-  { name:"VidSrc.me",  useImdb:true,  movie:id=>`https://vidsrc.me/embed/movie?imdb=${id}`,                               tv:(id,s,e)=>`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}` },
-  { name:"NontonGo",   useImdb:false, movie:id=>`https://www.nontongo.win/embed/movie/${id}`,                             tv:(id,s,e)=>`https://www.nontongo.win/embed/tv/${id}/${s}/${e}` },
-  { name:"SuperEmbed", useImdb:false, movie:id=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,          tv:(id,s,e)=>`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  {
+    name: "VidSrc",
+    useImdb: false,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://vidsrc.icu/embed/movie/"+id)}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://vidsrc.icu/embed/tv/${id}/${s}/${e}`)}`
+  },
+  {
+    name: "2Embed",
+    useImdb: false,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://www.2embed.stream/embed/movie/"+id)}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://www.2embed.stream/embed/tv/${id}/${s}/${e}`)}`
+  },
+  {
+    name: "VidLink",
+    useImdb: false,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://vidlink.pro/movie/"+id+"?autoplay=true&primaryColor=e8173a")}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=e8173a`)}`
+  },
+  {
+    name: "VidSrc.me",
+    useImdb: true,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://vidsrc.me/embed/movie?imdb="+id)}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://vidsrc.me/embed/tv?imdb=${id}&season=${s}&episode=${e}`)}`
+  },
+  {
+    name: "NontonGo",
+    useImdb: false,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://www.nontongo.win/embed/movie/"+id)}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://www.nontongo.win/embed/tv/${id}/${s}/${e}`)}`
+  },
+  {
+    name: "SuperEmbed",
+    useImdb: false,
+    movie: id => `${API}/embed-proxy?url=${encodeURIComponent("https://multiembed.mov/directstream.php?video_id="+id+"&tmdb=1")}`,
+    tv:   (id,s,e) => `${API}/embed-proxy?url=${encodeURIComponent(`https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${s}&e=${e}`)}`
+  },
 ];
 
 let cur=null, curS=1, curE=1, srcIdx=0;
@@ -483,7 +511,7 @@ a[href*="gotrackier"],a[href*="tracker"],a[target="_blank"],
   display:none!important;visibility:hidden!important;
   pointer-events:none!important;opacity:0!important;
 }
-video{width:100%!important;height:100%!important;}
+video{width:100%!important;height:100%!important;
 `;
 
 // The injected script runs INSIDE the iframe — blocks all ad activity
