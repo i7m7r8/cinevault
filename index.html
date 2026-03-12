@@ -504,6 +504,7 @@ a[href*="gotrackier"],a[href*="tracker"],a[target="_blank"],
 }
 video{width:100%!important;height:100%!important;}`;
 
+const AD_HOSTS = []; // Define AD_HOSTS to prevent errors with ad-block script
 const AD_BLOCK_SCRIPT = `<script>
 (function(){
   'use strict';
@@ -565,6 +566,13 @@ const AD_BLOCK_SCRIPT = `<script>
   }).observe(document.documentElement,{childList:true,subtree:true});
 })();<\/script>`;
 
+const API = "https://test-repo-six-sepia.vercel.app";
+const CORS_PROXIES = [
+  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`${API}/proxy?url=${encodeURIComponent(u)}`,
+];
+
 // ── TRY AD-FREE DIRECT STREAM ─────────────────────────────────
 async function tryAdFreeStream(){
   if(!cur) return;
@@ -625,6 +633,17 @@ function loadSource(i){
   const label=`${cur.title||cur.name||""}${isMovie?"":` · S${curS}E${curE}`} — ${src.name}`;
   showIframe(url,label);
   toast("▶ "+src.name);
+}
+
+function torrentioStreamUrl(infoHash, fileIdx) {
+  // Placeholder for Torrentio stream URL construction
+  // You might need to adjust the base URL and parameters based on your Torrentio setup
+  return `https://torrentio.strem.fun/stream/movie/${infoHash}${fileIdx ? `/${fileIdx}` : ''}.m3u8`;
+}
+
+function proxyUrl(url) {
+  // Uses the first CORS proxy defined in CORS_PROXIES
+  return CORS_PROXIES[0](url);
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
@@ -855,7 +874,11 @@ function playDirectVideo(streamUrl, title) {
   pwrap.appendChild(video);
 
   // First, test if the stream is reachable (optional, but helpful)
-  fetch(streamUrl, { method: 'HEAD', mode: 'cors' }).then(resp => {
+      // Use a CORS proxy for the stream URL if it's not a direct, same-origin stream
+    const proxiedStreamUrl = CORS_PROXIES[0](streamUrl);
+    console.log('[Video] Attempting to play (proxied):', proxiedStreamUrl);
+
+    fetch(proxiedStreamUrl, { method: 'HEAD', mode: 'cors' }).then(resp => {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     console.log('[Video] Stream reachable, status:', resp.status);
   }).catch(e => {
@@ -871,7 +894,7 @@ function playDirectVideo(streamUrl, title) {
     playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
     html5: {
       vhs: {
-        overrideNative: true,
+        overrideNative: false,
         limitRenditionByPlayerDimensions: true,
         handleManifestRedirects: true,
         withCredentials: false
@@ -897,7 +920,7 @@ function playDirectVideo(streamUrl, title) {
 
   const isHLS = /\.m3u8/i.test(streamUrl);
   const type = isHLS ? 'application/x-mpegURL' : 'video/mp4';
-  vjsPlayer.src({ src: streamUrl, type: type });
+  vjsPlayer.src({ src: proxiedStreamUrl, type: type });
 
   // Error handler with fallback
   vjsPlayer.on('error', () => {
@@ -921,7 +944,7 @@ function playDirectVideo(streamUrl, title) {
       pwrap.appendChild(nativeVideo);
 
       const hls = new Hls({ enableWorker: true });
-      hls.loadSource(streamUrl);
+      hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(nativeVideo);
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
