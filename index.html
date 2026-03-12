@@ -445,17 +445,10 @@ function updateMmeta(){
 // ── SOURCE BUTTONS ───────────────────────────────────────────────
 function buildSources(){
   const wrap=$("srcbns"); wrap.innerHTML="";
-  // "Ad-Free" button (tries direct HLS/MP4 via API)
-  const fp=document.createElement("button");
-  fp.className="fp-btn"; fp.id="fp-btn";
-  fp.textContent="🛡️ Ad-Free";
-  fp.onclick=()=>tryAdFreeStream();
-  wrap.appendChild(fp);
-  // Magnet button
+  // Torrent button (default, ad-free)
   const mg=document.createElement("button");
-  mg.className="cbtn";
-  mg.textContent="🧲 Magnet";
-  mg.title="Play via magnet link or infohash";
+  mg.className="fp-btn"; mg.id="torrent-btn";
+  mg.textContent="🧲 Torrent";
   mg.onclick=()=>playBestMagnet();
   wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
@@ -567,53 +560,6 @@ const AD_BLOCK_SCRIPT = `<script>
 })();<\/script>`;
 
 // ── TRY AD-FREE DIRECT STREAM ─────────────────────────────────
-async function tryAdFreeStream(){
-  if(!cur) return;
-  document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
-  const fpBtn=$("fp-btn");
-  if(fpBtn){ fpBtn.classList.add("on"); fpBtn.textContent="⏳ Loading…"; }
-  const isTv=cur.mediaType==="tv"||cur.mediaType==="series";
-  const tmdbId=cur.id;
-  const title=(cur.title||cur.name||"")+(isTv?` S${curS}E${curE}`:"");
-  const typeParam=isTv?"tv":"movie";
-  const epParams=isTv?`&s=${curS}&e=${curE}`:"";
-
-  const pph=$("pph");
-  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Finding ad-free stream…</div>';}
-
-  const sources = [
-    fetch(`${API}/autoembed?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-    fetch(`${API}/vixsrc?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-    fetch(`${API}/get-source?tmdb=${tmdbId}&type=${typeParam}${epParams}`).then(r=>r.ok?r.json():null),
-  ];
-
-  try {
-    const results = await Promise.allSettled(sources);
-    for (const res of results) {
-      if (res.status !== 'fulfilled' || !res.value) continue;
-      const data = res.value;
-      let best = null;
-      if (data.streams) {
-        best = data.streams.find(s=>s.url);
-      } else if (data.videos || data.results) {
-        best = (data.videos || data.results || [])[0];
-      }
-      if (best?.url) {
-        if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
-        toast("▶ Playing ad-free stream");
-        playDirectVideo(best.url, title);
-        return;
-      }
-    }
-    console.warn("[Ad-Free] all sources failed, falling back to iframe");
-    if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
-    loadSource(0);
-  } catch(e) {
-    console.warn("[Ad-Free] error:", e);
-    loadSource(0);
-  }
-}
-
 function loadSource(i){
   if(!cur) return;
   srcIdx=i;
@@ -630,59 +576,8 @@ function loadSource(i){
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
 function playTorrent(infoHash, fileIdx, title){
-  // Route through playBestMagnet logic using this specific hash
-  const label = title || (cur.title||cur.name||"");
-  const magnet = `magnet:?xt=urn:btih:${infoHash}`
-    +`&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`
-    +`&tr=wss%3A%2F%2Ftracker.btorrent.xyz`
-    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`
-    +`&tr=wss%3A%2F%2Ftracker.webtorrent.dev`
-    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`;
-
-  if(!window.WebTorrent){ playMagnetIframe(magnet, label); return; }
-
-  clearPlayer();
-  const pwrap=$("pwrap");
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>${infoHash.slice(0,12)}…</small></div>`;
-  setNameBar("🧲 "+label);
-  toast("🧲 Connecting to peers…");
-
-  destroyMagnetPlayer();
-  _wtClient = new WebTorrent();
-  _wtClient.on("error", e=>{ console.warn("WT:",e); playMagnetIframe(magnet,label); });
-
-  const peerTimer=setInterval(()=>{
-    const t=_wtClient?.torrents[0];
-    if(t) $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>${t.numPeers} peers · ${infoHash.slice(0,12)}…</small></div>`;
-  },2000);
-
-  const timeout=setTimeout(()=>{
-    if(!_wtClient) return;
-    const t=_wtClient.torrents[0];
-    if(!t||t.numPeers===0){ clearInterval(peerTimer); destroyMagnetPlayer(); playMagnetIframe(magnet,label); }
-  },45000);
-
-  _wtClient.add(magnet, { announce:["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz","wss://tracker.webtorrent.dev"] }, torrent=>{
-    clearTimeout(timeout); clearInterval(peerTimer);
-    const videoExts=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
-    const files=torrent.files.filter(f=>videoExts.test(f.name));
-    const file=files.sort((a,b)=>b.length-a.length)[fileIdx||0]||files[0]||torrent.files[0];
-    if(!file){ playMagnetIframe(magnet,label); return; }
-    toast("🎬 "+file.name);
-    $("pph").classList.add("hidden");
-    const vid=document.createElement("video");
-    vid.id="wt-video"; vid.setAttribute("playsinline",""); vid.setAttribute("webkit-playsinline","");
-    vid.controls=true; vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;background:#000;";
-    pwrap.appendChild(vid);
-    file.renderTo(vid,{autoplay:true},err=>{ if(err){ playMagnetIframe(magnet,label); } });
-    const timer=setInterval(()=>{
-      if(!_wtClient||torrent.done){clearInterval(timer);return;}
-      setNameBar(`🧲 ${label} ⬇${(torrent.progress*100).toFixed(1)}% ${(torrent.downloadSpeed/1e6).toFixed(2)}MB/s ${torrent.numPeers}peers`);
-    },3000);
-  });
+  _playMagnetHash(infoHash, fileIdx||0, title||(cur.title||cur.name||""));
 }
-
 
 // ── SUBTITLE OVERLAY ENGINE ───────────────────────────────────────
 let _subCues=[], _subOffset=0, _subVisible=true;
@@ -1123,7 +1018,7 @@ async function loadSeasons(tvId){
         curS=s.season_number;curE=1;
         updateMmeta();
         await loadEps(tvId,curS);
-        tryAdFreeStream();
+        playBestMagnet();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -1146,7 +1041,7 @@ async function loadEps(tvId,s){
         b.classList.add("on");
         curE=ep.episode_number;
         updateMmeta();
-        tryAdFreeStream();
+        playBestMagnet();
         loadDirectStreams(false);
       };
       wrap.appendChild(b);
@@ -1188,7 +1083,7 @@ function openModal(item,type){
       }catch(e){console.error("IMDb fetch:",e);}
     }
     if(isTv) await loadSeasons(item.id);
-    tryAdFreeStream();
+    playBestMagnet();
     loadDirectStreams(false);
   })();
 }
@@ -1329,35 +1224,35 @@ function pickBestTorrent(){
 
 function playBestMagnet(){
   const best=pickBestTorrent();
-  if(!best){ toast("⚠️ No torrents in stream list yet — wait for streams to load"); return; }
-
-  const hash=best.infoHash;
+  if(!best){ toast("⚠️ No torrents yet — streams still loading"); return; }
   const label=(cur.title||cur.name||"")+(cur.mediaType!=="movie"?` S${curS}E${curE}`:"");
-  const magnet=`magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(label)}`
-    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Fopen.tracker.cl%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969%2Fannounce`
+  // mark button active
+  document.querySelectorAll("#srcbns .fp-btn,#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
+  const tb=document.getElementById("torrent-btn"); if(tb) tb.classList.add("on");
+  _playMagnetHash(best.infoHash, best.fileIdx||0, label);
+}
+
+function _playMagnetHash(hash, fileIdx, label){
+  const magnet=`magnet:?xt=urn:btih:${hash}`
     +`&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`
     +`&tr=wss%3A%2F%2Ftracker.btorrent.xyz`
-    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`;
+    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`
+    +`&tr=wss%3A%2F%2Ftracker.webtorrent.dev`
+    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`;
 
   if(!window.WebTorrent){ playMagnetIframe(magnet,label); return; }
 
   clearPlayer();
   const pwrap=$("pwrap");
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML='<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>'+hash.slice(0,16)+'…</small></div>';
+  $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>0 peers · ${hash.slice(0,12)}…</small></div>`;
   setNameBar("🧲 "+label);
   toast("🧲 Connecting to peers…");
 
   destroyMagnetPlayer();
   _wtClient=new WebTorrent();
-  _wtClient.on("error", e=>{
-    console.warn("WT error:",e);
-    playMagnetIframe(magnet,label);
-  });
+  _wtClient.on("error", e=>{ console.warn("WT:",e); playMagnetIframe(magnet,label); });
 
-  // Update waiting screen with live peer count
   const peerTimer=setInterval(()=>{
     const t=_wtClient?.torrents[0];
     if(t) $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>${t.numPeers} peers · ${hash.slice(0,12)}…</small></div>`;
@@ -1367,48 +1262,26 @@ function playBestMagnet(){
     if(!_wtClient) return;
     const t=_wtClient.torrents[0];
     if(!t||t.numPeers===0){
-      console.warn("No peers after 45s — falling back to instant.io");
-      destroyMagnetPlayer();
-      playMagnetIframe(magnet,label);
+      clearInterval(peerTimer); destroyMagnetPlayer(); playMagnetIframe(magnet,label);
     }
   },45000);
 
-  _wtClient.add(magnet, {
-    announce:[
-      "wss://tracker.openwebtorrent.com",
-      "wss://tracker.btorrent.xyz",
-      "wss://tracker.fastcast.nz",
-      "wss://tracker.webtorrent.dev",
-    ]
-  }, torrent=>{
-    clearTimeout(timeout);
-    clearInterval(peerTimer);
+  _wtClient.add(magnet,{announce:["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz","wss://tracker.webtorrent.dev"]},torrent=>{
+    clearTimeout(timeout); clearInterval(peerTimer);
     const videoExts=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
     const files=torrent.files.filter(f=>videoExts.test(f.name));
-    const file=files.sort((a,b)=>b.length-a.length)[0]||torrent.files[0];
-
+    const file=files.sort((a,b)=>b.length-a.length)[fileIdx]||files[0]||torrent.files[0];
     if(!file){ playMagnetIframe(magnet,label); return; }
-
     toast("🎬 "+file.name);
     $("pph").classList.add("hidden");
-
     const vid=document.createElement("video");
-    vid.id="wt-video";
-    vid.setAttribute("playsinline","");
-    vid.setAttribute("webkit-playsinline","");
-    vid.controls=true;
-    vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;background:#000;";
+    vid.id="wt-video"; vid.setAttribute("playsinline",""); vid.setAttribute("webkit-playsinline","");
+    vid.controls=true; vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;background:#000;";
     pwrap.appendChild(vid);
-
-    file.renderTo(vid,{autoplay:true},err=>{
-      if(err){ console.warn("renderTo failed:",err); playMagnetIframe(magnet,label); }
-    });
-
+    file.renderTo(vid,{autoplay:true},err=>{ if(err){ playMagnetIframe(magnet,label); } });
     const timer=setInterval(()=>{
       if(!_wtClient||torrent.done){clearInterval(timer);return;}
-      const pct=(torrent.progress*100).toFixed(1);
-      const dl=(torrent.downloadSpeed/1e6).toFixed(2);
-      setNameBar(`🧲 ${label} ⬇${pct}% ${dl}MB/s ${torrent.numPeers}peers`);
+      setNameBar(`🧲 ${label} ⬇${(torrent.progress*100).toFixed(1)}% ${(torrent.downloadSpeed/1e6).toFixed(2)}MB/s ${torrent.numPeers}peers`);
     },3000);
   });
 }
