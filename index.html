@@ -314,37 +314,24 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
         <div id="stream-loading" style="font-size:12px;color:var(--muted);padding:8px 0;display:none">🔄 Loading streams…</div>
         <div id="streambns"></div>
       </div>
+
+      <!-- MAGNET PANEL inside modal -->
+      <div id="magnet-panel" style="display:none;margin-top:14px;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">🧲 Magnet / InfoHash</div>
+        <div style="display:flex;gap:8px;">
+          <input id="magnet-input" type="text" placeholder="magnet:?xt=… or infohash"
+            style="flex:1;background:var(--s1);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;-webkit-appearance:none;"
+            autocomplete="off" spellcheck="false">
+          <button onclick="playMagnet()" style="background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">▶ Play</button>
+        </div>
+        <div id="magnet-status" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px;"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
-
-<!-- MAGNET PLAYER -->
-<div id="magnet-box" style="margin:16px 14px 0;background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:none;">
-  <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
-    🧲 Magnet / InfoHash Player
-    <button onclick="document.getElementById('magnet-box').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;">✕</button>
-  </div>
-  <div style="display:flex;gap:8px;">
-    <input id="magnet-input" type="text" placeholder="magnet:?xt=urn:btih:… or infohash"
-      style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;-webkit-appearance:none;"
-      autocomplete="off" spellcheck="false">
-    <button onclick="playMagnet()" style="background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">▶ Play</button>
-  </div>
-  <div id="magnet-status" style="font-size:11px;color:var(--muted);margin-top:8px;min-height:16px;"></div>
-  <div id="magnet-player-wrap" style="display:none;margin-top:12px;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;position:relative;">
-    <video id="magnet-video" playsinline webkit-playsinline style="position:absolute;inset:0;width:100%;height:100%;background:#000;"></video>
-  </div>
-</div>
-
-<footer>
-  <button onclick="document.getElementById('magnet-box').style.display='block';document.getElementById('magnet-input').focus();"
-    style="background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:10px;">
-    🧲 Magnet Player
-  </button><br>
-  <strong>CineVault</strong> · Free streaming · For entertainment only
-</footer>
+<footer><strong>CineVault</strong> · Free streaming · For entertainment only</footer>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -460,9 +447,9 @@ function buildSources(){
   mg.textContent="🧲 Magnet";
   mg.title="Play via magnet link or infohash";
   mg.onclick=()=>{
-    document.getElementById("magnet-box").style.display="block";
-    document.getElementById("magnet-input").focus();
-    document.getElementById("magnet-box").scrollIntoView({behavior:"smooth",block:"center"});
+    const panel=document.getElementById("magnet-panel");
+    panel.style.display=panel.style.display==="none"?"block":"none";
+    if(panel.style.display==="block") document.getElementById("magnet-input").focus();
   };
   wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
@@ -1238,80 +1225,60 @@ function playMagnet(){
   const raw = (document.getElementById("magnet-input").value||"").trim();
   if(!raw){ toast("⚠️ Enter a magnet link or infohash"); return; }
 
-  // Normalise: bare infohash → magnet URI
   const magnet = raw.startsWith("magnet:") ? raw
     : `magnet:?xt=urn:btih:${raw}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.tracker.cl:1337/announce`;
 
   const status = document.getElementById("magnet-status");
-  const wrap   = document.getElementById("magnet-player-wrap");
-  const vid    = document.getElementById("magnet-video");
-
-  destroyMagnetPlayer();
-  wrap.style.display = "block";
   status.textContent = "⏳ Connecting to peers…";
 
-  if(!window.WebTorrent){ status.textContent="❌ WebTorrent not loaded"; return; }
+  if(!window.WebTorrent){ status.textContent="❌ WebTorrent not loaded — refresh page"; return; }
+
+  destroyMagnetPlayer();
+  if(_wtClient){ try{_wtClient.destroy();}catch(e){} _wtClient=null; }
 
   _wtClient = new WebTorrent();
+  _wtClient.on("error", err => { status.textContent = "❌ " + (err.message||err); });
 
-  _wtClient.on("error", err => {
-    status.textContent = "❌ " + (err.message||err);
-  });
-
-  _wtClient.add(magnet, { announce: [
-    "wss://tracker.openwebtorrent.com",
-    "wss://tracker.btorrent.xyz",
-    "wss://tracker.fastcast.nz",
-  ]}, torrent => {
-    status.textContent = `✅ ${torrent.name} — picking best file…`;
-
+  _wtClient.add(magnet, {
+    announce: [
+      "wss://tracker.openwebtorrent.com",
+      "wss://tracker.btorrent.xyz",
+      "wss://tracker.fastcast.nz",
+    ]
+  }, torrent => {
     // Pick largest video file
     const videoExts = /\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
     const files = torrent.files.filter(f => videoExts.test(f.name));
     const file  = files.sort((a,b) => b.length - a.length)[0] || torrent.files[0];
 
-    status.textContent = `🎬 ${file.name} (${(file.length/1e9).toFixed(2)} GB)`;
+    status.textContent = `🎬 ${file.name} · waiting for data…`;
 
-    // Stream into <video> via blob URL
-    file.getBlobURL((err, url) => {
-      if(err){
-        // Fallback: renderTo
-        file.renderTo(vid, { autoplay:true }, err2 => {
-          if(err2) status.textContent = "❌ Playback error: " + err2.message;
-        });
-        return;
-      }
-      vid.src = url;
-      vid.play().catch(()=>{});
+    // Create a <video> in pwrap and stream into it via renderTo
+    clearPlayer();
+    const pwrap = $("pwrap");
+    $("pph").classList.add("hidden");
+    setNameBar("🧲 " + file.name);
+
+    const vid = document.createElement("video");
+    vid.id = "magnet-video";
+    vid.setAttribute("playsinline","");
+    vid.setAttribute("webkit-playsinline","");
+    vid.controls = true;
+    vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;";
+    pwrap.appendChild(vid);
+
+    file.renderTo(vid, {autoplay:true}, err => {
+      if(err) status.textContent = "❌ " + err.message;
     });
 
-    // Init FluidPlayer on the magnet video element
-    requestAnimationFrame(() => {
-      if(window.fluidPlayer){
-        _magnetFpInstance = fluidPlayer("magnet-video", {
-          layoutControls: {
-            primaryColor: "#e8173a",
-            fillToContainer: true,
-            autoPlay: false,
-            mute: false,
-            playButtonShowing: true,
-            keyboardControl: true,
-            title: file.name,
-            controlBar: { autoHide: true, autoHideTimeout: 3, animated: true },
-            persistentSettings: { volume: true },
-          },
-        });
-      }
-    });
-
-    // Show download progress
-    const progress = setInterval(() => {
-      if(!_wtClient) return clearInterval(progress);
-      const pct = (torrent.progress * 100).toFixed(1);
-      const dl  = (torrent.downloadSpeed/1e6).toFixed(2);
-      const peers = torrent.numPeers;
-      status.textContent = `⬇ ${pct}% · ${dl} MB/s · ${peers} peers · ${file.name}`;
-      if(torrent.progress > 0.99) clearInterval(progress);
+    // Progress updates
+    const timer = setInterval(() => {
+      if(!_wtClient || !torrent) return clearInterval(timer);
+      const pct  = (torrent.progress*100).toFixed(1);
+      const dl   = (torrent.downloadSpeed/1e6).toFixed(2);
+      const peers= torrent.numPeers;
+      status.textContent = `⬇ ${pct}% · ${dl} MB/s · ${peers} peers`;
+      if(torrent.done) clearInterval(timer);
     }, 2000);
   });
 }
