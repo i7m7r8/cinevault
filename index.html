@@ -317,17 +317,6 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
         <div id="streambns"></div>
       </div>
 
-      <!-- MAGNET PANEL inside modal -->
-      <div id="magnet-panel" style="display:none;margin-top:14px;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
-        <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">🧲 Magnet / InfoHash</div>
-        <div style="display:flex;gap:8px;">
-          <input id="magnet-input" type="text" placeholder="magnet:?xt=… or infohash"
-            style="flex:1;background:var(--s1);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;-webkit-appearance:none;"
-            autocomplete="off" spellcheck="false">
-          <button onclick="playMagnet()" style="background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">▶ Play</button>
-        </div>
-        <div id="magnet-status" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px;"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -443,16 +432,11 @@ function buildSources(){
   fp.textContent="🎬 FluidPlayer";
   fp.onclick=()=>tryFluidPlayer();
   wrap.appendChild(fp);
-  // Magnet button
+  // Magnet button — auto-picks best torrent, no input needed
   const mg=document.createElement("button");
   mg.className="cbtn";
   mg.textContent="🧲 Magnet";
-  mg.title="Play via magnet link or infohash";
-  mg.onclick=()=>{
-    const panel=document.getElementById("magnet-panel");
-    panel.style.display=panel.style.display==="none"?"block":"none";
-    if(panel.style.display==="block") document.getElementById("magnet-input").focus();
-  };
+  mg.onclick=()=>playBestMagnet();
   wrap.appendChild(mg);
   SOURCES.forEach((src,i)=>{
     const b=document.createElement("button");
@@ -1234,8 +1218,6 @@ let _wtClient = null;
 
 function destroyMagnetPlayer(){
   if(_wtClient){ try{_wtClient.destroy();}catch(e){} _wtClient=null; }
-  const v=document.getElementById("wt-video");
-  if(v){v.pause();v.src="";}
 }
 
 function pickBestTorrent(){
@@ -1243,69 +1225,68 @@ function pickBestTorrent(){
   if(!streams.length) return null;
   return streams.sort((a,b)=>{
     const score=n=>/1080/i.test(n)?4:/720/i.test(n)?3:/480/i.test(n)?2:1;
-    return score(b.title||"")-score(a.title||"");
+    return score(b.title||b.name||"")-score(a.title||a.name||"");
   })[0];
+}
+
+function playMagnetIframe(magnet, label){
+  destroyMagnetPlayer();
+  clearPlayer();
+  toast("🔄 Opening via instant.io…");
+  const pwrap=$("pwrap");
+  $("pph").classList.add("hidden");
+  setNameBar("🧲 "+label+" [instant.io]");
+  const iframe=document.createElement("iframe");
+  iframe.id="pframe";
+  iframe.src="https://instant.io/#"+encodeURIComponent(magnet);
+  iframe.allowFullscreen=true;
+  iframe.allow="autoplay; fullscreen";
+  iframe.referrerPolicy="no-referrer-when-downgrade";
+  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;background:#1a1a2e;";
+  pwrap.appendChild(iframe);
 }
 
 function playBestMagnet(){
   const best=pickBestTorrent();
-  if(!best){ toast("⚠️ No torrents in stream list yet — wait for streams to load"); return; }
-
+  if(!best){
+    toast("⚠️ No torrents yet — wait for stream list to load");
+    return;
+  }
   const hash=best.infoHash;
   const label=(cur.title||cur.name||"")+(cur.mediaType!=="movie"?` S${curS}E${curE}`:"");
   const magnet=`magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(label)}`
-    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Fopen.tracker.cl%3A1337%2Fannounce`
-    +`&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A6969%2Fannounce`
     +`&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`
     +`&tr=wss%3A%2F%2Ftracker.btorrent.xyz`
-    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`;
+    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`
+    +`&tr=wss%3A%2F%2Ftracker.webtorrent.dev`;
 
-  // Try WebTorrent first; if no peers in 15s fall back to instant.io iframe
   if(!window.WebTorrent){ playMagnetIframe(magnet,label); return; }
 
   clearPlayer();
   const pwrap=$("pwrap");
   $("pph").classList.remove("hidden");
-  $("pph").innerHTML='<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>'+hash.slice(0,16)+'…</small></div>';
+  $("pph").innerHTML='<div class="pph-icon">🧲</div><div>Connecting to peers…</div>';
   setNameBar("🧲 "+label);
-  toast("🧲 Connecting to peers…");
+  toast("🧲 Connecting…");
 
   destroyMagnetPlayer();
   _wtClient=new WebTorrent();
-  _wtClient.on("error", e=>{
-    console.warn("WT error:",e);
-    playMagnetIframe(magnet,label);
-  });
+  _wtClient.on("error", ()=>playMagnetIframe(magnet,label));
 
-  // 15s timeout — if no peers, fall back to instant.io
-  const timeout=setTimeout(()=>{
-    if(!_wtClient) return;
-    const t=_wtClient.torrents[0];
-    if(!t||t.numPeers===0){
-      console.warn("No peers — falling back to instant.io");
-      destroyMagnetPlayer();
-      playMagnetIframe(magnet,label);
-    }
-  },15000);
+  // 12s no-peer fallback
+  const fbTimer=setTimeout(()=>{
+    const t=_wtClient&&_wtClient.torrents[0];
+    if(!t||t.numPeers===0){ destroyMagnetPlayer(); playMagnetIframe(magnet,label); }
+  }, 12000);
 
-  _wtClient.add(magnet, {
-    announce:[
-      "wss://tracker.openwebtorrent.com",
-      "wss://tracker.btorrent.xyz",
-      "wss://tracker.fastcast.nz",
-      "wss://tracker.webtorrent.dev",
-    ]
-  }, torrent=>{
-    clearTimeout(timeout);
-    const videoExts=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
-    const files=torrent.files.filter(f=>videoExts.test(f.name));
-    const file=files.sort((a,b)=>b.length-a.length)[0]||torrent.files[0];
+  _wtClient.add(magnet,{}, torrent=>{
+    clearTimeout(fbTimer);
+    const ext=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
+    const file=torrent.files.filter(f=>ext.test(f.name)).sort((a,b)=>b.length-a.length)[0]||torrent.files[0];
+    if(!file){ destroyMagnetPlayer(); playMagnetIframe(magnet,label); return; }
 
-    if(!file){ playMagnetIframe(magnet,label); return; }
-
-    toast("🎬 "+file.name);
     $("pph").classList.add("hidden");
+    toast("🎬 "+file.name);
 
     const vid=document.createElement("video");
     vid.id="wt-video";
@@ -1316,35 +1297,15 @@ function playBestMagnet(){
     pwrap.appendChild(vid);
 
     file.renderTo(vid,{autoplay:true},err=>{
-      if(err){ console.warn("renderTo failed:",err); playMagnetIframe(magnet,label); }
+      if(err){ destroyMagnetPlayer(); playMagnetIframe(magnet,label); }
     });
 
     const timer=setInterval(()=>{
-      if(!_wtClient||torrent.done){clearInterval(timer);return;}
-      const pct=(torrent.progress*100).toFixed(1);
-      const dl=(torrent.downloadSpeed/1e6).toFixed(2);
-      setNameBar(`🧲 ${label} ⬇${pct}% ${dl}MB/s ${torrent.numPeers}peers`);
+      if(!_wtClient||!torrent){clearInterval(timer);return;}
+      setNameBar(`🧲 ${label} ⬇${(torrent.progress*100).toFixed(1)}% · ${(torrent.downloadSpeed/1e6).toFixed(2)}MB/s · ${torrent.numPeers}p`);
+      if(torrent.done)clearInterval(timer);
     },3000);
   });
-}
-
-// Fallback: open magnet in instant.io inside an iframe
-function playMagnetIframe(magnet, label){
-  destroyMagnetPlayer();
-  clearPlayer();
-  toast("🔄 Opening in instant.io…");
-  const pwrap=$("pwrap");
-  $("pph").classList.add("hidden");
-  setNameBar("🧲 "+label+" (instant.io)");
-
-  const iframe=document.createElement("iframe");
-  iframe.id="pframe";
-  iframe.src="https://instant.io/#"+encodeURIComponent(magnet);
-  iframe.allowFullscreen=true;
-  iframe.allow="autoplay; fullscreen";
-  iframe.referrerPolicy="no-referrer-when-downgrade";
-  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  pwrap.appendChild(iframe);
 }
 
 </script>
