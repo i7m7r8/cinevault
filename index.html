@@ -421,7 +421,7 @@ function showIframe(url, nameLabel){
   iframe.allowFullscreen=true;
   iframe.allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write; accelerometer; gyroscope";
   iframe.referrerPolicy="no-referrer-when-downgrade";
-  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000;";
+  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;display:block";
   iframe.src=url;
   $("pwrap").appendChild(iframe);
   $("pph").classList.add("hidden");
@@ -460,10 +460,12 @@ function buildSources(){
   });
 }
 
-// ── AD‑BLOCKING PROXY INJECTION (for iframes) ─────────────────────
+// ── AD‑BLOCKING PROXY INJECTION (for iframes) ───────────────────
 const AD_HOSTS = [
+  // Trackers & redirectors
   "gotrackier","clickadu","go.oclasrv","exosrv","exdynsrv",
   "dtscout","clkrev","realsrv","hotcpx","adtng","trckng",
+  // Ad networks
   "popads","popcash","exoclick","juicyads","trafficjunky","trafficstars",
   "hilltopads","plugrush","adspyglass","adcash","adsterra","propellerads",
   "evadav","reporo","ero-advertising","a-ads","coinzilla","bidvertiser",
@@ -473,6 +475,7 @@ const AD_HOSTS = [
   "adnxs","doubleclick","googlesyndication","valueclick",
   "casalemedia","smartadserver","adskeeper","clicksfly",
   "fc.lc","shortearn","adshrink","tinyurl.com/adrd",
+  // Popup/redirect domains seen in vidsrc
   "sbm49","gotrackier","clck.ru","clkmon","clkrevenue",
   "datadome","otracking","clicktrace","land.allvideos",
 ];
@@ -556,7 +559,7 @@ const AD_BLOCK_SCRIPT = `<script>
   }).observe(document.documentElement,{childList:true,subtree:true});
 })();<\/script>`;
 
-// ── TRY AD‑FREE DIRECT STREAM ───────────────────────────────────────
+// ── TRY AD‑FREE DIRECT STREAM ─────────────────────────────────
 function loadSource(i){
   if(!cur) return;
   srcIdx=i;
@@ -572,118 +575,11 @@ function loadSource(i){
 }
 
 // ── TORRENT PLAYER ────────────────────────────────────────────────
-// **FIXED SECTION – default torrent player now waits for metadata,
- // selects a video file, renders it, and explicitly starts playback.**
-function _playMagnetHash(hash, fileIdx, label){
-  const magnet=`magnet:?xt=urn:btih:${hash}`
-    +`&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`
-    +`&tr=wss%3A%2F%2Ftracker.btorrent.xyz`
-    +`&tr=wss%3A%2F%2Ftracker.fastcast.nz`
-    +`&tr=wss%3A%2F%2Ftracker.webtorrent.dev`
-    +`&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce`;
-
-  if(!window.WebTorrent){ playMagnetIframe(magnet,label); return; }
-
-  clearPlayer();
-  const pwrap=$("pwrap");
-  $("pph").classList.remove("hidden");
-  $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>0 peers · ${hash.slice(0,12)}…</small></div>`;
-  setNameBar("🧲 "+label);
-  toast("🧲 Connecting to peers…");
-
-  destroyMagnetPlayer();
-  _wtClient=new WebTorrent();
-  _wtClient.on("error", e=>{ console.warn("WT:",e); playMagnetIframe(magnet,label); });
-
-  const peerTimer=setInterval(()=>{
-    const t=_wtClient?.torrents[0];
-    if(t) $("pph").innerHTML=`<div class="pph-icon">🧲</div><div>Connecting to peers…<br><small>${t.numPeers} peers · ${hash.slice(0,12)}…</small></div>`;
-  },2000);
-
-  const timeout=setTimeout(()=>{
-    if(!_wtClient) return;
-    const t=_wtClient.torrents[0];
-    if(!t||t.numPeers===0){
-      clearInterval(peerTimer); destroyMagnetPlayer(); playMagnetIframe(magnet,label);
-    }
-  },45000);
-
-  // **Added robust handling – wait for metadata, pick a video file,
-  // render it, then explicitly call play()**
-  _wtClient.add(magnet,{
-    announce:["wss://tracker.openwebtorrent.com","wss://tracker.btorrent.xyz","wss://tracker.fastcast.nz","wss://tracker.webtorrent.dev"]
-  }, torrent=>{
-    clearTimeout(timeout); clearInterval(peerTimer);
-    const videoExts=/\.(mp4|mkv|avi|mov|webm|m4v|ts)$/i;
-    const files=torrent.files.filter(f=>videoExts.test(f.name));
-
-    // **If no video files are found, fall back to the iframe player**
-    if(!files.length){
-      console.warn("WT: No video files in torrent");
-      playMagnetIframe(magnet,label);
-      return;
-    }
-
-    // Pick the file (use the requested index if possible)
-    const file=files.sort((a,b)=>b.length-a.length)[fileIdx]||files[0];
-
-    // **Ensure the file is selected for download**
-    file.select();
-
-    // Create the <video> element that will receive the stream
-    const vid=document.createElement("video");
-    vid.id="wt-video";
-    vid.setAttribute("playsinline","");
-    vid.setAttribute("webkit-playsinline","");
-    vid.controls=true;
-    vid.style.cssText="position:absolute;inset:0;width:100%;height:100%;background:#000;";
-
-    // Append video element to the wrapper
-    pwrap.appendChild(vid);
-
-    // Render the torrent file into the video element
-    file.renderTo(vid,{autoplay:true},err=>{
-      if(err){
-        console.error("WT render error:",err);
-        playMagnetIframe(magnet,label);
-        return;
-      }
-      // Explicitly start playback – some browsers block autoplay without user gesture
-      vid.play().catch(e=>{ console.warn("WT play error (may be blocked):",e); });
-      $("pph").classList.add("hidden");
-      toast("🎬 "+file.name);
-    });
-
-    // Update the name bar with progress information
-    const progressTimer=setInterval(()=>{
-      if(!_wtClient||torrent.done){clearInterval(progressTimer);return;}
-      setNameBar(`🧲 ${label} ⬇${(torrent.progress*100).toFixed(1)}% ${(torrent.downloadSpeed/1e6).toFixed(2)}MB/s ${torrent.numPeers} peers`);
-    },3000);
-  });
-}
-
-// -----------------------------------------------------------------
-function playMagnetIframe(magnet, label){
-  destroyMagnetPlayer();
-  clearPlayer();
-  toast("🔄 Opening in instant.io…");
-  const pwrap=$("pwrap");
-  $("pph").classList.add("hidden");
-  setNameBar("🧲 "+label+" (instant.io)");
-
-  const iframe=document.createElement("iframe");
-  iframe.id="pframe";
-  iframe.src="https://instant.io/#"+encodeURIComponent(magnet);
-  iframe.allowFullscreen=true;
-  iframe.allow="autoplay; fullscreen";
-  iframe.referrerPolicy="no-referrer-when-downgrade";
-  iframe.style.cssText="position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;";
-  pwrap.appendChild(iframe);
+function playTorrent(infoHash, fileIdx, title){
+  _playMagnetHash(infoHash, fileIdx||0, title||(cur.title||cur.name||""));
 }
 
 // ── SUBTITLE OVERLAY ENGINE ───────────────────────────────────────
-// (unchanged – omitted for brevity – the rest of the file is exactly the same
-// as the original you supplied, all lines preserved.)
 let _subCues=[], _subOffset=0, _subVisible=true;
 let _subStartWall=null, _subStartOffset=0;
 let _subRafId=null, _subMode="off";
@@ -753,13 +649,56 @@ async function loadAndStartSubs(mode){
   }catch(e){toast("⚠️ Sub fetch failed");}
 }
 
-// (All remaining functions – fetchSubCues, downloadAndDecompress, parseSRT,
- // fetchStreams, proxy handling, video.js player, stream picker, UI,
- // modal handling, card generation, hero handling, search, tabs,
- // PWA registration, init, etc. – are **exactly the same** as in the
- // original file you posted. They have been left untouched to preserve
- // line‑by‑line fidelity.)
+function startWallClockSubs(){
+  if(!_subCues.length){ loadAndStartSubs("wall"); return; }
+  _subStartWall=Date.now(); _subStartOffset=0; _subMode="wall";
+  $("sub-ctrl").classList.remove("hidden");
+  subOverlayTick();
+  toast("🔤 Subs synced to now");
+}
 
-</script>
-</body>
-</html>
+function cuesToVTT(cues){
+  const pad=(n,d=2)=>String(Math.floor(n)).padStart(d,"0");
+  const fmt=s=>{
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60),ms=Math.round((s%1)*1000);
+    return `${pad(h)}:${pad(m)}:${pad(sec)}.${pad(ms,3)}`;
+  };
+  return "WEBVTT\n\n"+cues.map((c,i)=>`${i+1}\n${fmt(c.start)} --> ${fmt(c.end)}\n${c.text}`).join("\n\n");
+}
+
+function attachSubtitleTrack(player, cues, lang, label){
+  if(!player) return;
+  if(_activeVttObjectUrl){
+    try{URL.revokeObjectURL(_activeVttObjectUrl);}catch(e){}
+    _activeVttObjectUrl=null;
+  }
+  const vttText = cuesToVTT(cues);
+  const blob = new Blob([vttText],{type:"text/vtt"});
+  const blobUrl = URL.createObjectURL(blob);
+  _activeVttObjectUrl = blobUrl;
+  const tracks = player.textTracks();
+  for(let i=tracks.length-1;i>=0;i--){
+    const t=tracks[i];
+    if(t.kind==="subtitles"||t.kind==="captions"){
+      try{player.removeRemoteTextTrack(t);}catch(e){}
+    }
+  }
+  player.addRemoteTextTrack({
+    kind: "subtitles",
+    src:  blobUrl,
+    srclang: lang,
+    label: label,
+    default: true,
+  }, false);
+  setTimeout(()=>{
+    const tts=player.textTracks();
+    for(let i=0;i<tts.length;i++){
+      if(tts[i].language===lang){
+        tts[i].mode="showing";
+        break;
+      }
+    }
+  }, 300);
+}
+
+async function fetchSubC
