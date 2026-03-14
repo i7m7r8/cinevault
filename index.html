@@ -307,6 +307,15 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
 <footer><strong>CineVault</strong> · Free streaming · For entertainment only</footer>
 
 <script>
+// Global error handler to catch and log all errors
+window.onerror = function(message, source, lineno, colno, error) {
+  console.error('🔥 GLOBAL ERROR:', message, 'at', source, lineno, colno, error);
+  toast('⚠️ Script error – check console');
+  return true; // prevent default
+};
+
+console.log('🚀 Script starting...');
+
 const $ = id => document.getElementById(id);
 const API = "https://test-repo-six-sepia.vercel.app";
 const TMDB_KEY = "4ef0d7355d9ffb5151e987764708ce96";
@@ -323,6 +332,8 @@ let _subRafId = null, _subMode = "off";
 let _activeVttObjectUrl = null;
 let _plyr = null, _plyrHls = null; // for plyr player
 
+console.log('✅ Globals defined');
+
 const SOURCES = [
   { name:"VidSrc",     useImdb:false, movie:id=>`https://vidsrc.icu/embed/movie/${id}`,                                    tv:(id,s,e)=>`https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
   { name:"2Embed",     useImdb:false, movie:id=>`https://www.2embed.stream/embed/movie/${id}`,                             tv:(id,s,e)=>`https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
@@ -336,7 +347,6 @@ const poster = p => p ? `${IMG}w300${p}` : `https://placehold.co/300x450/1a1a28/
 const back   = p => p ? `${IMG}w1280${p}` : "";
 
 function toast(msg,ms=2500){const t=$("toast");t.textContent=msg;t.classList.add("on");setTimeout(()=>t.classList.remove("on"),ms);}
-
 
 async function tmdb(path,params={}){
   const q=new URLSearchParams({...params,api_key:TMDB_KEY});
@@ -397,6 +407,7 @@ function updateMmeta(){
 
 // ── SOURCE BUTTONS ───────────────────────────────────────────────
 function buildSources(){
+  console.log('🔧 buildSources called');
   const wrap=$("srcbns"); wrap.innerHTML="";
   // Ad-Free button (tries direct streams)
   const fp=document.createElement("button");
@@ -415,12 +426,13 @@ function buildSources(){
 }
 
 // ── FULL AD BLOCKER (EasyList-style) ─────────────────────────────
-const AD_HOSTS = [ /* ... same as before ... */ ]; // (omitted for brevity – keep your list)
-const AD_CSS = `/* ... same ... */`;
-const AD_BLOCK_SCRIPT = `<script>/* ... same ... */<\/script>`;
+const AD_HOSTS = []; // (keep your list, omitted for brevity)
+const AD_CSS = ``;
+const AD_BLOCK_SCRIPT = `<script></script>`;
 
 // ── TRY AD-FREE DIRECT STREAM ─────────────────────────────────
 async function tryFluidPlayer(){
+  console.log('🎯 tryFluidPlayer called');
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
   const fpBtn=$("fp-btn");
@@ -474,6 +486,7 @@ async function tryFluidPlayer(){
 }
 
 function loadSource(i){
+  console.log('📺 loadSource', i);
   if(!cur) return;
   srcIdx=i;
   const src=SOURCES[i]; if(!src) return;
@@ -498,6 +511,7 @@ function destroyPlyr() {
 }
 
 function playWithFluidPlayer(streamUrl, title) {
+  console.log('▶ playWithFluidPlayer', streamUrl);
   clearPlayer();
   destroyPlyr();
   const pwrap = $("pwrap");
@@ -630,7 +644,7 @@ function subOverlayTick(){
   _subRafId=requestAnimationFrame(subOverlayTick);
 
   let t=0;
-  if(_subMode==="plyr" && _plyr && vid){ // we don't have direct reference, but we can use the video element
+  if(_subMode==="plyr" && _plyr){
     const vid = document.getElementById("plyr-video");
     if(vid) t = vid.currentTime + _subOffset/1000; else return;
   } else if(_subMode==="wall"){
@@ -683,7 +697,6 @@ function cuesToVTT(cues){
   return "WEBVTT\n\n"+cues.map((c,i)=>`${i+1}\n${fmt(c.start)} --> ${fmt(c.end)}\n${c.text}`).join("\n\n");
 }
 
-// Subtitle fetch functions (unchanged) – keep your existing fetchSubCues, downloadAndDecompress, parseSRT
 async function fetchSubCues(imdbId,season,episode,lang){
   const langMap={en:"eng",hi:"hin",ar:"ara",fr:"fre",es:"spa",de:"ger",pt:"por",it:"ita",ja:"jpn",ko:"kor",zh:"chi"};
   const num=imdbId.replace("tt","");
@@ -890,41 +903,47 @@ async function loadEps(tvId,s){
 
 // ── MODAL ─────────────────────────────────────────────────────────
 function openModal(item,type){
-  cur={...item,mediaType:type};
-  cur._year=(item.release_date||item.first_air_date||"").slice(0,4);
-  cur._rating=item.vote_average?.toFixed(1)||"—";
-  curS=1;curE=1;srcIdx=0;
-  _cachedStreams=[];_cacheKey="";
-  stopVideo();
-  const isTv=type==="tv"||type==="series";
-  $("mtitle").textContent=item.title||item.name;
-  $("mdesc").textContent=item.overview||"";
-  $("mbg").src=back(item.backdrop_path);
-  updateMmeta();
-  clearPlayer();
-  const _pph=$("pph");
-  if(_pph){_pph.classList.remove("hidden");_pph.innerHTML='<div class="pph-icon">⏳</div><div>Fetching info…</div>';}
-  $("stream-name-bar").classList.remove("on");
-  $("streambns").innerHTML="";
-  $("stream-loading").style.display="block";
-  $("stream-loading").textContent="🔄 Loading streams…";
-  $("stream-picker").style.display="block";
-  $("tv-ctrl").style.display=isTv?"block":"none";
-  if(isTv){$("sbns").innerHTML="";$("ebns").innerHTML="";}
-  buildSources();
-  $("modal").classList.add("on");
-  document.body.style.overflow="hidden";
-  (async()=>{
-    if(!cur.imdb_id){
-      try{
-        const ext=await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
-        cur.imdb_id=ext.imdb_id||null;
-      }catch(e){console.error("IMDb fetch:",e);}
-    }
-    if(isTv) await loadSeasons(item.id);
-    tryFluidPlayer();
-    loadDirectStreams(false);
-  })();
+  console.log('🎬 openModal called with', item.title || item.name);
+  try {
+    cur={...item,mediaType:type};
+    cur._year=(item.release_date||item.first_air_date||"").slice(0,4);
+    cur._rating=item.vote_average?.toFixed(1)||"—";
+    curS=1;curE=1;srcIdx=0;
+    _cachedStreams=[];_cacheKey="";
+    stopVideo();
+    const isTv=type==="tv"||type==="series";
+    $("mtitle").textContent=item.title||item.name;
+    $("mdesc").textContent=item.overview||"";
+    $("mbg").src=back(item.backdrop_path);
+    updateMmeta();
+    clearPlayer();
+    const _pph=$("pph");
+    if(_pph){_pph.classList.remove("hidden");_pph.innerHTML='<div class="pph-icon">⏳</div><div>Fetching info…</div>';}
+    $("stream-name-bar").classList.remove("on");
+    $("streambns").innerHTML="";
+    $("stream-loading").style.display="block";
+    $("stream-loading").textContent="🔄 Loading streams…";
+    $("stream-picker").style.display="block";
+    $("tv-ctrl").style.display=isTv?"block":"none";
+    if(isTv){$("sbns").innerHTML="";$("ebns").innerHTML="";}
+    buildSources();
+    $("modal").classList.add("on");
+    document.body.style.overflow="hidden";
+    (async()=>{
+      if(!cur.imdb_id){
+        try{
+          const ext=await tmdb(`/${isTv?"tv":"movie"}/${item.id}/external_ids`);
+          cur.imdb_id=ext.imdb_id||null;
+        }catch(e){console.error("IMDb fetch:",e);}
+      }
+      if(isTv) await loadSeasons(item.id);
+      tryFluidPlayer();
+      loadDirectStreams(false);
+    })();
+  } catch(e) {
+    console.error('🔥 Error in openModal:', e);
+    toast('⚠️ Error opening movie');
+  }
 }
 
 $("mclose").onclick=closeModal;
@@ -941,18 +960,23 @@ function closeModal(){
 
 // ── CARDS ─────────────────────────────────────────────────────────
 function makeCard(item,type){
-  const title=item.title||item.name||"Unknown";
-  const year=(item.release_date||item.first_air_date||"").slice(0,4);
-  const rating=item.vote_average?.toFixed(1)||"—";
-  const d=document.createElement("div");
-  d.className="card";
-  d.innerHTML=
-    `<img class="cposter" src="${poster(item.poster_path)}" alt="${title}" loading="lazy">` +
-    `<div class="cov"><div class="pbc">▶</div></div>` +
-    `<div class="cinfo"><div class="ctitle">${title}</div>` +
-    `<div class="cmeta"><span>${year}</span><span class="crating">⭐${rating}</span></div></div>`;
-  d.onclick=()=>openModal(item,type);
-  return d;
+  try {
+    const title=item.title||item.name||"Unknown";
+    const year=(item.release_date||item.first_air_date||"").slice(0,4);
+    const rating=item.vote_average?.toFixed(1)||"—";
+    const d=document.createElement("div");
+    d.className="card";
+    d.innerHTML=
+      `<img class="cposter" src="${poster(item.poster_path)}" alt="${title}" loading="lazy">` +
+      `<div class="cov"><div class="pbc">▶</div></div>` +
+      `<div class="cinfo"><div class="ctitle">${title}</div>` +
+      `<div class="cmeta"><span>${year}</span><span class="crating">⭐${rating}</span></div></div>`;
+    d.onclick=()=>openModal(item,type);
+    return d;
+  } catch(e) {
+    console.error('🔥 Error in makeCard:', e);
+    return document.createElement('div'); // fallback empty div
+  }
 }
 
 function skels(el,n=8){el.innerHTML="";for(let i=0;i<n;i++){const d=document.createElement("div");d.className="sk";el.appendChild(d);}}
@@ -976,6 +1000,7 @@ async function loadSec(gid,path,params,type,hero=false){
     if(hero&&items.length)setHero(items[0],items[0].media_type||type);
     items.slice(0,12).forEach(it=>g.appendChild(makeCard(it,it.media_type||type)));
   }catch(e){
+    console.error('🔥 loadSec error:', e);
     g.innerHTML=`<div style="color:var(--muted);padding:20px;text-align:center">⚠️ Failed to load</div>`;
   }
 }
@@ -1035,11 +1060,20 @@ if("serviceWorker" in navigator){
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function init(){
-  try{await tmdb("/configuration");}catch(e){toast("⚠️ TMDB connection failed");return;}
+  console.log('⚙️ init started');
+  try{
+    await tmdb("/configuration");
+    console.log('✅ TMDB connection OK');
+  }catch(e){
+    console.error('🔥 TMDB connection failed', e);
+    toast("⚠️ TMDB connection failed");
+    return;
+  }
   await loadSec("g0","/trending/all/week",{},"movie",true);
   loadSec("g1","/discover/movie",{with_original_language:"hi",sort_by:"popularity.desc"},"movie");
   loadSec("g2","/discover/tv",{with_genres:"16",with_original_language:"ja",sort_by:"popularity.desc"},"tv");
   loadSec("g3","/discover/movie",{with_original_language:"ko",sort_by:"popularity.desc"},"movie");
+  console.log('✅ init finished');
 }
 init();
 
