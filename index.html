@@ -348,8 +348,6 @@ const back   = p => p ? `${IMG}w1280${p}` : "";
 
 function toast(msg,ms=2500){const t=$("toast");t.textContent=msg;t.classList.add("on");setTimeout(()=>t.classList.remove("on"),ms);}
 
-/${fileIdx}/stream`;
-}
 
 async function tmdb(path,params={}){
   const q=new URLSearchParams({...params,api_key:TMDB_KEY});
@@ -1039,7 +1037,6 @@ function buildStreamPicker(streams, autoPlay=false){
         `<span class="stream-play-btn">▶</span>` +
       `</div>`;
     row._url=s.url||"";
-    row._fileIdx=typeof s.fileIdx==="number"?s.fileIdx:0;
     row._title=fname;
 
     const playRow=()=>{
