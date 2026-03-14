@@ -296,7 +296,7 @@ window.onerror = function(message, source, lineno, colno, error) {
 
 console.log('🚀 Script starting...');
 
-// Polyfill for AbortSignal.timeout
+// Polyfill for AbortSignal.timeout (for older browsers)
 if (!AbortSignal.timeout) {
   AbortSignal.timeout = function(ms) {
     const ctrl = new AbortController();
@@ -411,7 +411,7 @@ function buildSources(){
   });
 }
 
-// ── TRY AD-FREE DIRECT STREAM ─────────────────────────────────
+// ── TRY AD-FREE DIRECT STREAM (robust candidate checking) ─────────
 async function tryAdFreeStream(){
   if(!cur) return;
   document.querySelectorAll("#srcbns .cbtn").forEach(b=>b.classList.remove("on"));
@@ -424,45 +424,89 @@ async function tryAdFreeStream(){
   const epParams=isTv?`&s=${curS}&e=${curE}`:"";
 
   const pph=$("pph");
-  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Finding ad-free stream…</div>';}
+  if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Finding ad‑free stream…</div>';}
 
-  // Try get-source first (aggregates vidsrc.icu + vidsrc.me + vidsrc.net)
+  const streamCandidates = [];
+
+  // 1) get‑source (aggregates vidsrc.icu, vidsrc.me, vidsrc.net)
   try{
     const r=await fetch(`${API}/get-source?tmdb=${tmdbId}&type=${typeParam}${epParams}`,{signal:AbortSignal.timeout(25000)});
     if(r.ok){
       const data=await r.json();
       const best=(data.streams||[])[0];
       if(best?.url){
-        if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
-        if(pph) pph.classList.add("hidden");
-        toast("▶ Ad-Free · "+(best.provider||"Direct"));
-        playWithPlyr(best.url, `${title} [${best.provider||"Direct"}]`);
-        return;
+        streamCandidates.push({ url: best.url, provider: best.provider||"Direct", from: "get-source" });
       }
     }
-  }catch(e){ console.warn("[Ad-Free] get-source:",e.message); }
+  }catch(e){ console.warn("[Ad-Free] get-source error:",e.message); }
 
-  // Fallback to direct-stream (vidsrc.net exact port)
+  // 2) direct‑stream (vidsrc.net exact port)
   try{
     const r=await fetch(`${API}/direct-stream?tmdb=${tmdbId}&type=${typeParam}${epParams}`,{signal:AbortSignal.timeout(20000)});
     if(r.ok){
       const data=await r.json();
       const best=Array.isArray(data)?data[0]:null;
       if(best?.stream){
-        if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
-        if(pph) pph.classList.add("hidden");
-        toast("▶ Ad-Free · VidSrc");
-        playWithPlyr(best.stream, `${title} [VidSrc]`);
-        return;
+        streamCandidates.push({ url: best.stream, provider: "VidSrc", from: "direct-stream" });
       }
     }
-  }catch(e){ console.warn("[Ad-Free] direct-stream:",e.message); }
+  }catch(e){ console.warn("[Ad-Free] direct-stream error:",e.message); }
 
-  // All failed — fallback to first iframe source
-  console.warn("[Ad-Free] all failed, falling back to iframe");
-  if(pph) pph.classList.add("hidden");
-  if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
-  loadSource(0);
+  if(streamCandidates.length===0){
+    console.warn("[Ad-Free] no stream candidates – falling back to iframe");
+    if(pph) pph.classList.add("hidden");
+    if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
+    loadSource(0);
+    return;
+  }
+
+  // Try candidates sequentially until one plays successfully
+  let played = false;
+  for(const candidate of streamCandidates){
+    console.log(`[Ad-Free] trying ${candidate.from} (${candidate.provider}): ${candidate.url}`);
+
+    // Quick HEAD check – if it fails, skip this candidate
+    try{
+      const head = await fetch(candidate.url, { method: 'HEAD', mode: 'cors', signal: AbortSignal.timeout(5000) });
+      if(!head.ok) throw new Error(`HTTP ${head.status}`);
+      console.log(`[Ad-Free] HEAD ok, content‑type: ${head.headers.get('content-type')}`);
+    }catch(e){
+      console.warn(`[Ad-Free] HEAD failed for ${candidate.from}:`, e.message);
+      continue;
+    }
+
+    if(fpBtn) fpBtn.textContent="🛡️ Ad-Free";
+    if(pph) pph.classList.add("hidden");
+    toast("▶ Ad‑Free · "+candidate.provider);
+
+    // Set up a promise that resolves when playback starts (or rejects on timeout)
+    const playStarted = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("play timeout")), 10000);
+      window._adFreePlayStarted = false;
+      window._adFreeResolve = ()=>{ clearTimeout(timeout); window._adFreePlayStarted = true; resolve(); };
+      window._adFreeReject = reject;
+    });
+
+    playWithPlyr(candidate.url, `${title} [${candidate.provider}]`);
+
+    try{
+      await playStarted;
+      played = true;
+      break; // success, stop trying
+    }catch(e){
+      console.warn(`[Ad-Free] play failed for ${candidate.from}:`, e.message);
+      destroyPlyr();
+      clearPlayer();
+      if(pph){pph.classList.remove("hidden");pph.innerHTML='<div class="pph-icon">🛡️</div><div>Trying next source…</div>';}
+    }
+  }
+
+  if(!played){
+    console.warn("[Ad-Free] all candidates failed – falling back to iframe");
+    if(pph) pph.classList.add("hidden");
+    if(fpBtn){ fpBtn.textContent="🎬 Player"; fpBtn.classList.remove("on"); }
+    loadSource(0);
+  }
 }
 
 function loadSource(i){
@@ -479,7 +523,7 @@ function loadSource(i){
   toast("▶ "+src.name);
 }
 
-// ── PLYR PLAYER (improved) ─────────────────────────────────────
+// ── PLYR PLAYER (with success callback) ─────────────────────────
 function destroyPlyr() {
   if (_plyrHls)  { try { _plyrHls.destroy(); } catch(e) {} _plyrHls = null; }
   if (_plyr)     { try { _plyr.destroy(); } catch(e) {} _plyr = null; }
@@ -501,7 +545,6 @@ function playWithPlyr(streamUrl, title) {
   const isDirect = isHLS || isMP4;
 
   if (!isDirect) {
-    // Iframe mode
     const iframe = document.createElement("iframe");
     iframe.id = "plyr-iframe";
     iframe.src = streamUrl;
@@ -512,10 +555,10 @@ function playWithPlyr(streamUrl, title) {
     pwrap.appendChild(iframe);
     toast("🎬 " + title);
     if(cur?.imdb_id) loadAndStartSubs("wall");
+    if(window._adFreeResolve) setTimeout(()=>{ window._adFreeResolve(); window._adFreeResolve=null; }, 100);
     return;
   }
 
-  // Direct video mode
   const vid = document.createElement("video");
   vid.id = "plyr-video";
   vid.setAttribute("playsinline", "");
@@ -524,9 +567,8 @@ function playWithPlyr(streamUrl, title) {
   vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;background:#000;display:block;";
   pwrap.appendChild(vid);
 
-  // Plyr default options – enable debug to see what's happening
   const defaultOptions = {
-    debug: true, // remove after fixing
+    debug: true,
     controls: ["play-large","play","rewind","fast-forward","progress","current-time","duration","mute","volume","captions","settings","pip","fullscreen"],
     settings: ["captions","quality","speed"],
     speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
@@ -563,33 +605,32 @@ function playWithPlyr(streamUrl, title) {
       _plyr = new Plyr(vid, defaultOptions);
       _plyr.on("ready", () => {
         console.log('✅ Plyr ready, attempting play');
-        _plyr.play().catch(e => {
-          console.warn('⚠️ Plyr play() failed (maybe autoplay blocked):', e);
-          // User may need to click the big play button – that's fine.
-        });
+        _plyr.play().catch(e => console.warn('⚠️ Plyr play() failed:', e));
         toast("▶ " + title);
         if(cur?.imdb_id) {
-          vid.addEventListener("playing", () => loadAndStartSubs("plyr"), { once: true });
+          vid.addEventListener("playing", () => {
+            console.log('✅ Plyr playing');
+            if(window._adFreeResolve) { window._adFreeResolve(); window._adFreeResolve=null; }
+            loadAndStartSubs("plyr");
+          }, { once: true });
+        } else {
+          if(window._adFreeResolve) { window._adFreeResolve(); window._adFreeResolve=null; }
         }
       });
       _plyr.on("error", (event) => {
-        const err = _plyr.error;
-        console.error('❌ Plyr error:', err);
-        // Only fall back if it's a fatal error – otherwise keep trying
-        // We'll let the user click play again
+        console.error('❌ Plyr error:', _plyr.error);
       });
     });
 
     _plyrHls.on(Hls.Events.ERROR, (e, data) => {
       if (data.fatal) {
         console.error('❌ HLS fatal error:', data);
-        destroyPlyr();
-        toast("⚠️ Stream error – try another source");
-        // Optionally fall back to iframe, but maybe the user wants to try another quality
+        if(!window._adFreePlayStarted && window._adFreeReject) {
+          window._adFreeReject(new Error('HLS fatal'));
+        }
       }
     });
   } else {
-    // Native HLS (Safari) or MP4
     if (isHLS) {
       vid.src = streamUrl;
     } else {
@@ -600,17 +641,20 @@ function playWithPlyr(streamUrl, title) {
     _plyr = new Plyr(vid, defaultOptions);
     _plyr.on("ready", () => {
       console.log('✅ Plyr ready, attempting play');
-      _plyr.play().catch(e => {
-        console.warn('⚠️ Plyr play() failed (maybe autoplay blocked):', e);
-      });
+      _plyr.play().catch(e => console.warn('⚠️ Plyr play() failed:', e));
       toast("▶ " + title);
       if(cur?.imdb_id) {
-        vid.addEventListener("playing", () => loadAndStartSubs("plyr"), { once: true });
+        vid.addEventListener("playing", () => {
+          console.log('✅ Plyr playing');
+          if(window._adFreeResolve) { window._adFreeResolve(); window._adFreeResolve=null; }
+          loadAndStartSubs("plyr");
+        }, { once: true });
+      } else {
+        if(window._adFreeResolve) { window._adFreeResolve(); window._adFreeResolve=null; }
       }
     });
     _plyr.on("error", (event) => {
-      const err = _plyr.error;
-      console.error('❌ Plyr error:', err);
+      console.error('❌ Plyr error:', _plyr.error);
     });
   }
 }
