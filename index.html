@@ -5,248 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Torrent Stream · Uncensored</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-    }
-    body {
-      background: #0b0b0f;
-      color: #f0f0f5;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .header {
-      background: rgba(15, 15, 20, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      padding: 14px 18px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-    .logo {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      background: linear-gradient(135deg, #ff4d4d, #ffb347);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      margin-bottom: 12px;
-    }
-    .search-wrapper {
-      display: flex;
-      gap: 8px;
-    }
-    .search-wrapper input {
-      flex: 1;
-      background: #1c1c24;
-      border: 1px solid #2a2a35;
-      border-radius: 40px;
-      padding: 14px 20px;
-      font-size: 16px;
-      color: #fff;
-      outline: none;
-      transition: border 0.2s;
-    }
-    .search-wrapper input:focus {
-      border-color: #e50914;
-    }
-    .search-wrapper input::placeholder {
-      color: #7a7a8c;
-    }
-    .search-wrapper button {
-      background: #e50914;
-      border: none;
-      border-radius: 40px;
-      padding: 0 24px;
-      font-weight: 600;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background 0.2s;
-      white-space: nowrap;
-    }
-    .search-wrapper button:hover {
-      background: #b2070f;
-    }
-    .search-wrapper button:disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-    .container {
-      flex: 1;
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-    .player-section {
-      background: #000;
-      border-radius: 18px;
-      overflow: hidden;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      border: 1px solid #2a2a35;
-    }
-    .video-container {
-      position: relative;
-      width: 100%;
-      background: #0a0a0e;
-    }
-    video {
-      width: 100%;
-      height: auto;
-      display: block;
-      max-height: 70vh;
-      object-fit: contain;
-    }
-    .player-placeholder {
-      aspect-ratio: 16/9;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #111116;
-      color: #888;
-      font-size: 15px;
-      padding: 20px;
-      text-align: center;
-    }
-    .now-playing {
-      padding: 12px 16px;
-      background: #121218;
-      border-top: 1px solid #2a2a35;
-      font-size: 14px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .now-playing .label {
-      color: #e50914;
-      font-weight: 700;
-    }
-    .results-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 8px;
-    }
-    .results-header h2 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #ddd;
-    }
-    .results-count {
-      color: #9a9aae;
-      font-size: 14px;
-    }
-    .torrent-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .torrent-item {
-      background: #15151c;
-      border-radius: 16px;
-      padding: 16px;
-      border: 1px solid #2a2a35;
-      cursor: pointer;
-      transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .torrent-item:hover {
-      background: #1e1e28;
-      border-color: #e50914;
-      transform: scale(1.01);
-    }
-    .torrent-item:active {
-      transform: scale(0.99);
-    }
-    .torrent-icon {
-      font-size: 28px;
-    }
-    .torrent-info {
-      flex: 1;
-      min-width: 0;
-    }
-    .torrent-name {
-      font-weight: 600;
-      font-size: 15px;
-      margin-bottom: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .torrent-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 13px;
-      color: #a0a0b5;
-    }
-    .seeders {
-      color: #2ecc71;
-      font-weight: 700;
-    }
-    .size {
-      color: #b0b0c0;
-    }
-    .quality-badge {
-      background: #2a2a35;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #ddd;
-      text-transform: uppercase;
-    }
-    .status-message {
-      text-align: center;
-      padding: 32px 16px;
-      color: #8a8a9e;
-      font-size: 15px;
-    }
-    .loading-indicator {
-      display: flex;
-      justify-content: center;
-      padding: 20px;
-    }
-    .spinner {
-      width: 30px;
-      height: 30px;
-      border: 3px solid rgba(229, 9, 20, 0.2);
-      border-top-color: #e50914;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .footer {
-      padding: 20px 16px;
-      text-align: center;
-      color: #6a6a7e;
-      font-size: 13px;
-      border-top: 1px solid #1f1f28;
-    }
-    .error-badge {
-      background: #e50914;
-      color: white;
-      padding: 2px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-    }
-    .retry-note {
-      margin-top: 10px;
-      font-size: 12px;
-      color: #999;
-    }
+    /* --- all previous styles remain identical --- */
+    * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+    body { background:#0b0b0f; color:#f0f0f5; min-height:100vh; display:flex; flex-direction:column; }
+    .header { background:rgba(15,15,20,0.95); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.06); position:sticky; top:0; z-index:50; }
+    .logo { font-size:22px; font-weight:800; letter-spacing:1px; background:linear-gradient(135deg,#ff4d4d,#ffb347); -webkit-background-clip:text; background-clip:text; color:transparent; margin-bottom:12px; }
+    .search-wrapper { display:flex; gap:8px; }
+    .search-wrapper input { flex:1; background:#1c1c24; border:1px solid #2a2a35; border-radius:40px; padding:14px 20px; font-size:16px; color:#fff; outline:none; transition:border 0.2s; }
+    .search-wrapper input:focus { border-color:#e50914; }
+    .search-wrapper input::placeholder { color:#7a7a8c; }
+    .search-wrapper button { background:#e50914; border:none; border-radius:40px; padding:0 24px; font-weight:600; color:white; font-size:16px; cursor:pointer; transition:background 0.2s; white-space:nowrap; }
+    .search-wrapper button:hover { background:#b2070f; }
+    .search-wrapper button:disabled { opacity:0.5; pointer-events:none; }
+    .container { flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:18px; }
+    .player-section { background:#000; border-radius:18px; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid #2a2a35; }
+    .video-container { position:relative; width:100%; background:#0a0a0e; }
+    video { width:100%; height:auto; display:block; max-height:70vh; object-fit:contain; }
+    .player-placeholder { aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; background:#111116; color:#888; font-size:15px; padding:20px; text-align:center; }
+    .now-playing { padding:12px 16px; background:#121218; border-top:1px solid #2a2a35; font-size:14px; font-weight:500; display:flex; align-items:center; gap:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .now-playing .label { color:#e50914; font-weight:700; }
+    .results-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+    .results-header h2 { font-size:18px; font-weight:600; color:#ddd; }
+    .results-count { color:#9a9aae; font-size:14px; }
+    .torrent-list { display:flex; flex-direction:column; gap:10px; }
+    .torrent-item { background:#15151c; border-radius:16px; padding:16px; border:1px solid #2a2a35; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:14px; }
+    .torrent-item:hover { background:#1e1e28; border-color:#e50914; transform:scale(1.01); }
+    .torrent-item:active { transform:scale(0.99); }
+    .torrent-icon { font-size:28px; }
+    .torrent-info { flex:1; min-width:0; }
+    .torrent-name { font-weight:600; font-size:15px; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .torrent-meta { display:flex; gap:16px; font-size:13px; color:#a0a0b5; }
+    .seeders { color:#2ecc71; font-weight:700; }
+    .size { color:#b0b0c0; }
+    .quality-badge { background:#2a2a35; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; color:#ddd; text-transform:uppercase; }
+    .status-message { text-align:center; padding:32px 16px; color:#8a8a9e; font-size:15px; }
+    .loading-indicator { display:flex; justify-content:center; padding:20px; }
+    .spinner { width:30px; height:30px; border:3px solid rgba(229,9,20,0.2); border-top-color:#e50914; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .footer { padding:20px 16px; text-align:center; color:#6a6a7e; font-size:13px; border-top:1px solid #1f1f28; }
+    .retry-note { margin-top:10px; font-size:12px; color:#999; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 </head>
@@ -261,14 +58,14 @@
 </div>
 
 <div class="container">
-  <div class="player-section" id="playerSection">
+  <div class="player-section">
     <div class="video-container">
       <video id="videoPlayer" controls autoplay playsinline></video>
       <div id="playerPlaceholder" class="player-placeholder">
         <span>🔍 Search for a torrent to start streaming</span>
       </div>
     </div>
-    <div class="now-playing" id="nowPlaying">
+    <div class="now-playing">
       <span class="label">▶ NOW PLAYING</span>
       <span id="playingTitle">—</span>
     </div>
@@ -308,6 +105,7 @@
     let isSearching = false;
 
     function formatBytes(bytes) {
+      if (!bytes) return '?';
       if (bytes === 0) return '0 B';
       const k = 1024;
       const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -324,38 +122,52 @@
       return 'SD';
     }
 
-    // ----- Search with fallback APIs and CORS proxy -----
-    async function searchApibayWithFallback(query) {
-      // Try multiple endpoints to ensure reliability.
-      // The third option uses a CORS proxy to bypass browser restrictions.
-      const endpoints = [
-        `https://apibay.org/q.php?q=${encodeURIComponent(query)}`,
-        `https://apibay.cc/q.php?q=${encodeURIComponent(query)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://apibay.org/q.php?q=${encodeURIComponent(query)}`)}`
-      ];
+    // ----- JSONP search (CORS-free) -----
+    function searchApibayJSONP(query) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'apibay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const script = document.createElement('script');
+        const url = `https://apibay.org/q.php?q=${encodeURIComponent(query)}&callback=${callbackName}`;
 
-      let lastError = null;
-      for (const url of endpoints) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
-          const res = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
+        window[callbackName] = (data) => {
+          delete window[callbackName];
+          document.body.removeChild(script);
           
           if (!Array.isArray(data) || data.length === 0 || data[0]?.name === 'No results') {
-            return []; // valid empty result set
+            resolve([]);
+            return;
           }
-          // Filter valid torrents that have a name, magnet link, and seeder count
-          return data.filter(item => item.name && item.magnet && item.seeders !== undefined);
-        } catch (err) {
-          console.warn(`Fetch failed for ${url}:`, err.message);
-          lastError = err;
-          continue;
-        }
-      }
-      throw lastError || new Error('All endpoints failed');
+          
+          const torrents = data
+            .filter(item => item.name && item.info_hash)
+            .map(item => ({
+              name: item.name,
+              seeders: parseInt(item.seeders) || 0,
+              size: parseInt(item.size) || 0,
+              magnet: `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.demonii.com:1337/announce&tr=udp://tracker.torrent.eu.org:451/announce&tr=udp://tracker.coppersurfer.tk:6969/announce`,
+              quality: detectQuality(item.name)
+            }));
+          
+          resolve(torrents);
+        };
+
+        script.onerror = () => {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          reject(new Error('JSONP request failed'));
+        };
+
+        script.src = url;
+        document.body.appendChild(script);
+
+        setTimeout(() => {
+          if (window[callbackName]) {
+            delete window[callbackName];
+            document.body.removeChild(script);
+            reject(new Error('JSONP timeout'));
+          }
+        }, 10000);
+      });
     }
 
     function escapeHtml(text) {
@@ -374,21 +186,15 @@
       resultCount.textContent = `${torrents.length} found`;
       let html = '';
       torrents.slice(0, 30).forEach(t => {
-        const name = t.name || 'Unknown';
-        const seeders = t.seeders || 0;
-        const size = formatBytes(t.size || 0);
-        const quality = detectQuality(name);
-        const magnet = t.magnet;
-        
         html += `
-          <div class="torrent-item" data-magnet="${magnet}" data-name="${name.replace(/"/g, '&quot;')}">
+          <div class="torrent-item" data-magnet="${t.magnet}" data-name="${t.name.replace(/"/g, '&quot;')}">
             <div class="torrent-icon">🎬</div>
             <div class="torrent-info">
-              <div class="torrent-name">${escapeHtml(name)}</div>
+              <div class="torrent-name">${escapeHtml(t.name)}</div>
               <div class="torrent-meta">
-                <span class="seeders">👥 ${seeders}</span>
-                <span class="size">💾 ${size}</span>
-                <span class="quality-badge">${quality}</span>
+                <span class="seeders">👥 ${t.seeders}</span>
+                <span class="size">💾 ${formatBytes(t.size)}</span>
+                <span class="quality-badge">${t.quality}</span>
               </div>
             </div>
           </div>
@@ -460,10 +266,6 @@
         playerPlaceholder.innerHTML = `<span>⚠️ Torrent error: ${err.message}</span>`;
         videoPlayer.style.display = 'none';
       });
-
-      currentTorrent.on('warning', (warn) => {
-        console.warn('Torrent warning:', warn);
-      });
     }
 
     async function performSearch() {
@@ -483,15 +285,14 @@
       resultCount.textContent = 'Searching...';
 
       try {
-        const torrents = await searchApibayWithFallback(query);
+        const torrents = await searchApibayJSONP(query);
         renderTorrents(torrents);
       } catch (err) {
         console.error('Search error:', err);
         torrentList.innerHTML = `
           <div class="status-message">
-            ⚠️ Search failed: Network error<br>
-            <span style="font-size:13px;opacity:0.8;">${err.message}</span>
-            <div class="retry-note">Try using a VPN or disabling your ad-blocker if the problem persists.</div>
+            ⚠️ Search failed: ${err.message}<br>
+            <div class="retry-note">Check your internet connection or try again later.</div>
           </div>
         `;
         resultCount.textContent = 'Error';
