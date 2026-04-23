@@ -190,6 +190,19 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
 #spage{display:none;padding:16px 14px}
 #spage.on{display:block}
 .spage-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-bottom:12px;}
+
+/* Torrent results list */
+.torrent-section{margin-top:24px;border-top:1px solid var(--border);padding-top:16px;}
+.torrent-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.torrent-list{display:flex;flex-direction:column;gap:6px;}
+.torrent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--s2);border:1px solid var(--border);border-radius:10px;}
+.torrent-info{flex:1;min-width:0;}
+.torrent-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.torrent-meta{display:flex;gap:12px;font-size:10px;color:var(--muted);margin-top:2px;}
+.torrent-seeds{color:var(--green);font-weight:700;}
+.torrent-actions{display:flex;gap:4px;}
+.torrent-btn{background:var(--s3);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:10px;font-weight:600;transition:all .15s;}
+.torrent-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -235,6 +248,11 @@ footer{text-align:center;padding:24px;color:var(--muted);font-size:10px;border-t
 <div id="spage">
   <div class="spage-title" id="stitle">Results</div>
   <div class="grid" id="sgrid"></div>
+  <!-- PirateBay torrent results section -->
+  <div class="torrent-section" id="torrent-section" style="display:none;">
+    <div class="torrent-title">🏴‍☠️ PirateBay · <span id="torrent-count">0</span> results</div>
+    <div class="torrent-list" id="torrent-list"></div>
+  </div>
 </div>
 
 <div id="modal">
@@ -979,7 +997,58 @@ async function loadSec(gid,path,params,type,hero=false){
   }catch(e){ g.innerHTML=`<div style="color:var(--muted);padding:20px">⚠️ Failed to load</div>`; }
 }
 
-// ── SEARCH ────────────────────────────────────────────────────────
+// ── PIRATEBAY API SEARCH ──────────────────────────────────────────
+async function searchPirateBay(query) {
+  try {
+    const url = `https://apibay.org/q.php?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || data[0]?.name === "No results") return [];
+    return data.filter(r => r.name && r.magnet && r.seeders !== undefined).slice(0, 15);
+  } catch (e) {
+    console.warn('PirateBay search error:', e);
+    return [];
+  }
+}
+
+function renderTorrentResults(torrents) {
+  const section = $('torrent-section');
+  const list = $('torrent-list');
+  const countSpan = $('torrent-count');
+  list.innerHTML = '';
+  if (!torrents.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  countSpan.textContent = torrents.length;
+  torrents.forEach(t => {
+    const item = document.createElement('div');
+    item.className = 'torrent-item';
+    const size = t.size ? (t.size / (1024*1024*1024) > 1 ? (t.size/(1024*1024*1024)).toFixed(2)+' GB' : (t.size/(1024*1024)).toFixed(0)+' MB') : '?';
+    item.innerHTML = `
+      <div class="torrent-info">
+        <div class="torrent-name" title="${t.name}">${t.name}</div>
+        <div class="torrent-meta">
+          <span class="torrent-seeds">👤 ${t.seeders}</span>
+          <span>💾 ${size}</span>
+        </div>
+      </div>
+      <div class="torrent-actions">
+        <button class="torrent-btn" data-magnet="${t.magnet}">📋 Copy Magnet</button>
+      </div>
+    `;
+    item.querySelector('.torrent-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const magnet = e.currentTarget.dataset.magnet;
+      navigator.clipboard?.writeText(magnet).then(() => toast('📋 Magnet copied!')).catch(() => toast('❌ Copy failed'));
+    });
+    list.appendChild(item);
+  });
+}
+
+// ── SEARCH (TMDB + PirateBay) ─────────────────────────────────────
 const searchInput=$("sq");
 searchInput.addEventListener("input",e=>{
   const q=e.target.value.trim();
@@ -997,12 +1066,19 @@ function showSearch(q){
   $("main").style.display="none"; $("hero").style.display="none"; $("spage").classList.add("on");
   $("stitle").textContent=`"${q}"`;
   const g=$("sgrid"); skels(g,6);
+  // Hide torrent section while loading
+  $("torrent-section").style.display="none";
+  
+  // TMDB search
   tmdb("/search/multi",{ query: q }).then(d=>{
     const items=(d.results||[]).filter(i=>i.media_type!=="person");
     g.innerHTML="";
-    if(!items.length){ g.innerHTML=`<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; return; }
-    items.slice(0,20).forEach(it=> g.appendChild(makeCard(it,it.media_type||"movie")) );
+    if(!items.length){ g.innerHTML=`<div style="color:var(--muted);padding:20px">No results for "${q}"</div>`; }
+    else { items.slice(0,20).forEach(it=> g.appendChild(makeCard(it,it.media_type||"movie"))); }
   }).catch(()=>{ g.innerHTML=`<div style="color:var(--muted);padding:20px">⚠️ Search failed</div>`; });
+  
+  // PirateBay search
+  searchPirateBay(q).then(torrents => renderTorrentResults(torrents));
 }
 
 function hideSearch(){ $("main").style.display="block"; $("hero").style.display="flex"; $("spage").classList.remove("on"); }
