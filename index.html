@@ -324,12 +324,13 @@
       return 'SD';
     }
 
-    // ----- Search with fallback APIs -----
+    // ----- Search with fallback APIs and CORS proxy -----
     async function searchApibayWithFallback(query) {
+      // Try multiple endpoints to ensure reliability.
+      // The third option uses a CORS proxy to bypass browser restrictions.
       const endpoints = [
         `https://apibay.org/q.php?q=${encodeURIComponent(query)}`,
         `https://apibay.cc/q.php?q=${encodeURIComponent(query)}`,
-        // CORS proxy as last resort
         `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://apibay.org/q.php?q=${encodeURIComponent(query)}`)}`
       ];
 
@@ -344,9 +345,9 @@
           const data = await res.json();
           
           if (!Array.isArray(data) || data.length === 0 || data[0]?.name === 'No results') {
-            return []; // valid empty
+            return []; // valid empty result set
           }
-          // Filter valid torrents
+          // Filter valid torrents that have a name, magnet link, and seeder count
           return data.filter(item => item.name && item.magnet && item.seeders !== undefined);
         } catch (err) {
           console.warn(`Fetch failed for ${url}:`, err.message);
@@ -490,7 +491,7 @@
           <div class="status-message">
             ⚠️ Search failed: Network error<br>
             <span style="font-size:13px;opacity:0.8;">${err.message}</span>
-            <div class="retry-note">Try disabling ad-blocker or using a VPN if the problem persists.</div>
+            <div class="retry-note">Try using a VPN or disabling your ad-blocker if the problem persists.</div>
           </div>
         `;
         resultCount.textContent = 'Error';
