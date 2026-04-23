@@ -18,7 +18,6 @@
       display: flex;
       flex-direction: column;
     }
-    /* Header */
     .header {
       background: rgba(15, 15, 20, 0.95);
       backdrop-filter: blur(12px);
@@ -79,7 +78,6 @@
       opacity: 0.5;
       pointer-events: none;
     }
-    /* Main container */
     .container {
       flex: 1;
       padding: 16px 12px;
@@ -87,7 +85,6 @@
       flex-direction: column;
       gap: 18px;
     }
-    /* Player section */
     .player-section {
       background: #000;
       border-radius: 18px;
@@ -115,6 +112,8 @@
       background: #111116;
       color: #888;
       font-size: 15px;
+      padding: 20px;
+      text-align: center;
     }
     .now-playing {
       padding: 12px 16px;
@@ -133,7 +132,6 @@
       color: #e50914;
       font-weight: 700;
     }
-    /* Torrent list */
     .results-header {
       display: flex;
       justify-content: space-between;
@@ -244,8 +242,12 @@
       border-radius: 20px;
       font-size: 12px;
     }
+    .retry-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #999;
+    }
   </style>
-  <!-- WebTorrent -->
   <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 </head>
 <body>
@@ -259,7 +261,6 @@
 </div>
 
 <div class="container">
-  <!-- Video Player -->
   <div class="player-section" id="playerSection">
     <div class="video-container">
       <video id="videoPlayer" controls autoplay playsinline></video>
@@ -273,7 +274,6 @@
     </div>
   </div>
 
-  <!-- Results -->
   <div class="results-header">
     <h2>📡 Torrent results</h2>
     <span class="results-count" id="resultCount">0 found</span>
@@ -294,7 +294,6 @@
   (function(){
     "use strict";
 
-    // DOM elements
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
     const torrentList = document.getElementById('torrentList');
@@ -304,15 +303,10 @@
     const playerPlaceholder = document.getElementById('playerPlaceholder');
     const playingTitle = document.getElementById('playingTitle');
 
-    // WebTorrent client
     const client = new WebTorrent();
-    let currentTorrent = null;        // active torrent object
-    let currentFile = null;           // file being played
-
-    // UI state
+    let currentTorrent = null;
     let isSearching = false;
 
-    // ----- Helper: format bytes -----
     function formatBytes(bytes) {
       if (bytes === 0) return '0 B';
       const k = 1024;
@@ -321,7 +315,6 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // ----- Detect quality from name -----
     function detectQuality(name) {
       const n = name.toLowerCase();
       if (n.includes('4k') || n.includes('2160p')) return '4K';
@@ -331,31 +324,45 @@
       return 'SD';
     }
 
-    // ----- Fetch torrents from apibay -----
-    async function searchApibay(query) {
-      const url = `https://apibay.org/q.php?q=${encodeURIComponent(query)}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        
-        // apibay returns array, first element may be {name:"No results",...}
-        if (!Array.isArray(data) || data.length === 0 || data[0]?.name === 'No results') {
-          return [];
+    // ----- Search with fallback APIs -----
+    async function searchApibayWithFallback(query) {
+      const endpoints = [
+        `https://apibay.org/q.php?q=${encodeURIComponent(query)}`,
+        `https://apibay.cc/q.php?q=${encodeURIComponent(query)}`,
+        // CORS proxy as last resort
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://apibay.org/q.php?q=${encodeURIComponent(query)}`)}`
+      ];
+
+      let lastError = null;
+      for (const url of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          
+          if (!Array.isArray(data) || data.length === 0 || data[0]?.name === 'No results') {
+            return []; // valid empty
+          }
+          // Filter valid torrents
+          return data.filter(item => item.name && item.magnet && item.seeders !== undefined);
+        } catch (err) {
+          console.warn(`Fetch failed for ${url}:`, err.message);
+          lastError = err;
+          continue;
         }
-        // filter valid torrents with magnet
-        return data.filter(item => item.name && item.magnet && item.seeders !== undefined);
-      } catch (err) {
-        console.warn('apibay fetch error:', err);
-        throw err;
       }
+      throw lastError || new Error('All endpoints failed');
     }
 
-    // ----- Render torrent list -----
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     function renderTorrents(torrents) {
       if (!torrents.length) {
         torrentList.innerHTML = '<div class="status-message">😕 No results. Try another search.</div>';
@@ -388,9 +395,8 @@
       });
       torrentList.innerHTML = html;
 
-      // Attach click listeners
       document.querySelectorAll('.torrent-item').forEach(el => {
-        el.addEventListener('click', (e) => {
+        el.addEventListener('click', () => {
           const magnet = el.dataset.magnet;
           const name = el.dataset.name;
           if (magnet) startStream(magnet, name);
@@ -398,33 +404,21 @@
       });
     }
 
-    // Simple escape
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ----- Start streaming a magnet link -----
     function startStream(magnetUri, torrentName) {
-      // Clean previous torrent
       if (currentTorrent) {
         currentTorrent.destroy(() => {});
         currentTorrent = null;
       }
       
-      // Reset player UI
       videoPlayer.src = '';
       videoPlayer.style.display = 'none';
       playerPlaceholder.style.display = 'flex';
       playerPlaceholder.innerHTML = `<span>⏳ Connecting to peers... "${escapeHtml(torrentName)}"</span>`;
       playingTitle.textContent = torrentName || 'Loading...';
 
-      // Add torrent
       currentTorrent = client.add(magnetUri, { announce: [] }, (torrent) => {
         console.log('Torrent added:', torrent.name);
         
-        // Find the largest video file
         const files = torrent.files.filter(f => {
           const ext = f.name.split('.').pop().toLowerCase();
           return ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v'].includes(ext);
@@ -436,19 +430,16 @@
           return;
         }
         
-        // Sort by size, pick largest
         files.sort((a, b) => b.length - a.length);
         const videoFile = files[0];
-        currentFile = videoFile;
         
         playerPlaceholder.innerHTML = `<span>🎬 Preparing stream: ${escapeHtml(videoFile.name)}</span>`;
         playingTitle.textContent = `${torrentName} — ${videoFile.name}`;
         
-        // Render to video element
         videoFile.renderTo(videoPlayer, {
           autoplay: true,
           controls: true,
-          maxBlobLength: 20 * 1024 * 1024 // 20MB chunks
+          maxBlobLength: 20 * 1024 * 1024
         }, (err) => {
           if (err) {
             console.error('Render error:', err);
@@ -457,7 +448,6 @@
             videoPlayer.style.display = 'none';
             return;
           }
-          // Success: hide placeholder, show video
           playerPlaceholder.style.display = 'none';
           videoPlayer.style.display = 'block';
         });
@@ -473,16 +463,8 @@
       currentTorrent.on('warning', (warn) => {
         console.warn('Torrent warning:', warn);
       });
-
-      // Update progress / peers (optional)
-      currentTorrent.on('download', () => {
-        if (currentTorrent && videoPlayer.style.display === 'block') {
-          // Could show progress, but keep minimal
-        }
-      });
     }
 
-    // ----- Perform search -----
     async function performSearch() {
       const query = searchInput.value.trim();
       if (!query) {
@@ -494,17 +476,23 @@
       if (isSearching) return;
       isSearching = true;
       
-      // UI loading state
       searchBtn.disabled = true;
       loadingIndicator.style.display = 'flex';
       torrentList.innerHTML = '';
       resultCount.textContent = 'Searching...';
 
       try {
-        const torrents = await searchApibay(query);
+        const torrents = await searchApibayWithFallback(query);
         renderTorrents(torrents);
       } catch (err) {
-        torrentList.innerHTML = `<div class="status-message">⚠️ Search failed: ${err.message}</div>`;
+        console.error('Search error:', err);
+        torrentList.innerHTML = `
+          <div class="status-message">
+            ⚠️ Search failed: Network error<br>
+            <span style="font-size:13px;opacity:0.8;">${err.message}</span>
+            <div class="retry-note">Try disabling ad-blocker or using a VPN if the problem persists.</div>
+          </div>
+        `;
         resultCount.textContent = 'Error';
       } finally {
         loadingIndicator.style.display = 'none';
@@ -513,7 +501,6 @@
       }
     }
 
-    // ----- Event listeners -----
     searchBtn.addEventListener('click', performSearch);
     searchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
@@ -522,19 +509,12 @@
       }
     });
 
-    // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
-      if (currentTorrent) {
-        currentTorrent.destroy(() => {});
-      }
+      if (currentTorrent) currentTorrent.destroy(() => {});
     });
 
-    // Initial placeholder
     videoPlayer.style.display = 'none';
     playerPlaceholder.style.display = 'flex';
-
-    // Optional: handle if user leaves page
-    // Everything is ready.
   })();
 </script>
 </body>
