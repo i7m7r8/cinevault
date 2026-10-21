@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Torrent Stream · Uncensored</title>
+
+  <!-- Plyr (FOSS 播放器) -->
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
   <style>
-    /* --- all previous styles remain identical --- */
     * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
     body { background:#0b0b0f; color:#f0f0f5; min-height:100vh; display:flex; flex-direction:column; }
     .header { background:rgba(15,15,20,0.95); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.06); position:sticky; top:0; z-index:50; }
@@ -44,8 +47,16 @@
     @keyframes spin { to { transform:rotate(360deg); } }
     .footer { padding:20px 16px; text-align:center; color:#6a6a7e; font-size:13px; border-top:1px solid #1f1f28; }
     .retry-note { margin-top:10px; font-size:12px; color:#999; }
+
+    /* 覆盖 Plyr 在深色背景下的细节 */
+    .plyr--video { --plyr-color-main: #e50914; background:#000; }
+    .plyr__video-wrapper { background:#000; }
   </style>
+
+  <!-- WebTorrent -->
   <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+  <!-- Plyr -->
+  <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
 </head>
 <body>
 
@@ -60,7 +71,7 @@
 <div class="container">
   <div class="player-section">
     <div class="video-container">
-      <video id="videoPlayer" controls autoplay playsinline></video>
+      <video id="videoPlayer" controls playsinline></video>
       <div id="playerPlaceholder" class="player-placeholder">
         <span>🔍 Search for a torrent to start streaming</span>
       </div>
@@ -100,9 +111,43 @@
     const playerPlaceholder = document.getElementById('playerPlaceholder');
     const playingTitle = document.getElementById('playingTitle');
 
-    const client = new WebTorrent();
+    // WebTorrent 实例；maxConns 适当调高，有助于更快找到 peer
+    const client = new WebTorrent({ maxConns: 80 });
     let currentTorrent = null;
     let isSearching = false;
+    let plyr = null;          // Plyr 实例
+    let swReady = false;      // Service Worker 是否就绪
+
+    // ----- 1. 注册 Service Worker（用 Blob 内联，方便单文件部署）-----
+    const swCode = `
+      self.addEventListener('install', (e) => { self.skipWaiting(); });
+      self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
+      self.addEventListener('fetch', (e) => {
+        const url = new URL(e.request.url);
+        // WebTorrent 的 streamTo 会通过 /webtorrent/ 路径请求数据
+        if (!url.pathname.startsWith('/webtorrent/')) return;
+        // 不在这里处理，交给 WebTorrent 注册的 fetch handler
+      });
+    `;
+
+    async function ensureServiceWorker() {
+      if (swReady) return;
+      if (!('serviceWorker' in navigator)) {
+        console.warn('Service Worker 不可用，将回退到 MediaSource/blob 方案');
+        return;
+      }
+      try {
+        const blob = new Blob([swCode], { type: 'text/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        await navigator.serviceWorker.register(swUrl, { scope: '/' });
+        const controller = await navigator.serviceWorker.ready;
+        client.createServer({ controller });
+        swReady = true;
+        console.log('Service Worker + WebTorrent server 就绪');
+      } catch (err) {
+        console.warn('Service Worker 注册失败，回退到普通流式方案:', err);
+      }
+    }
 
     function formatBytes(bytes) {
       if (!bytes) return '?';
@@ -122,7 +167,13 @@
       return 'SD';
     }
 
-    // ----- JSONP search (CORS-free) -----
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ----- 2. 搜索（JSONP，CORS-free）-----
     function searchApibayJSONP(query) {
       return new Promise((resolve, reject) => {
         const callbackName = 'apibay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -132,12 +183,10 @@
         window[callbackName] = (data) => {
           delete window[callbackName];
           document.body.removeChild(script);
-          
           if (!Array.isArray(data) || data.length === 0 || data[0]?.name === 'No results') {
             resolve([]);
             return;
           }
-          
           const torrents = data
             .filter(item => item.name && item.info_hash)
             .map(item => ({
@@ -147,7 +196,6 @@
               magnet: `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.demonii.com:1337/announce&tr=udp://tracker.torrent.eu.org:451/announce&tr=udp://tracker.coppersurfer.tk:6969/announce`,
               quality: detectQuality(item.name)
             }));
-          
           resolve(torrents);
         };
 
@@ -168,12 +216,6 @@
           }
         }, 10000);
       });
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
 
     function renderTorrents(torrents) {
@@ -211,53 +253,93 @@
       });
     }
 
-    function startStream(magnetUri, torrentName) {
+    // ----- 3. 核心：用 Service Worker + streamTo 流畅播放 -----
+    async function startStream(magnetUri, torrentName) {
+      // 清理旧资源
       if (currentTorrent) {
         currentTorrent.destroy(() => {});
         currentTorrent = null;
       }
-      
-      videoPlayer.src = '';
+      if (plyr) {
+        plyr.destroy();
+        plyr = null;
+      }
+      videoPlayer.removeAttribute('src');
+      videoPlayer.load();
+
       videoPlayer.style.display = 'none';
       playerPlaceholder.style.display = 'flex';
       playerPlaceholder.innerHTML = `<span>⏳ Connecting to peers... "${escapeHtml(torrentName)}"</span>`;
       playingTitle.textContent = torrentName || 'Loading...';
 
-      currentTorrent = client.add(magnetUri, { announce: [] }, (torrent) => {
+      // 确保 SW 就绪（首次播放时注册）
+      await ensureServiceWorker();
+
+      currentTorrent = client.add(magnetUri, (torrent) => {
         console.log('Torrent added:', torrent.name);
-        
+
+        const videoExts = ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v'];
         const files = torrent.files.filter(f => {
           const ext = f.name.split('.').pop().toLowerCase();
-          return ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v'].includes(ext);
+          return videoExts.includes(ext);
         });
-        
+
         if (files.length === 0) {
           playerPlaceholder.innerHTML = '<span>⚠️ No playable video file found in this torrent</span>';
           playingTitle.textContent = torrentName + ' (no video)';
           return;
         }
-        
+
+        // 选最大的视频文件（通常是主片）
         files.sort((a, b) => b.length - a.length);
         const videoFile = files[0];
-        
-        playerPlaceholder.innerHTML = `<span>🎬 Preparing stream: ${escapeHtml(videoFile.name)}</span>`;
+
         playingTitle.textContent = `${torrentName} — ${videoFile.name}`;
-        
-        videoFile.renderTo(videoPlayer, {
-          autoplay: true,
-          controls: true,
-          maxBlobLength: 20 * 1024 * 1024
-        }, (err) => {
-          if (err) {
-            console.error('Render error:', err);
-            playerPlaceholder.style.display = 'flex';
-            playerPlaceholder.innerHTML = `<span>❌ Failed to stream: ${err.message}</span>`;
-            videoPlayer.style.display = 'none';
-            return;
+        playerPlaceholder.innerHTML = `<span>🎬 Preparing stream: ${escapeHtml(videoFile.name)}</span>`;
+
+        // 关键：streamTo 而不是 renderTo
+        // 如果 SW 已就绪，streamTo 会通过 Service Worker 提供 HTTP 流；
+        // 否则 WebTorrent 会回退到 MediaSource / Blob 方案。
+        try {
+          videoFile.streamTo(videoPlayer, (err) => {
+            if (err) {
+              console.error('streamTo 回调错误:', err);
+              // streamTo 在部分旧版本中回调签名不同，这里做兼容：
+              // 如果第一个参数是 Error 对象，说明失败
+              if (err instanceof Error) {
+                playerPlaceholder.style.display = 'flex';
+                playerPlaceholder.innerHTML = `<span>❌ Failed to stream: ${err.message}</span>`;
+                videoPlayer.style.display = 'none';
+              } else {
+                // 成功时可能回调的是 element 或 undefined
+                onVideoReady(videoFile);
+              }
+            } else {
+              onVideoReady(videoFile);
+            }
+          });
+        } catch (e) {
+          console.error('streamTo 调用异常:', e);
+          playerPlaceholder.innerHTML = `<span>❌ streamTo 失败: ${e.message}</span>`;
+          videoPlayer.style.display = 'none';
+        }
+
+        // 下载进度 / 缓冲提示（可选，帮助感知流畅度）
+        torrent.on('download', () => {
+          const progress = (torrent.progress * 100).toFixed(1);
+          if (torrent.progress < 1 && !videoPlayer.ended) {
+            // 只在占位可见时显示进度，避免干扰正常播放
+            if (playerPlaceholder.style.display !== 'none') {
+              playerPlaceholder.innerHTML = `<span>📥 ${progress}% · ⬇ ${formatBytes(torrent.downloadSpeed)}/s · 👥 ${torrent.numPeers} peers</span>`;
+            }
           }
-          playerPlaceholder.style.display = 'none';
-          videoPlayer.style.display = 'block';
         });
+
+        // 如果 streamTo 没有触发回调（某些版本），用 loadedmetadata 兜底
+        videoPlayer.addEventListener('loadedmetadata', () => {
+          onVideoReady(videoFile);
+        }, { once: true });
+
       });
 
       currentTorrent.on('error', (err) => {
@@ -268,6 +350,35 @@
       });
     }
 
+    // ----- 4. 视频就绪后初始化 Plyr -----
+    function onVideoReady(videoFile) {
+      if (plyr) return; // 避免重复初始化
+      playerPlaceholder.style.display = 'none';
+      videoPlayer.style.display = 'block';
+
+      // 确保 video 元素有 controls（Plyr 会接管）
+      videoPlayer.setAttribute('controls', '');
+
+      plyr = new Plyr(videoPlayer, {
+        controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'airplay', 'fullscreen'],
+        settings: ['quality', 'speed'],
+        speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+        keyboard: { focused: true, global: true },
+        tooltips: { controls: true, seek: true },
+        // 移动端体验
+        fullscreen: { enabled: true, fallback: true, iosNative: true },
+        storage: { enabled: true, key: 'plyr-streamvault' },
+      });
+
+      // 尝试自动播放（移动端可能被拦截，Plyr 会显示播放按钮）
+      videoPlayer.play().catch(() => {
+        // 自动播放被拦截时，Plyr 的 UI 已经足够引导用户点击
+      });
+
+      console.log('Plyr ready for:', videoFile.name);
+    }
+
+    // ----- 5. 搜索主流程 -----
     async function performSearch() {
       const query = searchInput.value.trim();
       if (!query) {
@@ -278,7 +389,7 @@
 
       if (isSearching) return;
       isSearching = true;
-      
+
       searchBtn.disabled = true;
       loadingIndicator.style.display = 'flex';
       torrentList.innerHTML = '';
@@ -313,10 +424,15 @@
 
     window.addEventListener('beforeunload', () => {
       if (currentTorrent) currentTorrent.destroy(() => {});
+      if (plyr) plyr.destroy();
     });
 
+    // 初始隐藏原生 video，等就绪后再由 Plyr 接管
     videoPlayer.style.display = 'none';
     playerPlaceholder.style.display = 'flex';
+
+    // 页面加载时预热 Service Worker（不阻塞 UI）
+    ensureServiceWorker().catch(() => {});
   })();
 </script>
 </body>
