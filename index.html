@@ -3,24 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>StreamVault · Netflix Clone</title>
+<title>StreamVault · Unified FOSS Player</title>
 
-<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+<!-- ArtPlayer -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.css" />
+<script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+<!-- Streaming libraries -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dashjs@4/dist/dash.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1/dist/flv.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
 
 <style>
-:root{
-  --bg:#141414; --panel:#181818; --card:#1f1f1f; --red:#e50914;
-  --text:#e5e5e5; --dim:#8c8c8c; --green:#46d369; --amber:#f5a623;
-  --border:#2a2a2a;
-}
+:root{--bg:#141414;--panel:#181818;--card:#1f1f1f;--red:#e50914;--text:#e5e5e5;--dim:#8c8c8c;--green:#46d369;--amber:#f5a623;--border:#2a2a2a;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}
 body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 
 /* NAVBAR */
-.navbar{position:fixed;top:0;left:0;right:0;height:68px;padding:0 4%;display:flex;align-items:center;gap:28px;z-index:100;
-  background:linear-gradient(180deg,rgba(0,0,0,.9),transparent);transition:background .3s;}
+.navbar{position:fixed;top:0;left:0;right:0;height:68px;padding:0 4%;display:flex;align-items:center;gap:28px;z-index:100;background:linear-gradient(180deg,rgba(0,0,0,.9),transparent);transition:background .3s;}
 .navbar.scrolled{background:var(--bg);}
 .logo{font-size:26px;font-weight:900;color:var(--red);letter-spacing:-1px;cursor:pointer;white-space:nowrap;}
 .logo span{color:#fff;font-weight:300;}
@@ -72,13 +72,12 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .search-header .count{color:var(--dim);font-size:14px;}
 .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;padding:24px 4% 40px;}
 
-/* ================= DETAIL MODAL (NETFLIX STYLE) ================= */
+/* DETAIL MODAL */
 .detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:200;overflow-y:auto;}
 .detail-modal.open{display:block;}
 .detail-close{position:fixed;top:16px;right:4%;width:44px;height:44px;background:rgba(0,0,0,.7);border:none;border-radius:50%;font-size:28px;color:#fff;cursor:pointer;z-index:220;display:flex;align-items:center;justify-content:center;}
 .detail-close:hover{background:var(--red);}
 
-/* Detail Hero */
 .detail-hero{position:relative;min-height:460px;background:center 20%/cover no-repeat #0a0a0a;display:flex;align-items:flex-end;}
 .detail-hero::after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,var(--bg) 0%,rgba(20,20,20,.6) 45%,rgba(20,20,20,.1) 100%);z-index:1;}
 .detail-hero-inner{position:relative;z-index:2;padding:40px 4% 30px;display:flex;gap:28px;align-items:flex-end;width:100%;max-width:1400px;margin:0 auto;}
@@ -100,8 +99,6 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 
 /* Detail Body */
 .detail-body{max-width:1400px;margin:0 auto;padding:24px 4% 60px;}
-
-/* Section */
 .d-section{margin-bottom:32px;}
 .d-section-title{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#aaa;font-weight:700;margin-bottom:12px;}
 
@@ -141,11 +138,10 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .source-tabs .retry-btn.show{display:inline-block;}
 .source-tier-label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin:8px 0 4px;}
 
-/* Player */
+/* Unified Player */
 .player-shell{width:100%;max-width:1100px;margin:0 auto;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #000;position:relative;}
-.player-shell .plyr{--plyr-color-main:var(--red);}
+.player-shell .artplayer-app{width:100%;aspect-ratio:16/9;background:#000;}
 .player-status{color:#888;font-size:14px;text-align:center;padding:40px 16px;line-height:1.6;}
-#embedFrame{width:100%;aspect-ratio:16/9;border:0;display:none;background:#000;}
 
 /* Similar */
 .similar-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
@@ -214,7 +210,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 <!-- HOME ROWS -->
 <main class="rows" id="contentRows"></main>
 
-<!-- ================= DETAIL MODAL ================= -->
+<!-- DETAIL MODAL -->
 <div class="detail-modal" id="detailModal">
   <button class="detail-close" id="detailClose">&times;</button>
 
@@ -262,7 +258,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
       <div class="similar-row" id="similarRow"></div>
     </div>
 
-    <!-- Sources + Player -->
+    <!-- Sources + Unified Player -->
     <div class="d-section" id="sourcesSection">
       <div class="d-section-title">Stream Sources</div>
       <div class="source-tier-label">Core (verified)</div>
@@ -272,8 +268,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
       <button class="retry-btn" id="retryBtn" style="margin-top:10px;">↻ Retry all sources</button>
 
       <div class="player-shell" style="margin-top:16px;">
-        <video id="videoPlayer" controls playsinline crossorigin="anonymous"></video>
-        <iframe id="embedFrame" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+        <div class="artplayer-app" id="artplayerApp"></div>
         <div class="player-status" id="playerStatus">Select a source above to start streaming</div>
       </div>
     </div>
@@ -281,7 +276,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 </div>
 
 <div class="footer">
-  StreamVault · Multi-source streaming · <a href="#" id="resetKeyLink">Reset TMDB key</a>
+  StreamVault · Unified FOSS player · <a href="#" id="resetKeyLink">Reset TMDB key</a>
 </div>
 
 <script>
@@ -299,60 +294,41 @@ const TMDB_EMBED_API="https://tmdb-embed-api.vercel.app";
 const VIDLINK_BASE="https://vidlink.pro/api";
 const MOVIEBOX_API="https://moviebox-api.vercel.app";
 
-// Provider registry: id, label, tier, url(tmdbId, mediaType, season, episode, imdbId)
-const PROVIDERS = [
-  // ---------- CORE (verified live at tmdb-embed-providers release) ----------
-  {id:"vidsrcto", label:"VidSrc.to", tier:"core",
+// ================= SOURCE REGISTRY =================
+// mode: "direct" = returns HLS/DASH/MP4 URL for ArtPlayer
+// mode: "proxy"  = iframe embed; fetch via /proxy and tunnel into blob URL
+const SOURCES = [
+  // --- CORE: direct stream resolvers ---
+  {id:"vidlink", label:"Vidlink", tier:"core", mode:"direct", api:"vidlink"},
+  {id:"vixsrc", label:"VixSrc", tier:"core", mode:"direct", api:"vixsrc"},
+  {id:"videasy", label:"Videasy", tier:"core", mode:"direct", api:"videasy"},
+  {id:"netmirror", label:"NetMirror", tier:"core", mode:"direct", api:"netmirror"},
+  {id:"showbox", label:"Showbox", tier:"core", mode:"direct", api:"showbox"},
+  {id:"streamflix", label:"StreamFlix", tier:"core", mode:"direct", api:"streamflix"},
+  {id:"moviebox", label:"MovieBox", tier:"core", mode:"direct", api:"moviebox"},
+
+  // --- EXTRAS: embed sources that get proxied ---
+  {id:"vidsrcto", label:"VidSrc.to", tier:"extras", mode:"proxy",
     url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.to/embed/movie/${id}` : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`},
-  {id:"vidsrccc", label:"VidSrc.cc", tier:"core",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.cc/v2/embed/movie/${id}?poster=true&autoPlay=true` : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}?poster=true&autoPlay=true`},
-  {id:"vidfast", label:"VidFast", tier:"core",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidfast.pro/movie/${id}?autoPlay=true` : `https://vidfast.pro/tv/${id}/${s}/${e}?autoPlay=true`},
-  {id:"vidlink", label:"Vidlink", tier:"core", direct:true},
-  {id:"vidsrcpm", label:"VidSrc.pm", tier:"core",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.pm/embed/movie/${id}` : `https://vidsrc.pm/embed/tv/${id}/${s}/${e}`},
-  {id:"2embedskin", label:"2Embed.skin", tier:"core",
-    url:(id,t,s,e)=> t==="movie" ? `https://2embed.skin/embed/movie/${id}` : `https://2embed.skin/embed/tv/${id}/${s}/${e}`},
-  {id:"2embed", label:"2Embed.cc", tier:"core",
+  {id:"vidsrccc", label:"VidSrc.cc", tier:"extras", mode:"proxy",
+    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.cc/v2/embed/movie/${id}` : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`},
+  {id:"vidfast", label:"VidFast", tier:"extras", mode:"proxy",
+    url:(id,t,s,e)=> t==="movie" ? `https://vidfast.pro/movie/${id}` : `https://vidfast.pro/tv/${id}/${s}/${e}`},
+  {id:"2embed", label:"2Embed", tier:"extras", mode:"proxy",
     url:(id,t,s,e)=> t==="movie" ? `https://2embed.cc/embed/movie/${id}` : `https://2embed.cc/embed/tv/${id}/${s}/${e}`},
-
-  // ---------- EXTRAS ----------
-  {id:"autoembed", label:"AutoEmbed", tier:"extras",
+  {id:"autoembed", label:"AutoEmbed", tier:"extras", mode:"proxy",
     url:(id,t,s,e)=> t==="movie" ? `https://autoembed.co/embed/movie/${id}` : `https://autoembed.co/embed/tv/${id}/${s}/${e}`},
-  {id:"multiembed", label:"MultiEmbed", tier:"extras",
+  {id:"multiembed", label:"MultiEmbed", tier:"extras", mode:"proxy",
     url:(id,t,s,e)=> t==="movie" ? `https://multiembed.mov/?video_id=${id}&tmdb=1` : `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`},
-  {id:"embedmaster", label:"EmbedMaster", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://embedmaster.link/embed/movie/${id}` : `https://embedmaster.link/embed/tv/${id}/${s}/${e}`},
-  {id:"vidsrcmov", label:"VidSrc.mov", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.mov/embed/movie/${id}` : `https://vidsrc.mov/embed/tv/${id}/${s}/${e}`},
-  {id:"vidsrcicu", label:"VidSrc.icu", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.icu/embed/movie/${id}` : `https://vidsrc.icu/embed/tv/${id}/${s}/${e}`},
-  {id:"smashystream", label:"SmashyStream", tier:"extras",
+  {id:"smashystream", label:"SmashyStream", tier:"extras", mode:"proxy",
     url:(id,t,s,e)=> t==="movie" ? `https://player.smashy.stream/movie/${id}` : `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`},
-  {id:"moviesapi", label:"MoviesAPI", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://moviesapi.to/embed/movie/${id}` : `https://moviesapi.to/embed/tv/${id}/${s}/${e}`},
-  {id:"nontongo", label:"Nontongo", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://nontongo.win/embed/movie/${id}` : `https://nontongo.win/embed/tv/${id}/${s}/${e}`},
-  {id:"frembed", label:"Frembed", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://frembed.lat/api/film.php?id=${id}` : `https://frembed.lat/api/serie.php?id=${id}&sa=${s}&epi=${e}`},
-  {id:"gomo", label:"Gomo.to", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://gomo.to/movie/${id}` : `https://gomo.to/show/${id}/${s}-${e}`},
-  {id:"embedsu", label:"Embed.su", tier:"extras",
-    url:(id,t,s,e)=> t==="movie" ? `https://embed.su/embed/movie/${id}` : `https://embed.su/embed/tv/${id}/${s}/${e}`},
-
-  // ---------- TMDB-Embed-API providers (direct HLS) ----------
-  {id:"netmirror", label:"NetMirror", tier:"extras", api:"netmirror"},
-  {id:"showbox", label:"Showbox", tier:"extras", api:"showbox"},
-  {id:"streamflix", label:"StreamFlix", tier:"extras", api:"streamflix"},
-  {id:"vixsrc", label:"VixSrc", tier:"extras", api:"vixsrc"},
-  {id:"videasy", label:"Videasy", tier:"extras", api:"videasy"},
-
-  // ---------- MovieBox ----------
-  {id:"moviebox", label:"MovieBox", tier:"extras", api:"moviebox"},
+  {id:"embedmaster", label:"EmbedMaster", tier:"extras", mode:"proxy",
+    url:(id,t,s,e)=> t==="movie" ? `https://embedmaster.link/embed/movie/${id}` : `https://embedmaster.link/embed/tv/${id}/${s}/${e}`},
 ];
 
-const ALL_SOURCES = PROVIDERS.map(p=>p.id);
-const DEFAULT_SOURCE = "vidsrcto";
+const ALL_SOURCES = SOURCES.map(s=>s.id);
+const DEFAULT_SOURCE = "vidlink";
+
 const PLACEHOLDER_POSTER="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
 const PLACEHOLDER_STILL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='170' fill='%23222'%3E%3Crect width='300' height='170'/%3E%3C/svg%3E";
 
@@ -375,47 +351,32 @@ const sourcesSection=$("sourcesSection");
 const sourceTabsCore=$("sourceTabsCore"), sourceTabsExtras=$("sourceTabsExtras");
 const retryBtn=$("retryBtn");
 
-const videoPlayer=$("videoPlayer"), embedFrame=$("embedFrame"), playerStatus=$("playerStatus");
+const artplayerApp=$("artplayerApp"), playerStatus=$("playerStatus");
 
 // ================= STATE =================
-let plyr=null, hls=null;
-let currentItem=null;      // full detail object
+let art=null;              // ArtPlayer instance
+let hls=null, dash=null, flvPlayer=null, torrentClient=null;
+let currentItem=null;
 let currentSource=DEFAULT_SOURCE;
 let heroItem=null;
 let playSessionId=0;
-let seasonLoading=false;
-let activeEpisode=1;
-let activeSeason=1;
+let activeSeason=1, activeEpisode=1;
 
 // ================= UTILS =================
 function esc(t){const d=document.createElement("div");d.textContent=t;return d.innerHTML;}
 function fmtRuntime(m){if(!m)return"";const h=Math.floor(m/60),x=m%60;return h>0?`${h}h ${x}m`:`${x}m`;}
 function showStatus(msg,loading){
   playerStatus.innerHTML=loading?`<div class="spinner"></div>${esc(msg)}`:esc(msg);
-  playerStatus.style.display="block"; videoPlayer.style.display="none"; embedFrame.style.display="none";
+  playerStatus.style.display="block";
+  if(art)art.pause();
 }
 function hideStatus(){playerStatus.style.display="none";}
-function destroyHls(){if(hls){try{hls.destroy();}catch(e){}hls=null;}videoPlayer.removeAttribute("src");videoPlayer.load();}
-function initPlyr(){
-  if(plyr)return;
-  plyr=new Plyr(videoPlayer,{
-    controls:["play-large","play","progress","current-time","duration","mute","volume","settings","pip","fullscreen"],
-    settings:["quality","speed"],speed:{selected:1,options:[0.5,0.75,1,1.25,1.5,2]},
-    keyboard:{focused:true,global:true},tooltips:{controls:true,seek:true},
-    fullscreen:{enabled:true,fallback:true,iosNative:true},storage:{enabled:true,key:"plyr-sv"}
-  });
-}
-function setTabState(container,src,state){
-  const btn=container.querySelector(`button[data-source="${src}"]`);
-  if(!btn)return;
-  btn.classList.remove("loading","failed","active");
-  if(state==="active")btn.classList.add("active");
-  else if(state==="loading")btn.classList.add("loading");
-  else if(state==="failed")btn.classList.add("failed");
-}
-function resetSourceTabs(){
-  [sourceTabsCore,sourceTabsExtras].forEach(c=>c.querySelectorAll("button[data-source]").forEach(b=>b.classList.remove("loading","failed")));
-  retryBtn.classList.remove("show");
+function destroyPlayer(){
+  if(hls){try{hls.destroy();}catch(e){}hls=null;}
+  if(dash){try{dash.reset();}catch(e){}dash=null;}
+  if(flvPlayer){try{flvPlayer.destroy();}catch(e){}flvPlayer=null;}
+  if(torrentClient){try{torrentClient.destroy();}catch(e){}torrentClient=null;}
+  if(art){try{art.destroy();}catch(e){}art=null;}
 }
 
 // ================= TMDB =================
@@ -539,12 +500,11 @@ async function performSearch(){
   finally{searchBtn.disabled=false; searchBtn.textContent="Search";}
 }
 
-// ================= DETAIL OPEN =================
+// ================= DETAIL =================
 async function openDetail(partial){
   playSessionId++;
   detailModal.classList.add("open");
   detailModal.scrollTop=0;
-  // Loading skeleton
   detailHero.style.backgroundImage="linear-gradient(135deg,#1a1a1a,#0a0a0a)";
   detailPoster.src=partial.poster||PLACEHOLDER_POSTER;
   detailTitle.textContent=partial.title||"Loading…";
@@ -644,7 +604,6 @@ function initSeasonUI(item){
 }
 
 async function loadSeasonEpisodes(item,seasonNum){
-  seasonLoading=true;
   episodeList.innerHTML='<div class="section-status" style="padding:20px 0;"><div class="spinner"></div>Loading episodes…</div>';
   try{
     const data=await fetchSeason(item.id,seasonNum);
@@ -671,13 +630,12 @@ async function loadSeasonEpisodes(item,seasonNum){
       });
     });
   }catch(e){episodeList.innerHTML='<div class="section-status">Failed to load episodes.</div>';}
-  finally{seasonLoading=false;}
 }
 
 // ================= SOURCES =================
 function buildSourceTabs(item){
-  const core=PROVIDERS.filter(p=>p.tier==="core");
-  const extras=PROVIDERS.filter(p=>p.tier==="extras");
+  const core=SOURCES.filter(p=>p.tier==="core");
+  const extras=SOURCES.filter(p=>p.tier==="extras");
   const render=(container,list)=>{
     container.innerHTML="";
     list.forEach(p=>{
@@ -691,15 +649,23 @@ function buildSourceTabs(item){
   render(sourceTabsExtras,extras);
 }
 
-function getProvider(id){return PROVIDERS.find(p=>p.id===id);}
+function getSource(id){return SOURCES.find(p=>p.id===id);}
 
-function buildEmbedUrl(provider,item){
-  if(provider.direct||provider.api)return null;
-  return provider.url(item.id,item.mediaType,item.season||activeSeason,item.episode||activeEpisode);
+function setTabState(container,src,state){
+  const btn=container.querySelector(`button[data-source="${src}"]`);
+  if(!btn)return;
+  btn.classList.remove("loading","failed","active");
+  if(state==="active")btn.classList.add("active");
+  else if(state==="loading")btn.classList.add("loading");
+  else if(state==="failed")btn.classList.add("failed");
+}
+function resetSourceTabs(){
+  [sourceTabsCore,sourceTabsExtras].forEach(c=>c.querySelectorAll("button[data-source]").forEach(b=>b.classList.remove("loading","failed")));
+  retryBtn.classList.remove("show");
 }
 
-// ================= DIRECT STREAM FETCHERS =================
-async function fetchVidlink(item){
+// ================= STREAM RESOLVERS =================
+async function resolveVidlink(item){
   const isMovie=item.mediaType==="movie";
   let u=`${VIDLINK_BASE}/vidlink/watch?isMovie=${isMovie}&id=${item.id}`;
   if(!isMovie)u+=`&season=${activeSeason}&episode=${activeEpisode}`;
@@ -708,7 +674,7 @@ async function fetchVidlink(item){
   if(!p)throw new Error("Vidlink no playlist"); return p;
 }
 
-async function fetchTMDBEmbedAPI(providerId,item){
+async function resolveTMDBEmbed(providerId,item){
   const type=item.mediaType==="movie"?"movie":"series";
   let u=`${TMDB_EMBED_API}/api/streams/${providerId}/${type}/${item.id}`;
   if(type==="series")u+=`?season=${activeSeason}&episode=${activeEpisode}`;
@@ -719,7 +685,7 @@ async function fetchTMDBEmbedAPI(providerId,item){
   return streams[0].url;
 }
 
-async function fetchMovieBox(item){
+async function resolveMovieBox(item){
   const s=await fetch(`${MOVIEBOX_API}/search?q=${encodeURIComponent(item.title)}`);
   if(!s.ok)throw new Error("MovieBox search failed");
   const sd=await s.json(); const res=sd.results||sd.data||[];
@@ -735,45 +701,79 @@ async function fetchMovieBox(item){
   if(!u)throw new Error("MovieBox no URL"); return u;
 }
 
-async function getDirectStream(provider,item){
-  if(provider.id==="vidlink")return fetchVidlink(item);
-  if(provider.id==="moviebox")return fetchMovieBox(item);
-  if(provider.api)return fetchTMDBEmbedAPI(provider.api,item);
-  throw new Error("Not a direct source");
+async function resolveDirect(source,item){
+  if(source.id==="vidlink")return resolveVidlink(item);
+  if(source.id==="moviebox")return resolveMovieBox(item);
+  if(source.api)return resolveTMDBEmbed(source.api,item);
+  throw new Error("No direct resolver");
 }
 
-// ================= PLAYBACK =================
-function playStreamUrl(url,onErr){
-  destroyHls();
-  if(!url){onErr?onErr(new Error("Empty URL")):showStatus("No stream URL.",false);return;}
+// ================= EMBED PROXY =================
+// Tunnels an iframe embed through same-origin so ArtPlayer can display it
+// without X-Frame-Options blocking. Requires a server route at /proxy?url=...
+async function resolveProxyEmbed(source,item){
+  const embedUrl=source.url(item.id,item.mediaType,activeSeason,activeEpisode);
+  if(!embedUrl)throw new Error("No embed URL");
+  // In production, point this at your own proxy server.
+  const proxied=`/proxy?url=${encodeURIComponent(embedUrl)}`;
+  const res=await fetch(proxied);
+  if(!res.ok)throw new Error(`Proxy ${res.status}`);
+  const html=await res.text();
+  const blob=new Blob([html],{type:"text/html"});
+  return URL.createObjectURL(blob);
+}
+
+// ================= UNIFIED PLAYER =================
+function playUrl(url,onError){
+  destroyPlayer();
+  hideStatus();
+
   const isHls=url.includes(".m3u8")||url.includes("m3u8");
-  if(isHls){
-    if(Hls.isSupported()){
-      hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60});
-      hls.loadSource(url); hls.attachMedia(videoPlayer);
-      hls.on(Hls.Events.MANIFEST_PARSED,()=>{
-        hideStatus(); videoPlayer.style.display="block"; embedFrame.style.display="none";
-        initPlyr(); videoPlayer.play().catch(()=>{});
-      });
-      hls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)onErr?onErr(new Error(`HLS: ${d.details}`)):showStatus(`HLS: ${d.details}`,false);});
-      return;
+  const isDash=url.includes(".mpd")||url.includes("mpd");
+  const isTorrent=url.startsWith("magnet:")||url.endsWith(".torrent");
+
+  art=new Artplayer({
+    container:artplayerApp,
+    url:url,
+    autoplay:true,
+    muted:false,
+    volume:0.8,
+    pip:true,
+    fullscreen:true,
+    fullscreenWeb:true,
+    playbackRate:true,
+    aspectRatio:true,
+    setting:true,
+    hotkey:true,
+    screenshot:true,
+    airplay:true,
+    theme:"#e50914",
+    lang:"en",
+    type:isHls?"m3u8":isDash?"mpd":undefined,
+    customType:{
+      m3u8:function(video,url,art){
+        if(Hls.isSupported()){
+          if(hls)hls.destroy();
+          hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60});
+          hls.loadSource(url); hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED,()=>art.play());
+          hls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)onError&&onError(new Error(`HLS: ${d.details}`));});
+        }else if(video.canPlayType("application/vnd.apple.mpegurl")){
+          video.src=url; art.play();
+        }else{onError&&onError(new Error("HLS unsupported"));}
+      },
+      mpd:function(video,url,art){
+        if(dash)try{dash.reset();}catch(e){}
+        dash=dashjs.MediaPlayer().create();
+        dash.initialize(video,url,true);
+        dash.on("error",e=>onError&&onError(new Error("DASH error")));
+      }
     }
-    if(videoPlayer.canPlayType("application/vnd.apple.mpegurl")){
-      videoPlayer.src=url; hideStatus(); videoPlayer.style.display="block"; embedFrame.style.display="none";
-      initPlyr(); videoPlayer.play().catch(()=>{}); return;
-    }
-    onErr?onErr(new Error("HLS unsupported")):showStatus("HLS unsupported.",false); return;
-  }
-  videoPlayer.src=url; hideStatus(); videoPlayer.style.display="block"; embedFrame.style.display="none";
-  initPlyr(); videoPlayer.play().catch(()=>{});
+  });
+  art.on("error",()=>onError&&onError(new Error("Playback error")));
 }
 
-function playEmbedUrl(url){
-  destroyHls(); if(plyr){try{plyr.pause();}catch(e){}}
-  hideStatus(); videoPlayer.style.display="none"; embedFrame.style.display="block";
-  embedFrame.src=url;
-}
-
+// ================= PLAY ORCHESTRATOR =================
 async function playItem(item,source,attempted=[]){
   const session=++playSessionId;
   if(attempted.includes(source)){
@@ -785,51 +785,42 @@ async function playItem(item,source,attempted=[]){
     source=rem[0];
   }
   currentItem=item; currentSource=source;
-  const provider=getProvider(source);
-  if(!provider){showStatus("Unknown source.",false);return;}
+  const src=getSource(source);
+  if(!src){showStatus("Unknown source.",false);return;}
 
   if(attempted.length===0)resetSourceTabs();
-  const tabContainer=provider.tier==="core"?sourceTabsCore:sourceTabsExtras;
+  const tabContainer=src.tier==="core"?sourceTabsCore:sourceTabsExtras;
   setTabState(tabContainer,source,"loading");
   [sourceTabsCore,sourceTabsExtras].forEach(c=>c.querySelectorAll("button[data-source]").forEach(b=>b.classList.remove("active")));
   tabContainer.querySelector(`button[data-source="${source}"]`)?.classList.add("active");
 
-  // Embed provider
-  if(!provider.direct&&!provider.api){
-    const url=buildEmbedUrl(provider,item);
-    if(!url){
-      setTabState(tabContainer,source,"failed");
-      const na=[...attempted,source]; const rem=ALL_SOURCES.filter(s=>!na.includes(s));
-      if(!rem.length){showStatus("All sources failed.",false);retryBtn.classList.add("show");return;}
-      showStatus(`${provider.label} produced no URL. Trying ${rem[0]}…`,true);
-      setTimeout(()=>playItem(item,rem[0],na),1200); return;
-    }
-    setTabState(tabContainer,source,"active");
-    playEmbedUrl(url); return;
-  }
+  showStatus(`Resolving ${src.label}…`,true);
 
-  // Direct stream
-  showStatus(`Loading ${provider.label}…`,true);
   try{
-    const url=await getDirectStream(provider,item);
+    let playableUrl;
+    if(src.mode==="direct"){
+      playableUrl=await resolveDirect(src,item);
+    }else{
+      playableUrl=await resolveProxyEmbed(src,item);
+    }
     if(session!==playSessionId)return;
     setTabState(tabContainer,source,"active");
-    playStreamUrl(url,(err)=>{
+    playUrl(playableUrl,(err)=>{
       if(session!==playSessionId)return;
-      console.warn(`${provider.label} playback failed:`,err);
+      console.warn(`${src.label} playback failed:`,err);
       setTabState(tabContainer,source,"failed");
       const na=[...attempted,source]; const rem=ALL_SOURCES.filter(s=>!na.includes(s));
       if(!rem.length){showStatus("All sources failed to play.",false);retryBtn.classList.add("show");return;}
-      showStatus(`${provider.label} failed. Trying ${rem[0]}…`,true);
+      showStatus(`${src.label} failed. Trying ${rem[0]}…`,true);
       setTimeout(()=>playItem(item,rem[0],na),1800);
     });
   }catch(e){
     if(session!==playSessionId)return;
-    console.warn(`${provider.label} fetch failed:`,e);
+    console.warn(`${src.label} resolve failed:`,e);
     setTabState(tabContainer,source,"failed");
     const na=[...attempted,source]; const rem=ALL_SOURCES.filter(s=>!na.includes(s));
     if(!rem.length){showStatus(`All failed. Last: ${e.message}`,false);retryBtn.classList.add("show");return;}
-    showStatus(`${provider.label} failed. Trying ${rem[0]}…`,true);
+    showStatus(`${src.label} failed. Trying ${rem[0]}…`,true);
     setTimeout(()=>playItem(item,rem[0],na),1800);
   }
 }
@@ -854,8 +845,7 @@ retryBtn.addEventListener("click",()=>{
 function closeDetail(){
   playSessionId++;
   detailModal.classList.remove("open");
-  destroyHls(); embedFrame.src="about:blank"; embedFrame.style.display="none";
-  if(plyr)plyr.pause();
+  destroyPlayer();
 }
 detailClose.addEventListener("click",closeDetail);
 detailModal.addEventListener("click",e=>{if(e.target===detailModal)closeDetail();});
@@ -866,7 +856,7 @@ pillNav.addEventListener("click",e=>{
   pillNav.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active");
   const tab=btn.dataset.tab;
-  if(tab==="episodes")episodesSection.style.display=episodesSection.style.display==="none"?"block":"block";
+  if(tab==="episodes")episodesSection.scrollIntoView({behavior:"smooth"});
   if(tab==="cast")castSection.scrollIntoView({behavior:"smooth"});
   if(tab==="similar")similarSection.scrollIntoView({behavior:"smooth"});
   if(tab==="sources")sourcesSection.scrollIntoView({behavior:"smooth"});
@@ -878,14 +868,14 @@ detailPlayBtn.addEventListener("click",()=>{if(currentItem)playItem(currentItem,
 detailInfoBtn.addEventListener("click",()=>{if(currentItem)playItem(currentItem,currentSource,[]);});
 
 window.addEventListener("scroll",()=>{navbar.classList.toggle("scrolled",window.scrollY>50);});
-window.addEventListener("beforeunload",()=>{destroyHls();if(plyr)plyr.destroy();});
+window.addEventListener("beforeunload",()=>{destroyPlayer();if(plyr)plyr.destroy();});
 document.getElementById("resetKeyLink").addEventListener("click",e=>{
   e.preventDefault(); localStorage.removeItem("tmdb_key");
   alert("TMDB key cleared. Reload and enter a new key on next API call.");
 });
 
 // ================= INIT =================
-document.addEventListener("DOMContentLoaded",()=>{initPlyr();loadHomepage();});
+document.addEventListener("DOMContentLoaded",()=>{loadHomepage();});
 })();
 </script>
 </body>
