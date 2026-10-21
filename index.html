@@ -70,21 +70,13 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .row-inner::-webkit-scrollbar { display:none; }
 
 /* ===== SEARCH GRID ===== */
-.search-grid {
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
-  gap:14px; padding:24px 4% 40px;
-}
-.search-header {
-  padding:24px 4% 8px; display:flex; align-items:baseline; gap:16px;
-}
+.search-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:14px; padding:24px 4% 40px; }
+.search-header { padding:24px 4% 8px; display:flex; align-items:baseline; gap:16px; }
 .search-header h2 { font-size:clamp(18px,2vw,26px); font-weight:700; }
 .search-header .count { color:var(--text-dim); font-size:14px; }
 
 /* ===== CARD ===== */
-.card {
-  position:relative; border-radius:4px; overflow:hidden;
-  cursor:pointer; transition:transform .3s, box-shadow .3s; background:var(--card-bg);
-}
+.card { position:relative; border-radius:4px; overflow:hidden; cursor:pointer; transition:transform .3s, box-shadow .3s; background:var(--card-bg); }
 .row-inner .card { flex:0 0 200px; }
 .card:hover { transform:scale(1.06); z-index:2; box-shadow:0 8px 24px rgba(0,0,0,.8); }
 .card img { width:100%; display:block; aspect-ratio:2/3; object-fit:cover; background:#222; }
@@ -98,11 +90,14 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .player-modal .close-btn { position:absolute; top:16px; right:4%; font-size:28px; color:#fff; cursor:pointer; z-index:10; line-height:1; }
 .player-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; padding-right:40px; }
 .player-header h3 { font-size:18px; font-weight:600; color:var(--text); }
-.source-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+.source-tabs {
+  display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;
+  max-height:120px; overflow-y:auto; padding:4px 0;
+}
 .source-tabs button {
   background:#2a2a2a; border:1px solid #444; border-radius:20px;
   padding:6px 16px; color:#aaa; font-size:13px; cursor:pointer; transition:all .2s;
-  position:relative;
+  position:relative; white-space:nowrap;
 }
 .source-tabs button.active { background:var(--red); border-color:var(--red); color:#fff; font-weight:600; }
 .source-tabs button.loading { border-color:var(--amber); color:var(--amber); }
@@ -119,9 +114,10 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 }
 .source-tabs .retry-btn.show { display:inline-block; }
 
-.player-shell { width:100%; max-width:1100px; margin:0 auto; background:#000; border-radius:8px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.8); }
+.player-shell { width:100%; max-width:1100px; margin:0 auto; background:#000; border-radius:8px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.8); position:relative; }
 .player-shell .plyr { --plyr-color-main:var(--red); }
 .player-status { color:#888; font-size:14px; text-align:center; padding:30px 10px; line-height:1.6; }
+#embedFrame { width:100%; aspect-ratio:16/9; border:0; display:none; background:#000; }
 
 /* ===== STATUS ===== */
 .section-status { padding:40px 4%; text-align:center; color:#888; font-size:15px; }
@@ -195,17 +191,26 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
     <button data-source="vidlink" class="active">Vidlink</button>
     <button data-source="netmirror">NetMirror</button>
     <button data-source="moviebox">MovieBox</button>
+    <button data-source="vidsrcto">VidSrc.to</button>
+    <button data-source="vidsrccc">VidSrc.cc</button>
+    <button data-source="2embed">2Embed</button>
+    <button data-source="autoembed">AutoEmbed</button>
+    <button data-source="superembed">SuperEmbed</button>
+    <button data-source="vidfast">VidFast</button>
+    <button data-source="vidify">Vidify</button>
     <button class="retry-btn" id="retryBtn">↻ Retry all</button>
   </div>
   <div class="player-shell">
     <video id="videoPlayer" controls playsinline crossorigin="anonymous"></video>
+    <iframe id="embedFrame" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
     <div class="player-status" id="playerStatus">Select a source to start streaming</div>
   </div>
 </div>
 
 <!-- ===== FOOTER ===== -->
 <div class="footer">
-  StreamVault · Streams via Vidlink / NetMirror / MovieBox · <a href="#" id="resetKeyLink">Reset TMDB key</a>
+  StreamVault · Streams via Vidlink / NetMirror / MovieBox / VidSrc / 2Embed / AutoEmbed / SuperEmbed / VidFast / Vidify ·
+  <a href="#" id="resetKeyLink">Reset TMDB key</a>
 </div>
 
 <script>
@@ -215,11 +220,16 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 // ================= CONFIG =================
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP = "https://image.tmdb.org/t/p/original";
-const TMDB_DEMO_KEY = "8265bd1679663a7ea12ac168da84d2e8"; // shared demo key, may rate-limit
+const TMDB_DEMO_KEY = "8265bd1679663a7ea12ac168da84d2e8";
+
+// Direct-stream sources
 const VIDLINK_BASE = "https://vidlink.pro/api";
 const TMDB_EMBED_API = "https://tmdb-embed-api.vercel.app";
 const MOVIEBOX_API = "https://moviebox-api.vercel.app";
-const ALL_SOURCES = ["vidlink", "netmirror", "moviebox"];
+
+// Embed-only sources (all use TMDB ID)
+const EMBED_SOURCES = ["vidsrcto", "vidsrccc", "2embed", "autoembed", "superembed", "vidfast", "vidify"];
+const ALL_SOURCES = ["vidlink", "netmirror", "moviebox", ...EMBED_SOURCES];
 
 // ================= DOM =================
 const $ = id => document.getElementById(id);
@@ -237,6 +247,7 @@ const playerModal = $("playerModal");
 const closePlayer = $("closePlayer");
 const playerTitle = $("playerTitle");
 const videoPlayer = $("videoPlayer");
+const embedFrame = $("embedFrame");
 const playerStatus = $("playerStatus");
 const sourceTabs = $("sourceTabs");
 const retryBtn = $("retryBtn");
@@ -247,7 +258,7 @@ let hls = null;
 let currentItem = null;
 let currentSource = "vidlink";
 let heroItem = null;
-let playSessionId = 0; // increments each new play, invalidates stale callbacks
+let playSessionId = 0;
 
 // ================= UTILS =================
 function escapeHtml(text) {
@@ -261,10 +272,10 @@ function showStatus(msg, loading) {
     : escapeHtml(msg);
   playerStatus.style.display = "block";
   videoPlayer.style.display = "none";
+  embedFrame.style.display = "none";
 }
 function hideStatus() {
   playerStatus.style.display = "none";
-  videoPlayer.style.display = "block";
 }
 function destroyHls() {
   if (hls) { try { hls.destroy(); } catch(e){} hls = null; }
@@ -284,7 +295,6 @@ function initPlyr() {
   });
 }
 function setSourceTabStatus(src, state) {
-  // state: "active" | "loading" | "failed" | "idle"
   const btn = sourceTabs.querySelector(`button[data-source="${src}"]`);
   if (!btn) return;
   btn.classList.remove("loading", "failed", "active");
@@ -329,7 +339,6 @@ async function fetchTMDB(path, params = {}, retried = false) {
 
   if (res.status === 429) {
     if (retried) throw new Error("TMDB rate limit reached. Wait 10 seconds and try again.");
-    // Prompt once for personal key to bypass shared demo rate limit
     const newKey = prompt(
       "The shared TMDB demo key is rate-limited.\n\n" +
       "Paste your own free key from https://www.themoviedb.org/settings/api\n" +
@@ -345,6 +354,18 @@ async function fetchTMDB(path, params = {}, retried = false) {
 
   if (!res.ok) throw new Error(`TMDB error ${res.status}`);
   return res.json();
+}
+
+async function fetchTMDBDetail(id, mediaType) {
+  const type = mediaType === "tv" ? "tv" : "movie";
+  const data = await fetchTMDB(`/${type}/${id}`);
+  return {
+    ...data,
+    mediaType: type,
+    title: data.title || data.name || "",
+    year: (data.release_date || data.first_air_date || "").slice(0, 4),
+    imdb_id: data.imdb_id || data.external_ids?.imdb_id || null
+  };
 }
 
 // ================= CARD =================
@@ -365,11 +386,29 @@ function createCard(item) {
     <div class="card-title">${escapeHtml(title)}</div>
     <div class="card-meta"><span>${year}</span><span>⭐ ${rating}</span></div>
   `;
-  card.addEventListener("click", () => {
-    playItem({
+
+  card.addEventListener("click", async () => {
+    const fallback = {
       id: item.id, title, poster, year, rating, mediaType,
       overview: item.overview || "", season: 1, episode: 1
-    }, "vidlink");
+    };
+
+    // CRITICAL: fetch full TMDB detail BEFORE touching any source
+    let full = fallback;
+    try {
+      const detail = await fetchTMDBDetail(item.id, mediaType);
+      full = {
+        ...fallback,
+        ...detail,
+        poster: poster || fallback.poster,
+        rating: detail.vote_average ? detail.vote_average.toFixed(1) : rating,
+        season: 1, episode: 1
+      };
+    } catch (err) {
+      console.warn("TMDB detail fetch failed, using fallback metadata:", err);
+    }
+
+    playItem(full, "vidlink", []);
   });
   return card;
 }
@@ -414,13 +453,11 @@ async function loadHomepage() {
     if (tr?.results) renderRow("🏆 Top Rated", tr.results.slice(0, 18));
     if (up?.results) renderRow("🎞 Coming Soon", up.results.slice(0, 18));
 
-    // If every call failed, show a clear error
     if (!t && !np && !pm && !pt && !tr && !up) {
       contentRows.innerHTML = '<div class="section-status">⚠️ Could not load content from TMDB.<br>Check the TMDB key from the footer.</div>';
       return;
     }
 
-    // Hero: first trending item with a backdrop
     const heroCandidate = trendingItems.find(x => x.backdrop_path) || trendingItems[0];
     if (heroCandidate) updateHero(heroCandidate);
   } catch (err) {
@@ -453,10 +490,7 @@ function updateHero(item) {
 // ================= SEARCH =================
 async function performSearch() {
   const query = searchInput.value.trim();
-  if (!query) {
-    searchInput.focus();
-    return;
-  }
+  if (!query) { searchInput.focus(); return; }
 
   searchBtn.disabled = true;
   searchBtn.textContent = "…";
@@ -483,7 +517,6 @@ async function performSearch() {
     results.forEach(item => grid.appendChild(createCard(item)));
     contentRows.appendChild(grid);
 
-    // Focus first result into hero
     const best = results.find(r => r.backdrop_path && (r.media_type === "movie" || r.media_type === "tv"));
     if (best) updateHero(best);
   } catch (err) {
@@ -495,7 +528,48 @@ async function performSearch() {
   }
 }
 
-// ================= STREAM FETCHERS =================
+// ================= EMBED URL BUILDERS =================
+function buildEmbedUrl(source, item) {
+  const id = item.id;
+  const isMovie = item.mediaType === "movie";
+  const s = item.season || 1;
+  const e = item.episode || 1;
+
+  switch (source) {
+    case "vidsrcto":
+      return isMovie
+        ? `https://vidsrc.to/embed/movie/${id}`
+        : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`;
+    case "vidsrccc":
+      return isMovie
+        ? `https://vidsrc.cc/v2/embed/movie/${id}`
+        : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`;
+    case "2embed":
+      return isMovie
+        ? `https://2embed.cc/embed/movie/${id}`
+        : `https://2embed.cc/embed/tv/${id}/${s}/${e}`;
+    case "autoembed":
+      return isMovie
+        ? `https://autoembed.cc/embed/movie/${id}`
+        : `https://autoembed.cc/embed/tv/${id}/${s}/${e}`;
+    case "superembed":
+      return isMovie
+        ? `https://multiembed.mov/?video_id=${id}&tmdb=1`
+        : `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`;
+    case "vidfast":
+      return isMovie
+        ? `https://vidfast.pro/movie/${id}`
+        : `https://vidfast.pro/tv/${id}/${s}/${e}`;
+    case "vidify":
+      return isMovie
+        ? `https://player.vidify.top/embed/movie/${id}`
+        : `https://player.vidify.top/embed/tv/${id}/${s}/${e}`;
+    default:
+      return null;
+  }
+}
+
+// ================= DIRECT STREAM FETCHERS =================
 async function fetchVidlinkStream(item) {
   const isMovie = item.mediaType === "movie";
   let url = `${VIDLINK_BASE}/vidlink/watch?isMovie=${isMovie}&id=${item.id}`;
@@ -541,12 +615,12 @@ async function fetchMovieBoxStream(item) {
   return url;
 }
 
-async function getStream(source, item) {
+async function getDirectStream(source, item) {
   switch (source) {
     case "vidlink":   return fetchVidlinkStream(item);
     case "netmirror": return fetchNetMirrorStream(item);
     case "moviebox":  return fetchMovieBoxStream(item);
-    default: throw new Error("Unknown source");
+    default: throw new Error("Not a direct stream source");
   }
 }
 
@@ -568,6 +642,8 @@ function playStreamUrl(url, onPlaybackError) {
       hls.attachMedia(videoPlayer);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         hideStatus();
+        videoPlayer.style.display = "block";
+        embedFrame.style.display = "none";
         initPlyr();
         videoPlayer.play().catch(() => {});
       });
@@ -583,6 +659,8 @@ function playStreamUrl(url, onPlaybackError) {
     if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
       videoPlayer.src = url;
       hideStatus();
+      videoPlayer.style.display = "block";
+      embedFrame.style.display = "none";
       initPlyr();
       videoPlayer.play().catch(() => {});
       return;
@@ -592,17 +670,27 @@ function playStreamUrl(url, onPlaybackError) {
     return;
   }
 
-  // Native (MP4 etc.)
   videoPlayer.src = url;
   hideStatus();
+  videoPlayer.style.display = "block";
+  embedFrame.style.display = "none";
   initPlyr();
   videoPlayer.play().catch(() => {});
+}
+
+function playEmbedUrl(url) {
+  destroyHls();
+  if (plyr) { try { plyr.pause(); } catch(e){} }
+  hideStatus();
+  videoPlayer.style.display = "none";
+  embedFrame.style.display = "block";
+  embedFrame.src = url;
 }
 
 async function playItem(item, source, attempted = []) {
   const session = ++playSessionId;
 
-  // If requested source already attempted, move to first untried
+  // Skip already-attempted source
   if (attempted.includes(source)) {
     const remaining = ALL_SOURCES.filter(s => !attempted.includes(s));
     if (!remaining.length) {
@@ -619,21 +707,41 @@ async function playItem(item, source, attempted = []) {
   playerTitle.textContent = item.title + (item.year ? ` (${item.year})` : "");
   playerModal.classList.add("open");
 
-  // Fresh play session → reset tab states
   if (attempted.length === 0) resetSourceTabs();
   setSourceTabStatus(source, "loading");
   sourceTabs.querySelectorAll("button[data-source]").forEach(b => b.classList.remove("active"));
   sourceTabs.querySelector(`button[data-source="${source}"]`)?.classList.add("active");
 
+  // Embed sources need no fetch — build URL and load immediately
+  if (EMBED_SOURCES.includes(source)) {
+    const embedUrl = buildEmbedUrl(source, item);
+    if (!embedUrl) {
+      setSourceTabStatus(source, "failed");
+      const nextAttempted = [...attempted, source];
+      const remaining = ALL_SOURCES.filter(s => !nextAttempted.includes(s));
+      if (!remaining.length) {
+        showStatus("All sources failed.", false);
+        retryBtn.classList.add("show");
+        return;
+      }
+      showStatus(`${source} produced no URL. Trying ${remaining[0]}…`, true);
+      setTimeout(() => playItem(item, remaining[0], nextAttempted), 1500);
+      return;
+    }
+    setSourceTabStatus(source, "active");
+    playEmbedUrl(embedUrl);
+    return;
+  }
+
+  // Direct stream sources
   showStatus(`Loading ${source}…`, true);
 
   try {
-    const url = await getStream(source, item);
-    if (session !== playSessionId) return; // stale
+    const url = await getDirectStream(source, item);
+    if (session !== playSessionId) return;
 
     setSourceTabStatus(source, "active");
 
-    // Playback with error fallback
     playStreamUrl(url, (playErr) => {
       if (session !== playSessionId) return;
       console.warn(`Playback failed on ${source}:`, playErr);
@@ -675,23 +783,23 @@ searchInput.addEventListener("keydown", (e) => {
 });
 
 sourceTabs.addEventListener("click", (e) => {
-  // Manual retry
   if (e.target === retryBtn) {
     if (!currentItem) return;
     resetSourceTabs();
-    playItem(currentItem, "vidlink", []); // fresh attempt chain
+    playItem(currentItem, "vidlink", []);
     return;
   }
   const btn = e.target.closest("button[data-source]");
   if (!btn || !currentItem) return;
-  // Manual source click → reset attempt chain so this source actually runs
   playItem(currentItem, btn.dataset.source, []);
 });
 
 closePlayer.addEventListener("click", () => {
-  playSessionId++; // invalidate any pending callbacks
+  playSessionId++;
   playerModal.classList.remove("open");
   destroyHls();
+  embedFrame.src = "about:blank";
+  embedFrame.style.display = "none";
   if (plyr) plyr.pause();
 });
 
@@ -700,6 +808,8 @@ playerModal.addEventListener("click", (e) => {
     playSessionId++;
     playerModal.classList.remove("open");
     destroyHls();
+    embedFrame.src = "about:blank";
+    embedFrame.style.display = "none";
     if (plyr) plyr.pause();
   }
 });
