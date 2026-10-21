@@ -7,80 +7,149 @@
 
 <!-- Plyr (open-source player) -->
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-<!-- hls.js for m3u8 playback -->
+<!-- hls.js for m3u8 streams -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <!-- Plyr -->
 <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
 
 <style>
+:root {
+  --bg: #141414;
+  --card-bg: #1f1f1f;
+  --red: #e50914;
+  --text: #e5e5e5;
+  --text-dim: #8c8c8c;
+}
 * { margin:0; padding:0; box-sizing:border-box; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; }
-body { background:#141414; color:#fff; overflow-x:hidden; }
+body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 
-/* ---- NAVBAR ---- */
-.navbar { position:fixed; top:0; left:0; right:0; height:68px; padding:0 4%; display:flex; align-items:center; gap:28px; z-index:100;
+/* ================= NAVBAR ================= */
+.navbar {
+  position:fixed; top:0; left:0; right:0; height:68px; padding:0 4%;
+  display:flex; align-items:center; gap:28px; z-index:100;
   background:linear-gradient(180deg,rgba(0,0,0,.9) 0%,rgba(0,0,0,0) 100%);
-  transition:background .3s; }
-.navbar.scrolled { background:#141414; }
-.logo { font-size:26px; font-weight:900; color:#e50914; letter-spacing:-1px; white-space:nowrap; cursor:pointer; }
+  transition:background .3s;
+}
+.navbar.scrolled { background:var(--bg); }
+.logo { font-size:26px; font-weight:900; color:var(--red); letter-spacing:-1px; white-space:nowrap; cursor:pointer; }
 .logo span { color:#fff; font-weight:300; }
-.nav-links { display:flex; gap:20px; font-size:14px; color:#e5e5e5; }
+.nav-links { display:flex; gap:20px; font-size:14px; color:var(--text); }
 .nav-links span { cursor:pointer; transition:color .2s; }
 .nav-links span:hover { color:#b3b3b3; }
 .nav-links span.active { font-weight:700; color:#fff; }
-
 .search-box { margin-left:auto; display:flex; align-items:center; gap:8px; }
-.search-box input { background:rgba(0,0,0,.75); border:1px solid #444; border-radius:4px; padding:8px 14px; color:#fff; font-size:14px; width:240px; outline:none; transition:border .2s,width .2s; }
-.search-box input:focus { border-color:#e50914; width:280px; }
-.search-box button { background:#e50914; border:none; border-radius:4px; padding:8px 18px; color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:background .2s; }
+.search-box input {
+  background:rgba(0,0,0,.75); border:1px solid #444; border-radius:4px;
+  padding:8px 14px; color:#fff; font-size:14px; width:240px; outline:none;
+  transition:border .2s, width .2s;
+}
+.search-box input:focus { border-color:var(--red); width:280px; }
+.search-box button {
+  background:var(--red); border:none; border-radius:4px; padding:8px 18px;
+  color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:background .2s;
+}
 .search-box button:hover { background:#b2070f; }
 
-/* ---- HERO ---- */
-.hero { position:relative; height:56vw; max-height:80vh; min-height:360px; background:#000; display:flex; align-items:flex-end; }
-.hero-bg { position:absolute; inset:0; background-size:cover; background-position:center 20%; opacity:.45; }
-.hero-gradient { position:absolute; inset:0; background:linear-gradient(0deg,#141414 0%,rgba(20,20,20,.4) 40%,rgba(20,20,20,0) 70%); }
+/* ================= HERO ================= */
+.hero {
+  position:relative; height:56vw; max-height:80vh; min-height:360px;
+  background:#000; display:flex; align-items:flex-end;
+}
+.hero-bg {
+  position:absolute; inset:0; background-size:cover; background-position:center 20%;
+  opacity:.45;
+}
+.hero-gradient {
+  position:absolute; inset:0;
+  background:linear-gradient(0deg,var(--bg) 0%,rgba(20,20,20,.4) 40%,rgba(20,20,20,0) 70%);
+}
 .hero-content { position:relative; z-index:2; padding:0 4% 60px; max-width:640px; }
-.hero-content h1 { font-size:clamp(28px,4vw,56px); font-weight:900; line-height:1.1; margin-bottom:16px; text-shadow:2px 2px 8px rgba(0,0,0,.8); }
-.hero-meta { display:flex; gap:14px; font-size:14px; color:#bcbcbc; margin-bottom:16px; align-items:center; }
+.hero-content h1 {
+  font-size:clamp(28px,4vw,56px); font-weight:900; line-height:1.1;
+  margin-bottom:16px; text-shadow:2px 2px 8px rgba(0,0,0,.8);
+}
+.hero-meta { display:flex; gap:14px; font-size:14px; color:#bcbcbc; margin-bottom:16px; align-items:center; flex-wrap:wrap; }
 .match { color:#46d369; font-weight:700; }
-.hero-desc { font-size:clamp(13px,1.4vw,17px); color:#d2d2d2; line-height:1.5; margin-bottom:24px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.hero-btns { display:flex; gap:12px; }
-.btn-play { background:#fff; color:#000; border:none; border-radius:4px; padding:12px 28px; font-size:17px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; transition:opacity .2s; }
+.hero-desc {
+  font-size:clamp(13px,1.4vw,17px); color:#d2d2d2; line-height:1.5;
+  margin-bottom:24px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+}
+.hero-btns { display:flex; gap:12px; flex-wrap:wrap; }
+.btn-play {
+  background:#fff; color:#000; border:none; border-radius:4px; padding:12px 28px;
+  font-size:17px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px;
+  transition:opacity .2s;
+}
 .btn-play:hover { opacity:.8; }
-.btn-info { background:rgba(109,109,110,.7); color:#fff; border:none; border-radius:4px; padding:12px 28px; font-size:17px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; transition:background .2s; }
+.btn-info {
+  background:rgba(109,109,110,.7); color:#fff; border:none; border-radius:4px;
+  padding:12px 28px; font-size:17px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; gap:8px; transition:background .2s;
+}
 .btn-info:hover { background:rgba(109,109,110,.5); }
 
-/* ---- ROWS ---- */
-.row { padding:0 4%; margin-bottom:32px; position:relative; }
-.row h2 { font-size:clamp(16px,1.6vw,22px); font-weight:700; margin-bottom:12px; color:#e5e5e5; }
-.row-inner { display:flex; gap:8px; overflow-x:auto; scroll-behavior:smooth; padding-bottom:8px; scrollbar-width:none; }
+/* ================= CONTENT ROWS ================= */
+.rows { padding:0 0 40px; margin-top:-60px; position:relative; z-index:3; }
+.row { padding:0 4%; margin-bottom:32px; }
+.row h2 { font-size:clamp(16px,1.6vw,22px); font-weight:700; margin-bottom:12px; color:var(--text); }
+.row-inner {
+  display:flex; gap:8px; overflow-x:auto; scroll-behavior:smooth;
+  padding-bottom:8px; scrollbar-width:none;
+}
 .row-inner::-webkit-scrollbar { display:none; }
-
-.card { flex:0 0 200px; position:relative; border-radius:4px; overflow:hidden; cursor:pointer; transition:transform .3s,box-shadow .3s; background:#1f1f1f; }
+.card {
+  flex:0 0 200px; position:relative; border-radius:4px; overflow:hidden;
+  cursor:pointer; transition:transform .3s, box-shadow .3s; background:var(--card-bg);
+}
 .card:hover { transform:scale(1.06); z-index:2; box-shadow:0 8px 24px rgba(0,0,0,.8); }
 .card img { width:100%; display:block; aspect-ratio:2/3; object-fit:cover; background:#222; }
-.card .card-title { font-size:12px; padding:8px 6px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#e5e5e5; }
-.card .card-meta { font-size:11px; color:#8c8c8c; padding:0 6px 8px; display:flex; justify-content:space-between; }
-.card .quality-tag { position:absolute; top:6px; right:6px; background:#e50914; font-size:10px; font-weight:700; padding:2px 6px; border-radius:2px; }
+.card .card-title {
+  font-size:12px; padding:8px 6px 4px; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; color:var(--text);
+}
+.card .card-meta {
+  font-size:11px; color:var(--text-dim); padding:0 6px 8px;
+  display:flex; justify-content:space-between;
+}
+.card .quality-tag {
+  position:absolute; top:6px; right:6px; background:var(--red);
+  font-size:10px; font-weight:700; padding:2px 6px; border-radius:2px;
+}
 
-/* ---- PLAYER MODAL ---- */
-.player-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.96); z-index:200; flex-direction:column; padding:20px 4%; overflow-y:auto; }
+/* ================= PLAYER MODAL ================= */
+.player-modal {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.96);
+  z-index:200; flex-direction:column; padding:20px 4%; overflow-y:auto;
+}
 .player-modal.open { display:flex; }
-.player-modal .close-btn { position:absolute; top:16px; right:4%; font-size:28px; color:#fff; cursor:pointer; z-index:10; line-height:1; }
+.player-modal .close-btn {
+  position:absolute; top:16px; right:4%; font-size:28px; color:#fff;
+  cursor:pointer; z-index:10; line-height:1;
+}
 .player-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; padding-right:40px; }
-.player-header h3 { font-size:18px; font-weight:600; color:#e5e5e5; }
+.player-header h3 { font-size:18px; font-weight:600; color:var(--text); }
 .source-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
-.source-tabs button { background:#2a2a2a; border:1px solid #444; border-radius:20px; padding:6px 16px; color:#aaa; font-size:13px; cursor:pointer; transition:all .2s; }
-.source-tabs button.active { background:#e50914; border-color:#e50914; color:#fff; font-weight:600; }
-.player-shell { width:100%; max-width:1100px; margin:0 auto; background:#000; border-radius:8px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.8); }
-.player-shell .plyr { --plyr-color-main:#e50914; }
+.source-tabs button {
+  background:#2a2a2a; border:1px solid #444; border-radius:20px;
+  padding:6px 16px; color:#aaa; font-size:13px; cursor:pointer; transition:all .2s;
+}
+.source-tabs button.active { background:var(--red); border-color:var(--red); color:#fff; font-weight:600; }
+.player-shell {
+  width:100%; max-width:1100px; margin:0 auto; background:#000;
+  border-radius:8px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.8);
+}
+.player-shell .plyr { --plyr-color-main:var(--red); }
 .player-status { color:#888; font-size:14px; text-align:center; padding:30px 10px; }
 
-/* ---- STATUS ---- */
+/* ================= STATUS / LOADING ================= */
 .section-status { padding:40px 0; text-align:center; color:#888; font-size:15px; }
-.spinner { width:28px; height:28px; border:3px solid #333; border-top-color:#e50914; border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
+.spinner {
+  width:28px; height:28px; border:3px solid #333; border-top-color:var(--red);
+  border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px;
+}
 @keyframes spin { to { transform:rotate(360deg); } }
 
-/* ---- RESPONSIVE ---- */
+/* ================= RESPONSIVE ================= */
 @media(max-width:768px) {
   .navbar { height:56px; gap:14px; }
   .nav-links { display:none; }
@@ -90,6 +159,7 @@ body { background:#141414; color:#fff; overflow-x:hidden; }
   .hero-content { padding-bottom:30px; }
   .card { flex:0 0 130px; }
   .btn-play, .btn-info { padding:9px 18px; font-size:14px; }
+  .rows { margin-top:-30px; }
 }
 </style>
 </head>
@@ -121,7 +191,7 @@ body { background:#141414; color:#fff; overflow-x:hidden; }
       <span>2024</span>
       <span>HD</span>
     </div>
-    <p class="hero-desc" id="heroDesc">Search for any movie or show above, pick a source, and start streaming instantly.</p>
+    <p class="hero-desc" id="heroDesc">Loading featured content...</p>
     <div class="hero-btns">
       <button class="btn-play" id="heroPlayBtn">▶ Play</button>
       <button class="btn-info" id="heroInfoBtn">ℹ More Info</button>
@@ -130,13 +200,8 @@ body { background:#141414; color:#fff; overflow-x:hidden; }
 </header>
 
 <!-- ================= CONTENT ROWS ================= -->
-<main id="mainContent">
-  <div class="row" id="trendingRow">
-    <h2>🔥 Trending Now</h2>
-    <div class="row-inner" id="trendingList">
-      <div class="section-status">Search to load titles...</div>
-    </div>
-  </div>
+<main class="rows" id="contentRows">
+  <!-- Rows will be injected by JavaScript -->
 </main>
 
 <!-- ================= PLAYER MODAL ================= -->
@@ -161,30 +226,29 @@ body { background:#141414; color:#fff; overflow-x:hidden; }
 "use strict";
 
 // ================= CONFIG =================
+const TMDB_KEY = "8265bd1679663a7ea12ac168da84d2e8"; // public demo key — replace for production
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP = "https://image.tmdb.org/t/p/original";
 
-// Vidlink.pro API (returns HLS stream URL)
-// Docs: https://github.com/hhool/vidsrcb
-const VIDLINK_API = "https://vidlink.pro/api/vidlink/watch";
+// Vidlink endpoint (verified from hhool/vidsrcb README)
+const VIDLINK_BASE = "https://vidlink.pro/api";
 
-// NetMirror via TMDB-Embed-API (Inside4ndroid)
-// Example deployment: https://tmdb-embed-api.vercel.app
-const NETMIRROR_API = "https://tmdb-embed-api.vercel.app";
+// TMDB-Embed-API (Inside4ndroid) — provides NetMirror streams
+const TMDB_EMBED_API = "https://tmdb-embed-api.vercel.app";
 
-// MovieBox API (walterwhite-69/Moviebox-API)
-// Example deployment: https://moviebox-api.vercel.app
+// MovieBox API (walterwhite-69/Moviebox-API) — may be archived, used as fallback
 const MOVIEBOX_API = "https://moviebox-api.vercel.app";
 
 // ================= DOM =================
 const searchInput = document.getElementById("searchInput");
 const searchBtn = document.getElementById("searchBtn");
-const trendingList = document.getElementById("trendingList");
+const contentRows = document.getElementById("contentRows");
 const heroBg = document.getElementById("heroBg");
 const heroTitle = document.getElementById("heroTitle");
 const heroMeta = document.getElementById("heroMeta");
 const heroDesc = document.getElementById("heroDesc");
 const heroPlayBtn = document.getElementById("heroPlayBtn");
+const heroInfoBtn = document.getElementById("heroInfoBtn");
 const navbar = document.getElementById("navbar");
 
 const playerModal = document.getElementById("playerModal");
@@ -197,13 +261,38 @@ const sourceTabs = document.getElementById("sourceTabs");
 // ================= STATE =================
 let plyr = null;
 let hls = null;
-let currentItem = null;      // { id, title, poster, overview, year, rating, mediaType, season, episode }
+let currentItem = null;
 let currentSource = "vidlink";
-let searchAbort = null;
+let heroItem = null;
 
-// ================= PLYR INIT =================
-function initPlyr(){
-  if(plyr) return;
+// ================= UTILS =================
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showPlayerStatus(msg, isLoading) {
+  playerStatus.innerHTML = isLoading
+    ? `<div class="spinner"></div>${escapeHtml(msg)}`
+    : escapeHtml(msg);
+  playerStatus.style.display = "block";
+  videoPlayer.style.display = "none";
+}
+
+function hidePlayerStatus() {
+  playerStatus.style.display = "none";
+  videoPlayer.style.display = "block";
+}
+
+function destroyHls() {
+  if (hls) { hls.destroy(); hls = null; }
+  videoPlayer.removeAttribute("src");
+  videoPlayer.load();
+}
+
+function initPlyr() {
+  if (plyr) return;
   plyr = new Plyr(videoPlayer, {
     controls: ["play-large","play","progress","current-time","duration","mute","volume","settings","pip","fullscreen"],
     settings: ["quality","speed"],
@@ -215,146 +304,176 @@ function initPlyr(){
   });
 }
 
-// ================= UTILS =================
-function escapeHtml(text){
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+// ================= TMDB FETCHING =================
+async function fetchTMDB(path, params = {}) {
+  const url = new URL(`https://api.themoviedb.org/3${path}`);
+  url.searchParams.set("api_key", TMDB_KEY);
+  url.searchParams.set("language", "en-US");
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("TMDB request failed");
+  return res.json();
 }
 
-function showStatus(msg, isLoading){
-  playerStatus.innerHTML = isLoading
-    ? `<div class="spinner"></div>${escapeHtml(msg)}`
-    : escapeHtml(msg);
-  playerStatus.style.display = "block";
-  videoPlayer.style.display = "none";
+// ================= RENDER ROWS =================
+function createCard(item) {
+  const poster = item.poster_path ? TMDB_IMG + item.poster_path : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+  const title = item.title || item.name || "Unknown";
+  const year = (item.release_date || item.first_air_date || "").slice(0,4);
+  const rating = item.vote_average ? item.vote_average.toFixed(1) : "N/A";
+  const mediaType = item.media_type || "movie";
+
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <img src="${poster}" alt="${escapeHtml(title)}" loading="lazy">
+    <span class="quality-tag">${mediaType === 'tv' ? 'TV' : 'HD'}</span>
+    <div class="card-title">${escapeHtml(title)}</div>
+    <div class="card-meta"><span>${year}</span><span>⭐ ${rating}</span></div>
+  `;
+  card.addEventListener("click", () => {
+    const streamItem = {
+      id: item.id,
+      title: title,
+      poster: poster,
+      year: year,
+      rating: rating,
+      mediaType: mediaType,
+      overview: item.overview || "",
+      season: 1,
+      episode: 1
+    };
+    playItem(streamItem, "vidlink");
+  });
+  return card;
 }
 
-function hideStatus(){
-  playerStatus.style.display = "none";
-  videoPlayer.style.display = "block";
+function renderRow(title, items) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `<h2>${title}</h2>`;
+  const inner = document.createElement("div");
+  inner.className = "row-inner";
+  items.forEach(item => inner.appendChild(createCard(item)));
+  row.appendChild(inner);
+  contentRows.appendChild(row);
 }
 
-function destroyHls(){
-  if(hls){ hls.destroy(); hls = null; }
-  videoPlayer.removeAttribute("src");
-  videoPlayer.load();
-}
+async function loadHomepage() {
+  contentRows.innerHTML = '<div class="section-status"><div class="spinner"></div>Loading content...</div>';
 
-function loadHlsStream(url){
-  destroyHls();
-  if(!url){ showStatus("No stream URL returned.", false); return; }
+  try {
+    const [trending, popularMovies, popularTV, topRated] = await Promise.all([
+      fetchTMDB("/trending/all/week"),
+      fetchTMDB("/movie/popular"),
+      fetchTMDB("/tv/popular"),
+      fetchTMDB("/movie/top_rated")
+    ]);
 
-  if(Hls.isSupported()){
-    hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
-    hls.loadSource(url);
-    hls.attachMedia(videoPlayer);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      hideStatus();
-      initPlyr();
-      videoPlayer.play().catch(()=>{});
-    });
-    hls.on(Hls.Events.ERROR, (e, data) => {
-      if(data.fatal){ showStatus("HLS playback error: " + data.details, false); }
-    });
-  } else if(videoPlayer.canPlayType("application/vnd.apple.mpegurl")){
-    videoPlayer.src = url;
-    hideStatus();
-    initPlyr();
-    videoPlayer.play().catch(()=>{});
-  } else {
-    showStatus("HLS is not supported in this browser.", false);
+    contentRows.innerHTML = "";
+
+    // Filter out people from trending
+    const trendingItems = (trending.results || []).filter(r => r.media_type !== "person");
+    if (trendingItems.length) renderRow("🔥 Trending Now", trendingItems.slice(0, 15));
+    if (popularMovies.results) renderRow("🎬 Popular Movies", popularMovies.results.slice(0, 15));
+    if (popularTV.results) renderRow("📺 Popular TV Shows", popularTV.results.slice(0, 15));
+    if (topRated.results) renderRow("🏆 Top Rated Movies", topRated.results.slice(0, 15));
+
+    // Set hero from first trending item
+    if (trendingItems.length) updateHero(trendingItems[0]);
+  } catch (err) {
+    console.error("Homepage load failed:", err);
+    contentRows.innerHTML = '<div class="section-status">⚠️ Could not load content. Please refresh.</div>';
   }
 }
 
-function loadNativeStream(url){
-  destroyHls();
-  videoPlayer.src = url;
-  hideStatus();
-  initPlyr();
-  videoPlayer.play().catch(()=>{});
+function updateHero(item) {
+  heroItem = {
+    id: item.id,
+    title: item.title || item.name || "Unknown",
+    poster: item.poster_path ? TMDB_IMG + item.poster_path : "",
+    year: (item.release_date || item.first_air_date || "").slice(0,4),
+    rating: item.vote_average ? item.vote_average.toFixed(1) : "N/A",
+    mediaType: item.media_type || "movie",
+    overview: item.overview || "",
+    season: 1,
+    episode: 1
+  };
+
+  heroTitle.textContent = heroItem.title;
+  heroMeta.innerHTML = `
+    <span class="match">${Math.round((item.vote_average || 0) * 10)}% Match</span>
+    <span>${heroItem.year}</span>
+    <span>${heroItem.mediaType === "tv" ? "TV Series" : "Movie"}</span>
+    <span>⭐ ${heroItem.rating}</span>
+  `;
+  heroDesc.textContent = item.overview || "No description available.";
+
+  if (item.backdrop_path) {
+    heroBg.style.backgroundImage = `url(${TMDB_BACKDROP}${item.backdrop_path})`;
+  }
 }
 
-// ================= TMDB SEARCH =================
-async function searchTMDB(query){
-  // Use a public TMDB proxy or your own API key here.
-  // For demo purposes, we use the TMDB API with a public demo key.
-  // Replace with your own key for production.
-  const TMDB_KEY = "8265bd1679663a7ea12ac168da84d2e8"; // public demo key
-  const url = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error("TMDB search failed");
-  const data = await res.json();
-  return (data.results || []).filter(r => r.media_type === "movie" || r.media_type === "tv");
-}
-
-// ================= FETCH STREAM URLS =================
-
-// --- Vidlink ---
-async function fetchVidlinkStream(item){
+// ================= STREAM FETCHERS =================
+async function fetchVidlinkStream(item) {
   const isMovie = item.mediaType === "movie";
-  let url = `${VIDLINK_API}?isMovie=${isMovie}&id=${item.id}`;
-  if(!isMovie){
+  let url = `${VIDLINK_BASE}/vidlink/watch?isMovie=${isMovie}&id=${item.id}`;
+  if (!isMovie) {
     url += `&season=${item.season || 1}&episode=${item.episode || 1}`;
   }
   const res = await fetch(url);
-  if(!res.ok) throw new Error("Vidlink API error: " + res.status);
+  if (!res.ok) throw new Error(`Vidlink HTTP ${res.status}`);
   const data = await res.json();
-  // Vidlink response may contain { stream: { playlist: "..." } } or similar
-  const streamUrl = data?.stream?.playlist || data?.url || data?.playlist;
-  if(!streamUrl) throw new Error("Vidlink returned no stream URL");
-  return streamUrl;
+  const playlist = data?.stream?.playlist;
+  if (!playlist) throw new Error("Vidlink returned no playlist");
+  return playlist; // HLS URL
 }
 
-// --- NetMirror (via TMDB-Embed-API) ---
-async function fetchNetMirrorStream(item){
-  // TMDB-Embed-API typically exposes /embed/{tmdbId} or /api/{provider}/{id}
-  // We'll use the generic embed endpoint with provider=netmirror
-  const isMovie = item.mediaType === "movie";
-  const type = isMovie ? "movie" : "tv";
-  let url = `${NETMIRROR_API}/embed/${type}/${item.id}`;
-  if(!isMovie){
-    url += `/${item.season || 1}/${item.episode || 1}`;
+async function fetchNetMirrorStream(item) {
+  const type = item.mediaType === "movie" ? "movie" : "series";
+  let url = `${TMDB_EMBED_API}/api/streams/netmirror/${type}/${item.id}`;
+  if (type === "series") {
+    url += `?season=${item.season || 1}&episode=${item.episode || 1}`;
   }
   const res = await fetch(url);
-  if(!res.ok) throw new Error("NetMirror API error: " + res.status);
+  if (!res.ok) throw new Error(`NetMirror HTTP ${res.status}`);
   const data = await res.json();
-  // Look for stream URL in various possible shapes
-  const streamUrl = data?.stream?.url || data?.url || data?.sources?.[0]?.file || data?.source;
-  if(!streamUrl) throw new Error("NetMirror returned no stream URL");
-  return streamUrl;
+  // TMDB-Embed-API returns an array of stream objects
+  const streams = Array.isArray(data) ? data : (data.streams || []);
+  if (!streams.length) throw new Error("NetMirror returned no streams");
+  // Prefer highest quality
+  const sorted = streams.sort((a, b) => (parseInt(b.quality) || 0) - (parseInt(a.quality) || 0));
+  return sorted[0].url;
 }
 
-// --- MovieBox ---
-async function fetchMovieBoxStream(item){
-  // Step 1: search for the title to get slug
+async function fetchMovieBoxStream(item) {
+  // Step 1: search
   const searchRes = await fetch(`${MOVIEBOX_API}/search?q=${encodeURIComponent(item.title)}`);
-  if(!searchRes.ok) throw new Error("MovieBox search failed");
+  if (!searchRes.ok) throw new Error("MovieBox search failed");
   const searchData = await searchRes.json();
   const results = searchData.results || searchData.data || [];
-  if(!results.length) throw new Error("MovieBox: no results");
+  if (!results.length) throw new Error("MovieBox: no results");
   const match = results[0];
   const slug = match.slug || match.id;
 
-  // Step 2: get detail to find stream ID
+  // Step 2: detail
   const detailRes = await fetch(`${MOVIEBOX_API}/detail/${slug}`);
-  if(!detailRes.ok) throw new Error("MovieBox detail failed");
+  if (!detailRes.ok) throw new Error("MovieBox detail failed");
   const detailData = await detailRes.json();
-  const streamId = detailData.id || detailData.stream_id || match.id;
+  const streamId = detailData.id || match.id;
 
-  // Step 3: get stream URL
+  // Step 3: stream
   const streamRes = await fetch(`${MOVIEBOX_API}/api/stream/${streamId}?detail_path=${slug}`);
-  if(!streamRes.ok) throw new Error("MovieBox stream failed");
+  if (!streamRes.ok) throw new Error("MovieBox stream failed");
   const streamData = await streamRes.json();
-  // MovieBox returns direct mp4 or hls
-  const streamUrl = streamData.url || streamData.stream || streamData.sources?.[0]?.file;
-  if(!streamUrl) throw new Error("MovieBox returned no stream URL");
-  return streamUrl;
+  const url = streamData.url || streamData.stream || (streamData.sources && streamData.sources[0]?.file);
+  if (!url) throw new Error("MovieBox returned no URL");
+  return url;
 }
 
-// ================= SOURCE DISPATCHER =================
-async function getStreamForSource(source, item){
-  switch(source){
+// ================= PLAYBACK DISPATCHER =================
+async function getStream(source, item) {
+  switch (source) {
     case "vidlink": return await fetchVidlinkStream(item);
     case "netmirror": return await fetchNetMirrorStream(item);
     case "moviebox": return await fetchMovieBoxStream(item);
@@ -362,200 +481,144 @@ async function getStreamForSource(source, item){
   }
 }
 
-// ================= PLAYBACK FLOW =================
-async function playItem(item, source){
+function playStreamUrl(url) {
+  destroyHls();
+  if (!url) { showPlayerStatus("No stream URL returned.", false); return; }
+
+  if (url.includes(".m3u8") || url.includes("m3u8")) {
+    if (Hls.isSupported()) {
+      hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
+      hls.loadSource(url);
+      hls.attachMedia(videoPlayer);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hidePlayerStatus();
+        initPlyr();
+        videoPlayer.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (e, data) => {
+        if (data.fatal) showPlayerStatus("HLS playback error: " + data.details, false);
+      });
+    } else if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
+      videoPlayer.src = url;
+      hidePlayerStatus();
+      initPlyr();
+      videoPlayer.play().catch(() => {});
+    } else {
+      showPlayerStatus("HLS not supported in this browser.", false);
+    }
+  } else {
+    videoPlayer.src = url;
+    hidePlayerStatus();
+    initPlyr();
+    videoPlayer.play().catch(() => {});
+  }
+}
+
+async function playItem(item, source) {
   currentItem = item;
-  currentSource = source || currentSource;
+  currentSource = source || "vidlink";
   playerTitle.textContent = item.title + (item.year ? ` (${item.year})` : "");
   playerModal.classList.add("open");
 
-  // Update active tab
   document.querySelectorAll("#sourceTabs button").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.source === currentSource);
   });
 
-  showStatus(`Loading ${currentSource}...`, true);
+  showPlayerStatus(`Loading ${currentSource}...`, true);
 
   try {
-    const streamUrl = await getStreamForSource(currentSource, item);
-    // Detect HLS vs native
-    if(streamUrl.includes(".m3u8") || streamUrl.includes("m3u8")){
-      loadHlsStream(streamUrl);
-    } else {
-      loadNativeStream(streamUrl);
-    }
-  } catch(err){
+    const url = await getStream(currentSource, item);
+    playStreamUrl(url);
+  } catch (err) {
     console.error(`${currentSource} failed:`, err);
     // Auto-fallback to next source
-    const sources = ["vidlink","netmirror","moviebox"];
-    const currentIdx = sources.indexOf(currentSource);
-    const nextSource = sources[(currentIdx + 1) % sources.length];
-    if(nextSource !== currentSource){
-      showStatus(`${currentSource} failed. Trying ${nextSource}...`, true);
-      setTimeout(() => playItem(item, nextSource), 1000);
+    const sources = ["vidlink", "netmirror", "moviebox"];
+    const idx = sources.indexOf(currentSource);
+    const next = sources[(idx + 1) % sources.length];
+    if (next !== currentSource) {
+      showPlayerStatus(`${currentSource} failed. Trying ${next}...`, true);
+      setTimeout(() => playItem(item, next), 1000);
     } else {
-      showStatus(`All sources failed for this title. ${err.message}`, false);
+      showPlayerStatus(`All sources failed. ${err.message}`, false);
     }
   }
 }
 
-// ================= RENDER SEARCH RESULTS =================
-function renderResults(results){
-  if(!results.length){
-    trendingList.innerHTML = '<div class="section-status">😕 No results. Try another search.</div>';
-    return;
-  }
-
-  let html = "";
-  results.slice(0, 20).forEach(item => {
-    const poster = item.poster_path ? TMDB_IMG + item.poster_path : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
-    const title = item.title || item.name || "Unknown";
-    const year = (item.release_date || item.first_air_date || "").slice(0,4);
-    const rating = item.vote_average ? item.vote_average.toFixed(1) : "N/A";
-    const mediaType = item.media_type || "movie";
-
-    html += `
-      <div class="card" data-id="${item.id}" data-title="${escapeHtml(title)}" data-poster="${poster}" data-year="${year}" data-rating="${rating}" data-mediatype="${mediaType}" data-overview="${escapeHtml(item.overview || '')}">
-        <img src="${poster}" alt="${escapeHtml(title)}" loading="lazy">
-        <span class="quality-tag">${mediaType === 'tv' ? 'TV' : 'HD'}</span>
-        <div class="card-title">${escapeHtml(title)}</div>
-        <div class="card-meta"><span>${year}</span><span>⭐ ${rating}</span></div>
-      </div>
-    `;
-  });
-
-  trendingList.innerHTML = html;
-
-  // Attach click handlers
-  document.querySelectorAll(".card").forEach(card => {
-    card.addEventListener("click", () => {
-      const item = {
-        id: card.dataset.id,
-        title: card.dataset.title,
-        poster: card.dataset.poster,
-        year: card.dataset.year,
-        rating: card.dataset.rating,
-        mediaType: card.dataset.mediatype,
-        overview: card.dataset.overview,
-        season: 1,
-        episode: 1
-      };
-      playItem(item, "vidlink");
-    });
-  });
-}
-
-// ================= UPDATE HERO =================
-function updateHero(item){
-  if(!item) return;
-  const title = item.title || item.name || "Unknown";
-  const year = (item.release_date || item.first_air_date || "").slice(0,4);
-  const rating = item.vote_average ? item.vote_average.toFixed(1) : "N/A";
-  const overview = item.overview || "No description available.";
-  const backdrop = item.backdrop_path ? TMDB_BACKDROP + item.backdrop_path : "";
-
-  heroTitle.textContent = title;
-  heroMeta.innerHTML = `
-    <span class="match">${Math.round((item.vote_average || 0) * 10)}% Match</span>
-    <span>${year}</span>
-    <span>${item.media_type === "tv" ? "TV Series" : "Movie"}</span>
-    <span>⭐ ${rating}</span>
-  `;
-  heroDesc.textContent = overview;
-  if(backdrop) heroBg.style.backgroundImage = `url(${backdrop})`;
-
-  // Update hero play button
-  heroPlayBtn.onclick = () => {
-    const heroItem = {
-      id: item.id,
-      title: title,
-      poster: item.poster_path ? TMDB_IMG + item.poster_path : "",
-      year: year,
-      rating: rating,
-      mediaType: item.media_type || "movie",
-      overview: overview,
-      season: 1,
-      episode: 1
-    };
-    playItem(heroItem, "vidlink");
-  };
-}
-
-// ================= SEARCH HANDLER =================
-async function performSearch(){
+// ================= SEARCH =================
+async function performSearch() {
   const query = searchInput.value.trim();
-  if(!query) return;
+  if (!query) return;
 
-  if(searchAbort) searchAbort.abort();
-  searchAbort = new AbortController();
-
-  trendingList.innerHTML = '<div class="section-status"><div class="spinner"></div>Searching...</div>';
+  contentRows.innerHTML = '<div class="section-status"><div class="spinner"></div>Searching...</div>';
 
   try {
-    const results = await searchTMDB(query);
-    renderResults(results);
-    // Update hero with first result
-    if(results.length) updateHero(results[0]);
-  } catch(err){
+    const data = await fetchTMDB("/search/multi", { query: query });
+    const results = (data.results || []).filter(r => r.media_type === "movie" || r.media_type === "tv");
+    contentRows.innerHTML = "";
+
+    if (!results.length) {
+      contentRows.innerHTML = '<div class="section-status">😕 No results found.</div>';
+      return;
+    }
+
+    renderRow(`Search results for "${escapeHtml(query)}"`, results.slice(0, 20));
+    if (results.length) updateHero(results[0]);
+  } catch (err) {
     console.error("Search failed:", err);
-    trendingList.innerHTML = `<div class="section-status">⚠️ Search failed: ${escapeHtml(err.message)}</div>`;
+    contentRows.innerHTML = `<div class="section-status">⚠️ Search failed. Please try again.</div>`;
   }
 }
 
 // ================= EVENT LISTENERS =================
 searchBtn.addEventListener("click", performSearch);
 searchInput.addEventListener("keypress", (e) => {
-  if(e.key === "Enter"){ e.preventDefault(); performSearch(); }
+  if (e.key === "Enter") { e.preventDefault(); performSearch(); }
 });
 
-// Source tab switching
 sourceTabs.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
-  if(!btn) return;
-  const source = btn.dataset.source;
-  if(!source || !currentItem) return;
-  playItem(currentItem, source);
+  if (!btn || !currentItem) return;
+  playItem(currentItem, btn.dataset.source);
 });
 
-// Close player
 closePlayer.addEventListener("click", () => {
   playerModal.classList.remove("open");
   destroyHls();
-  if(plyr){ plyr.pause(); }
+  if (plyr) plyr.pause();
 });
 
 playerModal.addEventListener("click", (e) => {
-  if(e.target === playerModal){
+  if (e.target === playerModal) {
     playerModal.classList.remove("open");
     destroyHls();
-    if(plyr){ plyr.pause(); }
+    if (plyr) plyr.pause();
   }
 });
 
-// Navbar scroll effect
+heroPlayBtn.addEventListener("click", () => {
+  if (heroItem) playItem(heroItem, "vidlink");
+});
+
+heroInfoBtn.addEventListener("click", () => {
+  if (heroItem) {
+    // For now, open the player modal showing info (play with auto)
+    playItem(heroItem, "vidlink");
+  }
+});
+
 window.addEventListener("scroll", () => {
   navbar.classList.toggle("scrolled", window.scrollY > 50);
 });
 
-// Hero info button
-heroInfoBtn.addEventListener("click", () => {
-  if(currentItem) {
-    playItem(currentItem, "vidlink");
-  }
-});
-
-// Cleanup on unload
 window.addEventListener("beforeunload", () => {
   destroyHls();
-  if(plyr) plyr.destroy();
+  if (plyr) plyr.destroy();
 });
 
 // ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
   initPlyr();
-  // Load a default search so the UI isn't empty
-  searchInput.value = "Dune";
-  performSearch();
+  loadHomepage();
 });
 
 })();
