@@ -3,19 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>StreamVault · Unified FOSS Player</title>
+<title>StreamVault · Nuvio-Powered FOSS Player</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.css" />
 <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4/dist/dash.all.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
-:root{--bg:#141414;--panel:#181818;--card:#1f1f1f;--red:#e50914;--text:#e5e5e5;--dim:#8c8c8c;--green:#46d369;--amber:#f5a623;--border:#2a2a2a;}
+:root{
+  --bg:#141414; --panel:#181818; --card:#1f1f1f; --red:#e50914;
+  --text:#e5e5e5; --dim:#8c8c8c; --green:#46d369; --amber:#f5a623;
+  --border:#2a2a2a;
+}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}
 body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 
-.navbar{position:fixed;top:0;left:0;right:0;height:68px;padding:0 4%;display:flex;align-items:center;gap:28px;z-index:100;background:linear-gradient(180deg,rgba(0,0,0,.9),transparent);transition:background .3s;}
+/* NAVBAR */
+.navbar{position:fixed;top:0;left:0;right:0;height:68px;padding:0 4%;display:flex;align-items:center;gap:28px;z-index:100;
+  background:linear-gradient(180deg,rgba(0,0,0,.9),transparent);transition:background .3s;}
 .navbar.scrolled{background:var(--bg);}
 .logo{font-size:26px;font-weight:900;color:var(--red);letter-spacing:-1px;cursor:pointer;white-space:nowrap;}
 .logo span{color:#fff;font-weight:300;}
@@ -30,6 +37,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .search-box button:hover{background:#b2070f;}
 .search-box button:disabled{opacity:.6;cursor:wait;}
 
+/* HOME HERO */
 .hero{position:relative;height:56vw;max-height:80vh;min-height:360px;background:#000;display:flex;align-items:flex-end;}
 .hero-bg{position:absolute;inset:0;background-size:cover;background-position:center 20%;opacity:.45;transition:background-image .5s;}
 .hero-grad{position:absolute;inset:0;background:linear-gradient(0deg,var(--bg) 0%,rgba(20,20,20,.4) 40%,transparent 70%);}
@@ -44,12 +52,14 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .btn-info{background:rgba(109,109,110,.7);color:#fff;border:none;border-radius:4px;padding:12px 28px;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;}
 .btn-info:hover{background:rgba(109,109,110,.5);}
 
+/* HOME ROWS */
 .rows{padding:0 0 40px;margin-top:-60px;position:relative;z-index:3;}
 .row{padding:0 4%;margin-bottom:32px;}
 .row h2{font-size:clamp(16px,1.6vw,22px);font-weight:700;margin-bottom:12px;}
 .row-inner{display:flex;gap:8px;overflow-x:auto;scroll-behavior:smooth;padding-bottom:8px;scrollbar-width:none;}
 .row-inner::-webkit-scrollbar{display:none;}
 
+/* CARD */
 .card{position:relative;border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .3s,box-shadow .3s;background:var(--card);}
 .row-inner .card{flex:0 0 200px;}
 .card:hover{transform:scale(1.06);z-index:2;box-shadow:0 8px 24px #000;}
@@ -58,11 +68,13 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .card .card-meta{font-size:11px;color:var(--dim);padding:0 6px 8px;display:flex;justify-content:space-between;}
 .card .quality-tag{position:absolute;top:6px;right:6px;background:var(--red);font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;}
 
+/* SEARCH GRID */
 .search-header{padding:24px 4% 8px;display:flex;align-items:baseline;gap:16px;}
 .search-header h2{font-size:clamp(18px,2vw,26px);font-weight:700;}
 .search-header .count{color:var(--dim);font-size:14px;}
 .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;padding:24px 4% 40px;}
 
+/* DETAIL MODAL */
 .detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:200;overflow-y:auto;}
 .detail-modal.open{display:block;}
 .detail-close{position:fixed;top:16px;right:4%;width:44px;height:44px;background:rgba(0,0,0,.7);border:none;border-radius:50%;font-size:28px;color:#fff;cursor:pointer;z-index:220;display:flex;align-items:center;justify-content:center;}
@@ -81,15 +93,18 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .detail-overview{font-size:14px;line-height:1.6;color:#d2d2d2;max-width:720px;margin-bottom:18px;}
 .detail-actions{display:flex;gap:12px;flex-wrap:wrap;}
 
+/* Sticky pill nav */
 .pill-nav{position:sticky;top:0;z-index:50;background:rgba(20,20,20,.95);backdrop-filter:blur(12px);padding:14px 4%;display:flex;gap:8px;border-bottom:1px solid var(--border);}
 .pill-nav button{background:transparent;border:1px solid #444;border-radius:20px;padding:8px 20px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
 .pill-nav button:hover{border-color:#888;color:#fff;}
 .pill-nav button.active{background:#fff;color:#000;border-color:#fff;}
 
+/* Detail Body */
 .detail-body{max-width:1400px;margin:0 auto;padding:24px 4% 60px;}
 .d-section{margin-bottom:32px;}
 .d-section-title{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#aaa;font-weight:700;margin-bottom:12px;}
 
+/* Cast */
 .cast-row{display:flex;gap:16px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
 .cast-row::-webkit-scrollbar{display:none;}
 .cast-card{flex:0 0 100px;text-align:center;}
@@ -97,6 +112,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .cast-name{font-size:12px;font-weight:600;line-height:1.3;}
 .cast-role{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.3;}
 
+/* Season / Episode */
 .season-controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
 .season-controls select{background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:10px 16px;color:#fff;font-size:14px;cursor:pointer;outline:none;min-width:180px;}
 .season-controls select:focus{border-color:var(--red);}
@@ -113,25 +129,36 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .episode-info .ep-overview{font-size:12px;color:#bbb;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .episode-num{font-size:18px;font-weight:800;color:#555;width:30px;text-align:center;flex-shrink:0;}
 
-.source-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+/* Sources */
+.source-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
 .source-tabs button{background:#2a2a2a;border:1px solid #444;border-radius:20px;padding:7px 16px;color:#aaa;font-size:12px;cursor:pointer;transition:all .2s;white-space:nowrap;position:relative;}
 .source-tabs button.active{background:var(--red);border-color:var(--red);color:#fff;font-weight:600;}
 .source-tabs button.loading{border-color:var(--amber);color:var(--amber);}
 .source-tabs button.loading::after{content:'';display:inline-block;width:10px;height:10px;margin-left:6px;border:2px solid transparent;border-top-color:var(--amber);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;}
 .source-tabs button.failed{opacity:.4;text-decoration:line-through;}
-.source-tabs button .stat{display:inline-block;font-size:9px;color:var(--green);margin-left:4px;opacity:.7;}
 .source-tabs .retry-btn{background:var(--green);color:#000;border:none;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;display:none;}
 .source-tabs .retry-btn.show{display:inline-block;}
-.source-tier-label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin:8px 0 4px;}
 
-.player-shell{width:100%;max-width:1100px;margin:0 auto;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #000;position:relative;}
+.stream-list{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding-right:6px;}
+.stream-item{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#1a1a1a;border-radius:8px;cursor:pointer;transition:background .2s;border:1px solid transparent;}
+.stream-item:hover{background:#252525;border-color:#444;}
+.stream-item .s-left{display:flex;flex-direction:column;gap:4px;}
+.stream-item .s-name{font-size:14px;font-weight:600;color:#fff;}
+.stream-item .s-provider{font-size:11px;color:var(--dim);}
+.stream-item .s-right{display:flex;align-items:center;gap:12px;}
+.stream-item .s-quality{background:#2a2a2a;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700;color:var(--green);}
+.stream-item .s-play{color:var(--red);font-size:18px;}
+
+/* Player Shell */
+.player-shell{width:100%;max-width:1100px;margin:20px auto 0;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #000;position:relative;}
 .player-shell .artplayer-app{width:100%;aspect-ratio:16/9;background:#000;}
 .player-status{color:#888;font-size:14px;text-align:center;padding:40px 16px;line-height:1.6;}
-.player-status .url-debug{font-size:11px;color:#666;word-break:break-all;margin-top:8px;max-width:600px;margin-left:auto;margin-right:auto;}
 
+/* Similar */
 .similar-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
 .similar-row::-webkit-scrollbar{display:none;}
 
+/* Utility */
 .section-status{padding:40px 4%;text-align:center;color:#888;font-size:15px;}
 .spinner{width:28px;height:28px;border:3px solid #333;border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -139,6 +166,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .footer a{color:#777;text-decoration:none;}
 .footer a:hover{color:var(--red);}
 
+/* Responsive */
 @media(max-width:768px){
   .navbar{height:56px;gap:14px;}
   .nav-links{display:none;}
@@ -163,6 +191,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 </head>
 <body>
 
+<!-- NAVBAR -->
 <nav class="navbar" id="navbar">
   <div class="logo" onclick="location.reload()">STREAM<span>VAULT</span></div>
   <div class="nav-links">
@@ -174,6 +203,7 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
   </div>
 </nav>
 
+<!-- HOME HERO -->
 <header class="hero" id="hero">
   <div class="hero-bg" id="heroBg"></div>
   <div class="hero-grad"></div>
@@ -188,8 +218,10 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
   </div>
 </header>
 
+<!-- HOME ROWS -->
 <main class="rows" id="contentRows"></main>
 
+<!-- DETAIL MODAL -->
 <div class="detail-modal" id="detailModal">
   <button class="detail-close" id="detailClose">&times;</button>
 
@@ -216,40 +248,43 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
   </div>
 
   <div class="detail-body">
+    <!-- Episodes (TV only) -->
     <div class="d-section" id="episodesSection" style="display:none;">
       <div class="d-section-title">Episodes</div>
       <div class="season-controls"><select id="seasonSelect"></select></div>
       <div class="episode-list" id="episodeList"></div>
     </div>
 
+    <!-- Cast -->
     <div class="d-section" id="castSection" style="display:none;">
       <div class="d-section-title">Top Cast</div>
       <div class="cast-row" id="castRow"></div>
     </div>
 
+    <!-- Similar -->
     <div class="d-section" id="similarSection" style="display:none;">
       <div class="d-section-title">More Like This</div>
       <div class="similar-row" id="similarRow"></div>
     </div>
 
+    <!-- Sources + Unified Player -->
     <div class="d-section" id="sourcesSection">
       <div class="d-section-title">Stream Sources</div>
-      <div class="source-tier-label">Direct (HLS/DASH — fastest)</div>
-      <div class="source-tabs" id="sourceTabsDirect"></div>
-      <div class="source-tier-label">Extract (best-effort via CORS proxy)</div>
-      <div class="source-tabs" id="sourceTabsExtract"></div>
-      <button class="retry-btn" id="retryBtn" style="margin-top:10px;">↻ Retry all sources</button>
+      <div class="source-tabs" id="sourceTabs"></div>
+      <div class="stream-list" id="streamList">
+        <div class="section-status" style="padding:20px 0;">Loading providers…</div>
+      </div>
 
       <div class="player-shell" style="margin-top:16px;">
         <div class="artplayer-app" id="artplayerApp"></div>
-        <div class="player-status" id="playerStatus">Select a source above to start streaming</div>
+        <div class="player-status" id="playerStatus">Select a stream above to start playing</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="footer">
-  StreamVault · Unified FOSS player · Sources resolve client-side · <a href="#" id="resetKeyLink">Reset TMDB key</a>
+  StreamVault · Nuvio-powered · <a href="#" id="resetKeyLink">Reset TMDB key</a>
 </div>
 
 <script>
@@ -263,53 +298,24 @@ const TMDB_STILL="https://image.tmdb.org/t/p/w300";
 const TMDB_BACKDROP="https://image.tmdb.org/t/p/original";
 const TMDB_DEMO_KEY="8265bd1679663a7ea12ac168da84d2e8";
 
-const TMDB_EMBED_API="https://tmdb-embed-api.vercel.app";
-const VIDLINK_BASE="https://vidlink.pro/api";
-const MOVIEBOX_API="https://moviebox-api.vercel.app";
-
-// Public CORS proxies — tried in order when fetching embed HTML
-const CORS_PROXIES=[
-  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u=>`https://cors.eu.org/${u}`,
+// Nuvio provider repositories
+const NUVIO_REPOS = [
+  {
+    name: "Yoruix",
+    manifest: "https://raw.githubusercontent.com/yoruix/nuvio-providers/refs/heads/main/manifest.json",
+    base: "https://raw.githubusercontent.com/yoruix/nuvio-providers/refs/heads/main/"
+  },
+  {
+    name: "Phisher98",
+    manifest: "https://raw.githubusercontent.com/phisher98/phisher-nuvio-providers/refs/heads/main/manifest.json",
+    base: "https://raw.githubusercontent.com/phisher98/phisher-nuvio-providers/refs/heads/main/"
+  },
+  {
+    name: "D3adlyRocket",
+    manifest: "https://raw.githubusercontent.com/D3adlyRocket/All-in-One-Nuvio/refs/heads/main/manifest.json",
+    base: "https://raw.githubusercontent.com/D3adlyRocket/All-in-One-Nuvio/refs/heads/main/"
+  }
 ];
-
-// ================= SOURCE REGISTRY =================
-// mode: "direct" = resolves to HLS/DASH URL via JSON API (best)
-// mode: "extract" = fetch embed HTML via proxy, regex out .m3u8/.mp4
-const SOURCES=[
-  // ---- DIRECT: return stream URL from JSON API ----
-  {id:"vidlink",   label:"Vidlink",   tier:"direct", resolver:"vidlink"},
-  {id:"vixsrc",    label:"VixSrc",    tier:"direct", resolver:"tmdbembed", api:"vixsrc"},
-  {id:"videasy",   label:"Videasy",   tier:"direct", resolver:"tmdbembed", api:"videasy"},
-  {id:"netmirror", label:"NetMirror", tier:"direct", resolver:"tmdbembed", api:"netmirror"},
-  {id:"showbox",   label:"Showbox",   tier:"direct", resolver:"tmdbembed", api:"showbox"},
-  {id:"streamflix",label:"StreamFlix",tier:"direct", resolver:"tmdbembed", api:"streamflix"},
-  {id:"moviebox",  label:"MovieBox",  tier:"direct", resolver:"moviebox"},
-
-  // ---- EXTRACT: fetch embed HTML, pull stream URL ----
-  {id:"vidsrcto", label:"VidSrc.to", tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.to/embed/movie/${id}` : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`},
-  {id:"vidsrccc", label:"VidSrc.cc", tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidsrc.cc/v2/embed/movie/${id}` : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`},
-  {id:"vidfast",  label:"VidFast",   tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://vidfast.pro/movie/${id}?autoPlay=true` : `https://vidfast.pro/tv/${id}/${s}/${e}?autoPlay=true`},
-  {id:"2embed",   label:"2Embed",    tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://2embed.cc/embed/movie/${id}` : `https://2embed.cc/embed/tv/${id}/${s}/${e}`},
-  {id:"autoembed",label:"AutoEmbed", tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://autoembed.co/embed/movie/${id}` : `https://autoembed.co/embed/tv/${id}/${s}/${e}`},
-  {id:"multiembed",label:"MultiEmbed",tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://multiembed.mov/?video_id=${id}&tmdb=1` : `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`},
-  {id:"smashy",   label:"SmashyStream",tier:"extract",
-    url:(id,t,s,e)=> t==="movie" ? `https://player.smashy.stream/movie/${id}` : `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`},
-];
-
-const ALL_SOURCES=SOURCES.map(s=>s.id);
-const DEFAULT_SOURCE="vidlink";
-const SOURCE_STATS={}; // { [id]: { ok:0, fail:0 } }
-
-const PLACEHOLDER_POSTER="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
-const PLACEHOLDER_STILL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='170' fill='%23222'%3E%3Crect width='300' height='170'/%3E%3C/svg%3E";
 
 // ================= DOM =================
 const $=id=>document.getElementById(id);
@@ -327,49 +333,33 @@ const episodesSection=$("episodesSection"), seasonSelect=$("seasonSelect"), epis
 const castSection=$("castSection"), castRow=$("castRow");
 const similarSection=$("similarSection"), similarRow=$("similarRow");
 const sourcesSection=$("sourcesSection");
-const sourceTabsDirect=$("sourceTabsDirect"), sourceTabsExtract=$("sourceTabsExtract");
-const retryBtn=$("retryBtn");
+const sourceTabs=$("sourceTabs"), streamList=$("streamList");
 
 const artplayerApp=$("artplayerApp"), playerStatus=$("playerStatus");
 
 // ================= STATE =================
 let art=null, hls=null, dash=null;
-let currentItem=null, currentSource=DEFAULT_SOURCE;
-let heroItem=null, playSessionId=0;
+let currentItem=null, heroItem=null;
 let activeSeason=1, activeEpisode=1;
+let loadedProviders=[]; // { id, name, getStreams }
+let allStreams=[];      // { name, title, url, quality, headers, provider }
+let providerStatus={};  // { [providerId]: 'loading'|'ok'|'fail' }
 
 // ================= UTILS =================
 function esc(t){const d=document.createElement("div");d.textContent=t;return d.innerHTML;}
 function fmtRuntime(m){if(!m)return"";const h=Math.floor(m/60),x=m%60;return h>0?`${h}h ${x}m`:`${x}m`;}
-function showStatus(msg,loading,debugUrl){
-  let html=loading?`<div class="spinner"></div>${esc(msg)}`:esc(msg);
-  if(debugUrl) html+=`<div class="url-debug">${esc(debugUrl)}</div>`;
-  playerStatus.innerHTML=html;
+
+function showPlayerStatus(msg,loading){
+  playerStatus.innerHTML=loading?`<div class="spinner"></div>${esc(msg)}`:esc(msg);
   playerStatus.style.display="block";
   if(art)try{art.pause();}catch(e){}
 }
-function hideStatus(){playerStatus.style.display="none";}
+function hidePlayerStatus(){playerStatus.style.display="none";}
+
 function destroyPlayer(){
   if(hls){try{hls.destroy();}catch(e){}hls=null;}
   if(dash){try{dash.reset();}catch(e){}dash=null;}
   if(art){try{art.destroy();}catch(e){}art=null;}
-}
-function bumpStat(id,ok){
-  if(!SOURCE_STATS[id])SOURCE_STATS[id]={ok:0,fail:0};
-  if(ok)SOURCE_STATS[id].ok++; else SOURCE_STATS[id].fail++;
-  // Update tab label if visible
-  const btn=document.querySelector(`button[data-source="${id}"]`);
-  if(btn){
-    const old=btn.querySelector(".stat"); if(old)old.remove();
-    const s=SOURCE_STATS[id];
-    if(s.ok+s.fail>0){
-      const span=document.createElement("span");
-      span.className="stat";
-      span.textContent=` ${s.ok}/${s.ok+s.fail}`;
-      if(s.fail>s.ok)span.style.color="var(--red)";
-      btn.appendChild(span);
-    }
-  }
 }
 
 // ================= TMDB =================
@@ -406,49 +396,232 @@ async function fetchFullDetail(id,mediaType){
 }
 async function fetchSeason(tvId,seasonNum){return fetchTMDB(`/tv/${tvId}/season/${seasonNum}`);}
 
-// ================= CORS PROXY FETCH =================
-async function fetchViaProxy(url,signal){
-  let lastErr;
-  for(const build of CORS_PROXIES){
-    try{
-      const res=await fetch(build(url),{signal});
-      if(!res.ok){lastErr=new Error(`proxy ${res.status}`);continue;}
-      return await res.text();
-    }catch(e){lastErr=e;}
+// ================= NUVIO PROVIDER LOADER =================
+async function loadProvider(providerInfo, baseUrl){
+  try {
+    const res = await fetch(baseUrl + providerInfo.filename);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const code = await res.text();
+
+    // Create a minimal sandbox environment
+    const module = { exports: {} };
+    const sandboxConsole = {
+      log: (...args) => console.log(`[${providerInfo.name}]`, ...args),
+      error: (...args) => console.error(`[${providerInfo.name}]`, ...args),
+      warn: (...args) => console.warn(`[${providerInfo.name}]`, ...args)
+    };
+
+    // Build a function that mimics the provider environment
+    const fn = new Function(
+      'module', 'exports', 'fetch', 'console', 'URL', 'Blob', 'Promise', 'setTimeout',
+      code
+    );
+
+    // Execute the provider code
+    fn(module, module.exports, fetch, sandboxConsole, URL, Blob, Promise, setTimeout);
+
+    // Extract getStreams
+    let getStreams = module.exports.getStreams;
+    if(!getStreams && typeof globalThis !== 'undefined') {
+      // Some providers attach to global scope
+      getStreams = globalThis.getStreams;
+    }
+
+    if(typeof getStreams !== 'function') {
+      throw new Error("No getStreams export found");
+    }
+
+    return { id: providerInfo.id, name: providerInfo.name, getStreams };
+  } catch(err) {
+    console.warn(`Failed to load provider ${providerInfo.name}:`, err.message);
+    return null;
   }
-  throw lastErr||new Error("All CORS proxies failed");
 }
 
-// Extract .m3u8 / .mp4 URL from embed HTML
-function extractStreamUrl(html){
-  if(!html)return null;
-  // JSON-escaped URLs often appear as https:\/\/... — normalize first
-  const normalized=html.replace(/\\\//g,"/");
-  const patterns=[
-    /https?:\/\/[^\s"'<>\\)]+\.m3u8[^\s"'<>\\)]*/i,
-    /https?:\/\/[^\s"'<>\\)]+\.mpd[^\s"'<>\\)]*/i,
-    /https?:\/\/[^\s"'<>\\)]+\.mp4[^\s"'<>\\)]*/i,
-  ];
-  for(const p of patterns){
-    const m=normalized.match(p);
-    if(m)return m[0];
-  }
-  // Common JSON keys in player configs
-  const keyMatches=[
-    /"file"\s*:\s*"([^"]+)"/i,
-    /"source"\s*:\s*"([^"]+)"/i,
-    /"src"\s*:\s*"([^"]+\.(?:m3u8|mp4|mpd)[^"]*)"/i,
-    /"url"\s*:\s*"([^"]+\.(?:m3u8|mp4|mpd)[^"]*)"/i,
-    /"playlist"\s*:\s*"([^"]+)"/i,
-  ];
-  for(const p of keyMatches){
-    const m=normalized.match(p);
-    if(m){
-      const u=m[1];
-      if(/^https?:\/\//i.test(u)||u.startsWith("//"))return u.startsWith("//")?"https:"+u:u;
+async function loadAllProviders(){
+  loadedProviders = [];
+  providerStatus = {};
+  streamList.innerHTML = '<div class="section-status" style="padding:20px 0;"><div class="spinner"></div>Loading provider repositories…</div>';
+
+  for(const repo of NUVIO_REPOS) {
+    try {
+      const res = await fetch(repo.manifest);
+      if(!res.ok) continue;
+      const manifest = await res.json();
+      const providers = manifest.providers || [];
+      for(const p of providers) {
+        if(p.enabled === false) continue;
+        const loaded = await loadProvider(p, repo.base);
+        if(loaded) {
+          loadedProviders.push(loaded);
+          providerStatus[loaded.id] = 'ok';
+        }
+      }
+    } catch(e) {
+      console.warn(`Failed to load repo ${repo.name}:`, e);
     }
   }
-  return null;
+
+  // If no providers loaded, show a message
+  if(loadedProviders.length === 0) {
+    streamList.innerHTML = '<div class="section-status">⚠️ No providers could be loaded. Check your connection or try a different repository.</div>';
+    return;
+  }
+
+  // Render provider tabs
+  renderSourceTabs();
+}
+
+function renderSourceTabs(){
+  sourceTabs.innerHTML = '';
+  loadedProviders.forEach(p => {
+    const btn = document.createElement('button');
+    btn.dataset.provider = p.id;
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      // Filter streams by this provider
+      renderStreams(allStreams.filter(s => s.provider === p.id));
+    });
+    sourceTabs.appendChild(btn);
+  });
+  // Add "All" tab
+  const allBtn = document.createElement('button');
+  allBtn.dataset.provider = 'all';
+  allBtn.textContent = 'All Sources';
+  allBtn.classList.add('active');
+  allBtn.addEventListener('click', () => {
+    document.querySelectorAll('.source-tabs button').forEach(b => b.classList.remove('active'));
+    allBtn.classList.add('active');
+    renderStreams(allStreams);
+  });
+  sourceTabs.prepend(allBtn);
+}
+
+// ================= STREAM FETCHING =================
+async function fetchAllStreams(item) {
+  allStreams = [];
+  streamList.innerHTML = '<div class="section-status" style="padding:20px 0;"><div class="spinner"></div>Searching across providers…</div>';
+
+  const isMovie = item.mediaType === 'movie';
+  const params = [item.id, isMovie ? 'movie' : 'tv', activeSeason, activeEpisode];
+
+  const promises = loadedProviders.map(async (p) => {
+    try {
+      const streams = await p.getStreams(...params);
+      if(Array.isArray(streams) && streams.length > 0) {
+        streams.forEach(s => {
+          allStreams.push({
+            ...s,
+            provider: p.id,
+            providerName: p.name
+          });
+        });
+      }
+    } catch(e) {
+      console.warn(`Provider ${p.name} failed:`, e.message);
+    }
+  });
+
+  await Promise.allSettled(promises);
+
+  // Sort by quality (descending)
+  allStreams.sort((a,b) => {
+    const qa = parseInt(a.quality) || 0;
+    const qb = parseInt(b.quality) || 0;
+    return qb - qa;
+  });
+
+  renderStreams(allStreams);
+}
+
+function renderStreams(streams) {
+  if(streams.length === 0) {
+    streamList.innerHTML = '<div class="section-status">😕 No streams found for this title across loaded providers.</div>';
+    return;
+  }
+
+  streamList.innerHTML = streams.map(s => `
+    <div class="stream-item" data-url="${esc(s.url)}" data-headers='${JSON.stringify(s.headers||{})}' data-name="${esc(s.name)}">
+      <div class="s-left">
+        <div class="s-name">${esc(s.name || 'Unknown Stream')}</div>
+        <div class="s-provider">${esc(s.providerName || s.provider || '')}</div>
+      </div>
+      <div class="s-right">
+        <span class="s-quality">${esc(s.quality || 'HD')}</span>
+        <i class="fas fa-play-circle s-play"></i>
+      </div>
+    </div>
+  `).join('');
+
+  // Attach click handlers
+  streamList.querySelectorAll('.stream-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const url = el.dataset.url;
+      const headers = JSON.parse(el.dataset.headers || '{}');
+      playStream(url, headers);
+    });
+  });
+}
+
+// ================= PLAYER =================
+function playStream(url, headers) {
+  destroyPlayer();
+  hidePlayerStatus();
+
+  const isHls = url.includes('.m3u8') || url.includes('m3u8');
+  const isDash = url.includes('.mpd') || url.includes('mpd');
+
+  art = new Artplayer({
+    container: artplayerApp,
+    url: url,
+    autoplay: true,
+    muted: false,
+    volume: 0.8,
+    pip: true,
+    fullscreen: true,
+    fullscreenWeb: true,
+    playbackRate: true,
+    aspectRatio: true,
+    setting: true,
+    hotkey: true,
+    screenshot: true,
+    airplay: true,
+    theme: "#e50914",
+    lang: "en",
+    type: isHls ? 'm3u8' : isDash ? 'mpd' : 'mp4',
+    customType: {
+      m3u8: function(video, url, art) {
+        if(Hls.isSupported()) {
+          if(hls) hls.destroy();
+          hls = new Hls({
+            xhrSetup: (xhr) => {
+              if(headers) {
+                Object.keys(headers).forEach(key => {
+                  xhr.setRequestHeader(key, headers[key]);
+                });
+              }
+            }
+          });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => art.play());
+          hls.on(Hls.Events.ERROR, (e, data) => {
+            if(data.fatal) console.error('HLS fatal error:', data.details);
+          });
+        } else if(video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = url;
+          art.play();
+        }
+      },
+      mpd: function(video, url, art) {
+        if(dash) try{dash.reset();}catch(e){}
+        dash = dashjs.MediaPlayer().create();
+        dash.initialize(video, url, true);
+      }
+    }
+  });
+
+  art.on('error', () => console.error('ArtPlayer error'));
 }
 
 // ================= HOME =================
@@ -536,7 +709,6 @@ async function performSearch(){
 
 // ================= DETAIL =================
 async function openDetail(partial){
-  playSessionId++;
   detailModal.classList.add("open");
   detailModal.scrollTop=0;
   detailHero.style.backgroundImage="linear-gradient(135deg,#1a1a1a,#0a0a0a)";
@@ -544,21 +716,26 @@ async function openDetail(partial){
   detailTitle.textContent=partial.title||"Loading…";
   detailBadges.innerHTML="";detailOverview.textContent="Loading details…";
   episodesSection.style.display="none";castSection.style.display="none";similarSection.style.display="none";
-  showStatus("Fetching title details…",true);
+  showPlayerStatus("Fetching title details…",true);
 
   try{
     const full=await fetchFullDetail(partial.id,partial.mediaType);
     const merged={...partial,...full,poster:full.poster_path?TMDB_IMG+full.poster_path:partial.poster};
     currentItem=merged;activeSeason=1;activeEpisode=1;
-    renderDetail(merged);buildSourceTabs(merged);resetSourceTabs();
-    playItem(merged,DEFAULT_SOURCE,[]);
+    renderDetail(merged);
+    // Load providers if not loaded
+    if(loadedProviders.length===0) await loadAllProviders();
+    // Fetch streams
+    await fetchAllStreams(merged);
   }catch(e){
     console.warn("Detail fetch failed:",e);
     detailOverview.textContent=partial.overview||"No description available.";
-    currentItem=partial;buildSourceTabs(partial);
-    playItem(partial,DEFAULT_SOURCE,[]);
+    currentItem=partial;
+    if(loadedProviders.length===0) await loadAllProviders();
+    await fetchAllStreams(partial);
   }
 }
+
 function renderDetail(item){
   const title=item.title||item.name||"Unknown";
   const year=(item.release_date||item.first_air_date||"").slice(0,4);
@@ -603,6 +780,7 @@ function renderDetail(item){
     episodesSection.style.display="block";initSeasonUI(item);
   }else episodesSection.style.display="none";
 }
+
 function initSeasonUI(item){
   const seasons=item.seasons.filter(s=>s.season_number>0);
   seasonSelect.innerHTML=seasons.map(s=>`<option value="${s.season_number}">Season ${s.season_number}</option>`).join("");
@@ -611,7 +789,7 @@ function initSeasonUI(item){
   seasonSelect.onchange=async()=>{
     activeSeason=parseInt(seasonSelect.value);activeEpisode=1;
     await loadSeasonEpisodes(item,activeSeason);
-    playItem(currentItem,currentSource,[]);
+    await fetchAllStreams(currentItem);
   };
 }
 async function loadSeasonEpisodes(item,seasonNum){
@@ -633,202 +811,25 @@ async function loadSeasonEpisodes(item,seasonNum){
       </div>`;
     }).join("");
     episodeList.querySelectorAll(".episode-item").forEach(el=>{
-      el.addEventListener("click",()=>{
+      el.addEventListener("click",async()=>{
         activeEpisode=parseInt(el.dataset.ep);
         episodeList.querySelectorAll(".episode-item").forEach(x=>x.classList.remove("active"));
         el.classList.add("active");
-        playItem(currentItem,currentSource,[]);
+        await fetchAllStreams(currentItem);
       });
     });
   }catch(e){episodeList.innerHTML='<div class="section-status">Failed to load episodes.</div>';}
 }
 
-// ================= SOURCES =================
-function buildSourceTabs(){
-  const direct=SOURCES.filter(s=>s.tier==="direct");
-  const extract=SOURCES.filter(s=>s.tier==="extract");
-  const render=(container,list)=>{
-    container.innerHTML="";
-    list.forEach(s=>{
-      const b=document.createElement("button");
-      b.dataset.source=s.id;b.textContent=s.label;
-      if(s.id===currentSource)b.classList.add("active");
-      container.appendChild(b);
-    });
-  };
-  render(sourceTabsDirect,direct);render(sourceTabsExtract,extract);
-}
-function getSource(id){return SOURCES.find(s=>s.id===id);}
-function setTabState(container,src,state){
-  const btn=container.querySelector(`button[data-source="${src}"]`);
-  if(!btn)return;
-  btn.classList.remove("loading","failed","active");
-  if(state==="active")btn.classList.add("active");
-  else if(state==="loading")btn.classList.add("loading");
-  else if(state==="failed")btn.classList.add("failed");
-}
-function resetSourceTabs(){
-  [sourceTabsDirect,sourceTabsExtract].forEach(c=>c.querySelectorAll("button[data-source]").forEach(b=>b.classList.remove("loading","failed")));
-  retryBtn.classList.remove("show");
-}
-
-// ================= RESOLVERS =================
-async function resolveVidlink(item){
-  const isMovie=item.mediaType==="movie";
-  let u=`${VIDLINK_BASE}/vidlink/watch?isMovie=${isMovie}&id=${item.id}`;
-  if(!isMovie)u+=`&season=${activeSeason}&episode=${activeEpisode}`;
-  const r=await fetch(u);if(!r.ok)throw new Error(`Vidlink ${r.status}`);
-  const d=await r.json();const p=d?.stream?.playlist;
-  if(!p)throw new Error("Vidlink: no playlist");return p;
-}
-async function resolveTMDBEmbed(providerId,item){
-  const type=item.mediaType==="movie"?"movie":"series";
-  let u=`${TMDB_EMBED_API}/api/streams/${providerId}/${type}/${item.id}`;
-  if(type==="series")u+=`?season=${activeSeason}&episode=${activeEpisode}`;
-  const r=await fetch(u);if(!r.ok)throw new Error(`${providerId} ${r.status}`);
-  const d=await r.json();const streams=Array.isArray(d)?d:(d.streams||[]);
-  if(!streams.length)throw new Error(`${providerId}: no streams`);
-  streams.sort((a,b)=>(parseInt(b.quality)||0)-(parseInt(a.quality)||0));
-  return streams[0].url;
-}
-async function resolveMovieBox(item){
-  const s=await fetch(`${MOVIEBOX_API}/search?q=${encodeURIComponent(item.title)}`);
-  if(!s.ok)throw new Error("MovieBox search failed");
-  const sd=await s.json();const res=sd.results||sd.data||[];
-  if(!res.length)throw new Error("MovieBox: no results");
-  const m=res[0];const slug=m.slug||m.id;
-  const d=await fetch(`${MOVIEBOX_API}/detail/${slug}`);
-  if(!d.ok)throw new Error("MovieBox detail failed");
-  const dd=await d.json();const sid=dd.id||m.id;
-  const st=await fetch(`${MOVIEBOX_API}/api/stream/${sid}?detail_path=${slug}`);
-  if(!st.ok)throw new Error("MovieBox stream failed");
-  const std=await st.json();
-  const u=std.url||std.stream||(std.sources&&std.sources[0]?.file);
-  if(!u)throw new Error("MovieBox: no URL");return u;
-}
-async function resolveExtract(source,item){
-  const embedUrl=source.url(item.id,item.mediaType,activeSeason,activeEpisode);
-  if(!embedUrl)throw new Error("No embed URL");
-  const html=await fetchViaProxy(embedUrl);
-  const streamUrl=extractStreamUrl(html);
-  if(!streamUrl)throw new Error("No stream URL found in embed HTML");
-  return streamUrl;
-}
-async function resolveSource(source,item){
-  switch(source.resolver){
-    case "vidlink":return resolveVidlink(item);
-    case "tmdbembed":return resolveTMDBEmbed(source.api,item);
-    case "moviebox":return resolveMovieBox(item);
-    default:
-      if(source.tier==="extract")return resolveExtract(source,item);
-      throw new Error("No resolver");
-  }
-}
-
-// ================= PLAYER =================
-function playUrl(url,onError){
-  destroyPlayer();hideStatus();
-  const isHls=url.includes(".m3u8")||url.includes("m3u8");
-  const isDash=url.includes(".mpd")||url.includes("mpd");
-
-  art=new Artplayer({
-    container:artplayerApp,url:url,
-    autoplay:true,muted:false,volume:0.8,
-    pip:true,fullscreen:true,fullscreenWeb:true,
-    playbackRate:true,aspectRatio:true,setting:true,hotkey:true,screenshot:true,airplay:true,
-    theme:"#e50914",lang:"en",
-    type:isHls?"m3u8":isDash?"mpd":undefined,
-    customType:{
-      m3u8:function(video,u,art){
-        if(Hls.isSupported()){
-          if(hls)hls.destroy();
-          hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60});
-          hls.loadSource(u);hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED,()=>art.play());
-          hls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)onError&&onError(new Error(`HLS: ${d.details}`));});
-        }else if(video.canPlayType("application/vnd.apple.mpegurl")){
-          video.src=u;art.play();
-        }else onError&&onError(new Error("HLS unsupported"));
-      },
-      mpd:function(video,u,art){
-        if(dash)try{dash.reset();}catch(e){}
-        dash=dashjs.MediaPlayer().create();
-        dash.initialize(video,u,true);
-        dash.on("error",()=>onError&&onError(new Error("DASH error")));
-      }
-    }
-  });
-  art.on("error",()=>onError&&onError(new Error("Playback error")));
-}
-
-// ================= ORCHESTRATOR =================
-async function playItem(item,source,attempted=[]){
-  const session=++playSessionId;
-  if(attempted.includes(source)){
-    const rem=ALL_SOURCES.filter(s=>!attempted.includes(s));
-    if(!rem.length){
-      showStatus("All sources failed. Click Retry or pick a source tab.",false);
-      retryBtn.classList.add("show");return;
-    }
-    source=rem[0];
-  }
-  currentItem=item;currentSource=source;
-  const src=getSource(source);
-  if(!src){showStatus("Unknown source.",false);return;}
-
-  if(attempted.length===0)resetSourceTabs();
-  const tabContainer=src.tier==="direct"?sourceTabsDirect:sourceTabsExtract;
-  setTabState(tabContainer,source,"loading");
-  [sourceTabsDirect,sourceTabsExtract].forEach(c=>c.querySelectorAll("button[data-source]").forEach(b=>b.classList.remove("active")));
-  tabContainer.querySelector(`button[data-source="${source}"]`)?.classList.add("active");
-
-  showStatus(`Resolving ${src.label}…`,true);
-
-  try{
-    const streamUrl=await resolveSource(src,item);
-    if(session!==playSessionId)return;
-    setTabState(tabContainer,source,"active");
-    bumpStat(source,true);
-    playUrl(streamUrl,(err)=>{
-      if(session!==playSessionId)return;
-      console.warn(`${src.label} playback failed:`,err);
-      bumpStat(source,false);
-      setTabState(tabContainer,source,"failed");
-      const na=[...attempted,source];const rem=ALL_SOURCES.filter(s=>!na.includes(s));
-      if(!rem.length){showStatus(`All sources failed. Last: ${err.message}`,false);retryBtn.classList.add("show");return;}
-      showStatus(`${src.label} failed. Trying ${rem[0]}…`,true);
-      setTimeout(()=>playItem(item,rem[0],na),1500);
-    });
-  }catch(e){
-    if(session!==playSessionId)return;
-    console.warn(`${src.label} resolve failed:`,e);
-    bumpStat(source,false);
-    setTabState(tabContainer,source,"failed");
-    const na=[...attempted,source];const rem=ALL_SOURCES.filter(s=>!na.includes(s));
-    if(!rem.length){showStatus(`All sources failed. Last: ${e.message}`,false);retryBtn.classList.add("show");return;}
-    showStatus(`${src.label} failed (${e.message}). Trying ${rem[0]}…`,true);
-    setTimeout(()=>playItem(item,rem[0],na),1200);
-  }
-}
+// ================= PLACEHOLDER IMAGES =================
+const PLACEHOLDER_POSTER="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+const PLACEHOLDER_STILL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='170' fill='%23222'%3E%3Crect width='300' height='170'/%3E%3C/svg%3E";
 
 // ================= EVENTS =================
 searchBtn.addEventListener("click",performSearch);
 searchInput.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();performSearch();}});
 
-[sourceTabsDirect,sourceTabsExtract].forEach(container=>{
-  container.addEventListener("click",e=>{
-    const btn=e.target.closest("button[data-source]");
-    if(!btn||!currentItem)return;
-    playItem(currentItem,btn.dataset.source,[]);
-  });
-});
-retryBtn.addEventListener("click",()=>{
-  if(!currentItem)return;
-  resetSourceTabs();playItem(currentItem,DEFAULT_SOURCE,[]);
-});
-
 function closeDetail(){
-  playSessionId++;
   detailModal.classList.remove("open");
   destroyPlayer();
 }
@@ -849,8 +850,8 @@ pillNav.addEventListener("click",e=>{
 
 heroPlayBtn.addEventListener("click",()=>{if(heroItem)openDetail(heroItem);});
 heroInfoBtn.addEventListener("click",()=>{if(heroItem)openDetail(heroItem);});
-detailPlayBtn.addEventListener("click",()=>{if(currentItem)playItem(currentItem,currentSource,[]);});
-detailInfoBtn.addEventListener("click",()=>{if(currentItem)playItem(currentItem,currentSource,[]);});
+detailPlayBtn.addEventListener("click",()=>{if(currentItem)openDetail(currentItem);});
+detailInfoBtn.addEventListener("click",()=>{if(currentItem)openDetail(currentItem);});
 
 window.addEventListener("scroll",()=>{navbar.classList.toggle("scrolled",window.scrollY>50);});
 window.addEventListener("beforeunload",destroyPlayer);
@@ -860,7 +861,11 @@ document.getElementById("resetKeyLink").addEventListener("click",e=>{
 });
 
 // ================= INIT =================
-document.addEventListener("DOMContentLoaded",loadHomepage);
+document.addEventListener("DOMContentLoaded",()=>{
+  loadHomepage();
+  // Preload providers in background
+  loadAllProviders().catch(e=>console.warn("Provider preload failed:",e));
+});
 })();
 </script>
 </body>
