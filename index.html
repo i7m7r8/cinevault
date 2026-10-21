@@ -11,20 +11,15 @@
 
 <style>
 :root {
-  --bg: #141414; --card-bg: #1f1f1f; --red: #e50914;
-  --text: #e5e5e5; --text-dim: #8c8c8c;
-  --green: #46d369; --amber: #f5a623;
+  --bg:#141414; --card-bg:#1f1f1f; --red:#e50914;
+  --text:#e5e5e5; --text-dim:#8c8c8c;
+  --green:#46d369; --amber:#f5a623;
 }
 * { margin:0; padding:0; box-sizing:border-box; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; }
 body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 
-/* ===== NAVBAR ===== */
-.navbar {
-  position:fixed; top:0; left:0; right:0; height:68px; padding:0 4%;
-  display:flex; align-items:center; gap:28px; z-index:100;
-  background:linear-gradient(180deg,rgba(0,0,0,.9) 0%,rgba(0,0,0,0) 100%);
-  transition:background .3s;
-}
+/* NAVBAR */
+.navbar { position:fixed; top:0; left:0; right:0; height:68px; padding:0 4%; display:flex; align-items:center; gap:28px; z-index:100; background:linear-gradient(180deg,rgba(0,0,0,.9) 0%,rgba(0,0,0,0) 100%); transition:background .3s; }
 .navbar.scrolled { background:var(--bg); }
 .logo { font-size:26px; font-weight:900; color:var(--red); letter-spacing:-1px; white-space:nowrap; cursor:pointer; }
 .logo span { color:#fff; font-weight:300; }
@@ -33,21 +28,13 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .nav-links span:hover { color:#b3b3b3; }
 .nav-links span.active { font-weight:700; color:#fff; }
 .search-box { margin-left:auto; display:flex; align-items:center; gap:8px; }
-.search-box input {
-  background:rgba(0,0,0,.75); border:1px solid #444; border-radius:4px;
-  padding:8px 14px; color:#fff; font-size:14px; width:240px; outline:none;
-  transition:border .2s, width .2s;
-}
+.search-box input { background:rgba(0,0,0,.75); border:1px solid #444; border-radius:4px; padding:8px 14px; color:#fff; font-size:14px; width:240px; outline:none; transition:border .2s, width .2s; }
 .search-box input:focus { border-color:var(--red); width:280px; }
-.search-box button {
-  background:var(--red); border:none; border-radius:4px; padding:8px 18px;
-  color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:background .2s;
-  min-width:80px;
-}
+.search-box button { background:var(--red); border:none; border-radius:4px; padding:8px 18px; color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:background .2s; min-width:80px; }
 .search-box button:hover { background:#b2070f; }
 .search-box button:disabled { opacity:.6; cursor:wait; }
 
-/* ===== HERO ===== */
+/* HERO */
 .hero { position:relative; height:56vw; max-height:80vh; min-height:360px; background:#000; display:flex; align-items:flex-end; }
 .hero-bg { position:absolute; inset:0; background-size:cover; background-position:center 20%; opacity:.45; transition:background-image .5s; }
 .hero-gradient { position:absolute; inset:0; background:linear-gradient(0deg,var(--bg) 0%,rgba(20,20,20,.4) 40%,rgba(20,20,20,0) 70%); }
@@ -62,20 +49,20 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .btn-info { background:rgba(109,109,110,.7); color:#fff; border:none; border-radius:4px; padding:12px 28px; font-size:17px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; transition:background .2s; }
 .btn-info:hover { background:rgba(109,109,110,.5); }
 
-/* ===== ROWS ===== */
+/* ROWS */
 .rows { padding:0 0 40px; margin-top:-60px; position:relative; z-index:3; }
 .row { padding:0 4%; margin-bottom:32px; }
 .row h2 { font-size:clamp(16px,1.6vw,22px); font-weight:700; margin-bottom:12px; color:var(--text); }
 .row-inner { display:flex; gap:8px; overflow-x:auto; scroll-behavior:smooth; padding-bottom:8px; scrollbar-width:none; }
 .row-inner::-webkit-scrollbar { display:none; }
 
-/* ===== SEARCH GRID ===== */
+/* SEARCH GRID */
 .search-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:14px; padding:24px 4% 40px; }
 .search-header { padding:24px 4% 8px; display:flex; align-items:baseline; gap:16px; }
 .search-header h2 { font-size:clamp(18px,2vw,26px); font-weight:700; }
 .search-header .count { color:var(--text-dim); font-size:14px; }
 
-/* ===== CARD ===== */
+/* CARD */
 .card { position:relative; border-radius:4px; overflow:hidden; cursor:pointer; transition:transform .3s, box-shadow .3s; background:var(--card-bg); }
 .row-inner .card { flex:0 0 200px; }
 .card:hover { transform:scale(1.06); z-index:2; box-shadow:0 8px 24px rgba(0,0,0,.8); }
@@ -84,20 +71,101 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .card .card-meta { font-size:11px; color:var(--text-dim); padding:0 6px 8px; display:flex; justify-content:space-between; }
 .card .quality-tag { position:absolute; top:6px; right:6px; background:var(--red); font-size:10px; font-weight:700; padding:2px 6px; border-radius:2px; }
 
-/* ===== PLAYER MODAL ===== */
-.player-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.96); z-index:200; flex-direction:column; padding:20px 4%; overflow-y:auto; }
+/* PLAYER MODAL + DETAIL */
+.player-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.97); z-index:200; flex-direction:column; padding:16px 4% 40px; overflow-y:auto; }
 .player-modal.open { display:flex; }
-.player-modal .close-btn { position:absolute; top:16px; right:4%; font-size:28px; color:#fff; cursor:pointer; z-index:10; line-height:1; }
-.player-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; padding-right:40px; }
-.player-header h3 { font-size:18px; font-weight:600; color:var(--text); }
+.player-modal .close-btn {
+  position:fixed; top:16px; right:4%; width:44px; height:44px;
+  background:rgba(0,0,0,.7); border-radius:50%; border:none;
+  font-size:28px; color:#fff; cursor:pointer; z-index:210; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
+.player-modal .close-btn:hover { background:var(--red); }
+
+/* Detail Hero */
+.detail-hero {
+  position:relative; border-radius:12px; overflow:hidden; margin-bottom:20px;
+  background:#0a0a0a center 30%/cover no-repeat; min-height:320px;
+  display:flex; align-items:flex-end; padding: 0;
+}
+.detail-hero::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, rgba(20,20,20,.95) 0%, rgba(20,20,20,.5) 55%, rgba(20,20,20,.15) 100%),
+             linear-gradient(0deg, rgba(20,20,20,.95) 0%, transparent 55%);
+  z-index:1;
+}
+.detail-hero-inner {
+  position:relative; z-index:2; display:flex; gap:24px;
+  padding:26px; width:100%; align-items:flex-end;
+}
+.detail-poster {
+  width:150px; flex-shrink:0; border-radius:8px;
+  box-shadow:0 10px 30px rgba(0,0,0,.8);
+  aspect-ratio:2/3; object-fit:cover; background:#222;
+}
+.detail-meta-block { flex:1; min-width:0; }
+.detail-meta-block h1 {
+  font-size:clamp(24px,3.2vw,40px); font-weight:900; line-height:1.05;
+  margin-bottom:10px; text-shadow:2px 2px 8px rgba(0,0,0,.8);
+}
+.detail-badges {
+  display:flex; gap:10px; flex-wrap:wrap; font-size:13px;
+  color:#ccc; margin-bottom:12px; align-items:center;
+}
+.detail-badges .rating { color:var(--green); font-weight:700; }
+.detail-badges .divider { color:#555; }
+.detail-badges .genre-tag {
+  border:1px solid #555; padding:2px 10px; border-radius:12px; font-size:12px;
+}
+.detail-overview {
+  font-size:14px; line-height:1.55; color:#d2d2d2;
+  max-height:100px; overflow-y:auto; padding-right:8px;
+}
+.detail-overview::-webkit-scrollbar { width:4px; }
+.detail-overview::-webkit-scrollbar-thumb { background:#444; border-radius:2px; }
+
+.detail-body { display:flex; flex-direction:column; gap:20px; }
+
+.section-label {
+  font-size:12px; color:#aaa; margin-bottom:8px;
+  text-transform:uppercase; letter-spacing:1.2px; font-weight:700;
+}
+
+/* Cast */
+.cast-row { display:flex; gap:14px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none; }
+.cast-row::-webkit-scrollbar { display:none; }
+.cast-card { flex:0 0 96px; text-align:center; font-size:11px; }
+.cast-card img {
+  width:72px; height:72px; border-radius:50%; object-fit:cover;
+  background:#222; margin:0 auto 6px; display:block;
+}
+.cast-card .cast-name { font-weight:600; color:#e5e5e5; font-size:11px; line-height:1.25; }
+.cast-card .cast-role { color:#888; font-size:10px; line-height:1.25; margin-top:2px; }
+
+/* Episode picker */
+.episode-picker {
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  padding:14px 16px; background:#1a1a1a; border-radius:10px;
+  border:1px solid #2a2a2a;
+}
+.episode-picker label { font-size:13px; color:#aaa; font-weight:600; }
+.episode-picker select {
+  background:#2a2a2a; border:1px solid #444; border-radius:6px;
+  padding:8px 14px; color:#fff; font-size:14px; cursor:pointer; outline:none;
+  min-width:140px; max-width:320px;
+}
+.episode-picker select:focus { border-color:var(--red); }
+.episode-picker select:disabled { opacity:.5; }
+
+/* Source tabs */
 .source-tabs {
-  display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;
-  max-height:120px; overflow-y:auto; padding:4px 0;
+  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  padding:4px 0; max-height:none;
 }
 .source-tabs button {
   background:#2a2a2a; border:1px solid #444; border-radius:20px;
-  padding:6px 16px; color:#aaa; font-size:13px; cursor:pointer; transition:all .2s;
-  position:relative; white-space:nowrap;
+  padding:7px 16px; color:#aaa; font-size:13px; cursor:pointer;
+  transition:all .2s; white-space:nowrap;
 }
 .source-tabs button.active { background:var(--red); border-color:var(--red); color:#fff; font-weight:600; }
 .source-tabs button.loading { border-color:var(--amber); color:var(--amber); }
@@ -109,27 +177,31 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 .source-tabs button.failed { opacity:.45; text-decoration:line-through; }
 .source-tabs .retry-btn {
   background:var(--green); color:#000; border:none; border-radius:20px;
-  padding:6px 16px; font-size:13px; font-weight:700; cursor:pointer;
-  display:none;
+  padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; display:none;
 }
 .source-tabs .retry-btn.show { display:inline-block; }
 
-.player-shell { width:100%; max-width:1100px; margin:0 auto; background:#000; border-radius:8px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.8); position:relative; }
+/* Player shell */
+.player-shell {
+  width:100%; max-width:1100px; margin:0 auto; background:#000;
+  border-radius:10px; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.8); position:relative;
+}
 .player-shell .plyr { --plyr-color-main:var(--red); }
-.player-status { color:#888; font-size:14px; text-align:center; padding:30px 10px; line-height:1.6; }
+.player-status { color:#888; font-size:14px; text-align:center; padding:40px 16px; line-height:1.6; }
 #embedFrame { width:100%; aspect-ratio:16/9; border:0; display:none; background:#000; }
 
-/* ===== STATUS ===== */
+/* Status */
 .section-status { padding:40px 4%; text-align:center; color:#888; font-size:15px; }
 .spinner { width:28px; height:28px; border:3px solid #333; border-top-color:var(--red); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
-/* ===== FOOTER ===== */
+/* Footer */
 .footer { padding:40px 4% 30px; color:#555; font-size:12px; text-align:center; border-top:1px solid #222; }
 .footer a { color:#777; text-decoration:none; }
 .footer a:hover { color:var(--red); }
 
-/* ===== RESPONSIVE ===== */
+/* Responsive */
 @media(max-width:768px) {
   .navbar { height:56px; gap:14px; }
   .nav-links { display:none; }
@@ -141,12 +213,19 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
   .search-grid { grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; }
   .btn-play, .btn-info { padding:9px 18px; font-size:14px; }
   .rows { margin-top:-30px; }
+  .detail-hero { min-height:0; }
+  .detail-hero-inner { padding:16px; gap:14px; flex-direction:column; align-items:flex-start; }
+  .detail-poster { width:110px; }
+  .detail-meta-block h1 { font-size:22px; }
+  .detail-overview { max-height:120px; font-size:13px; }
+  .cast-card { flex:0 0 80px; }
+  .cast-card img { width:60px; height:60px; }
 }
 </style>
 </head>
 <body>
 
-<!-- ===== NAVBAR ===== -->
+<!-- NAVBAR -->
 <nav class="navbar" id="navbar">
   <div class="logo" onclick="location.reload()">STREAM<span>VAULT</span></div>
   <div class="nav-links">
@@ -161,7 +240,7 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
   </div>
 </nav>
 
-<!-- ===== HERO ===== -->
+<!-- HERO -->
 <header class="hero" id="hero">
   <div class="hero-bg" id="heroBg"></div>
   <div class="hero-gradient"></div>
@@ -178,38 +257,70 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
   </div>
 </header>
 
-<!-- ===== CONTENT ===== -->
+<!-- CONTENT -->
 <main class="rows" id="contentRows"></main>
 
-<!-- ===== PLAYER MODAL ===== -->
+<!-- PLAYER MODAL -->
 <div class="player-modal" id="playerModal">
-  <span class="close-btn" id="closePlayer">&times;</span>
-  <div class="player-header">
-    <h3 id="playerTitle">—</h3>
+  <button class="close-btn" id="closePlayer" title="Close">&times;</button>
+
+  <!-- Rich Detail Hero -->
+  <div class="detail-hero" id="detailHero">
+    <div class="detail-hero-inner">
+      <img class="detail-poster" id="detailPoster" alt="Poster">
+      <div class="detail-meta-block">
+        <h1 id="detailTitle">—</h1>
+        <div class="detail-badges" id="detailBadges"></div>
+        <p class="detail-overview" id="detailOverview"></p>
+      </div>
+    </div>
   </div>
-  <div class="source-tabs" id="sourceTabs">
-    <button data-source="vidlink" class="active">Vidlink</button>
-    <button data-source="netmirror">NetMirror</button>
-    <button data-source="moviebox">MovieBox</button>
-    <button data-source="vidsrcto">VidSrc.to</button>
-    <button data-source="vidsrccc">VidSrc.cc</button>
-    <button data-source="2embed">2Embed</button>
-    <button data-source="autoembed">AutoEmbed</button>
-    <button data-source="superembed">SuperEmbed</button>
-    <button data-source="vidfast">VidFast</button>
-    <button data-source="vidify">Vidify</button>
-    <button class="retry-btn" id="retryBtn">↻ Retry all</button>
-  </div>
-  <div class="player-shell">
-    <video id="videoPlayer" controls playsinline crossorigin="anonymous"></video>
-    <iframe id="embedFrame" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
-    <div class="player-status" id="playerStatus">Select a source to start streaming</div>
+
+  <div class="detail-body">
+    <!-- Cast -->
+    <div id="castSection" style="display:none;">
+      <div class="section-label">Top Cast</div>
+      <div class="cast-row" id="castRow"></div>
+    </div>
+
+    <!-- Season / Episode -->
+    <div id="episodeSection" class="episode-picker" style="display:none;">
+      <label for="seasonSelect">Season</label>
+      <select id="seasonSelect"></select>
+      <label for="episodeSelect">Episode</label>
+      <select id="episodeSelect"></select>
+    </div>
+
+    <!-- Sources -->
+    <div>
+      <div class="section-label">Stream Sources</div>
+      <div class="source-tabs" id="sourceTabs">
+        <button data-source="vidsrcto" class="active">VidSrc.to</button>
+        <button data-source="vidlink">Vidlink</button>
+        <button data-source="vidsrccc">VidSrc.cc</button>
+        <button data-source="2embed">2Embed</button>
+        <button data-source="autoembed">AutoEmbed</button>
+        <button data-source="superembed">SuperEmbed</button>
+        <button data-source="vidfast">VidFast</button>
+        <button data-source="vidify">Vidify</button>
+        <button data-source="netmirror">NetMirror</button>
+        <button data-source="moviebox">MovieBox</button>
+        <button class="retry-btn" id="retryBtn">↻ Retry all</button>
+      </div>
+    </div>
+
+    <!-- Player -->
+    <div class="player-shell">
+      <video id="videoPlayer" controls playsinline crossorigin="anonymous"></video>
+      <iframe id="embedFrame" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+      <div class="player-status" id="playerStatus">Select a source above to start streaming</div>
+    </div>
   </div>
 </div>
 
-<!-- ===== FOOTER ===== -->
+<!-- FOOTER -->
 <div class="footer">
-  StreamVault · Streams via Vidlink / NetMirror / MovieBox / VidSrc / 2Embed / AutoEmbed / SuperEmbed / VidFast / Vidify ·
+  StreamVault · Streams via VidSrc / Vidlink / NetMirror / MovieBox / 2Embed / AutoEmbed / SuperEmbed / VidFast / Vidify ·
   <a href="#" id="resetKeyLink">Reset TMDB key</a>
 </div>
 
@@ -219,17 +330,19 @@ body { background:var(--bg); color:var(--text); overflow-x:hidden; }
 
 // ================= CONFIG =================
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
+const TMDB_PROFILE = "https://image.tmdb.org/t/p/w185";
 const TMDB_BACKDROP = "https://image.tmdb.org/t/p/original";
 const TMDB_DEMO_KEY = "8265bd1679663a7ea12ac168da84d2e8";
 
-// Direct-stream sources
 const VIDLINK_BASE = "https://vidlink.pro/api";
 const TMDB_EMBED_API = "https://tmdb-embed-api.vercel.app";
 const MOVIEBOX_API = "https://moviebox-api.vercel.app";
 
-// Embed-only sources (all use TMDB ID)
 const EMBED_SOURCES = ["vidsrcto", "vidsrccc", "2embed", "autoembed", "superembed", "vidfast", "vidify"];
-const ALL_SOURCES = ["vidlink", "netmirror", "moviebox", ...EMBED_SOURCES];
+const ALL_SOURCES = ["vidsrcto", "vidlink", "vidsrccc", "2embed", "autoembed", "superembed", "vidfast", "vidify", "netmirror", "moviebox"];
+const DEFAULT_SOURCE = "vidsrcto";
+
+const PLACEHOLDER_POSTER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
 
 // ================= DOM =================
 const $ = id => document.getElementById(id);
@@ -243,9 +356,19 @@ const heroDesc = $("heroDesc");
 const heroPlayBtn = $("heroPlayBtn");
 const heroInfoBtn = $("heroInfoBtn");
 const navbar = $("navbar");
+
 const playerModal = $("playerModal");
 const closePlayer = $("closePlayer");
-const playerTitle = $("playerTitle");
+const detailHero = $("detailHero");
+const detailPoster = $("detailPoster");
+const detailTitle = $("detailTitle");
+const detailBadges = $("detailBadges");
+const detailOverview = $("detailOverview");
+const castSection = $("castSection");
+const castRow = $("castRow");
+const episodeSection = $("episodeSection");
+const seasonSelect = $("seasonSelect");
+const episodeSelect = $("episodeSelect");
 const videoPlayer = $("videoPlayer");
 const embedFrame = $("embedFrame");
 const playerStatus = $("playerStatus");
@@ -256,15 +379,22 @@ const retryBtn = $("retryBtn");
 let plyr = null;
 let hls = null;
 let currentItem = null;
-let currentSource = "vidlink";
+let currentSource = DEFAULT_SOURCE;
 let heroItem = null;
 let playSessionId = 0;
+let seasonLoading = false;
 
 // ================= UTILS =================
 function escapeHtml(text) {
   const d = document.createElement("div");
   d.textContent = text;
   return d.innerHTML;
+}
+function formatRuntime(mins) {
+  if (!mins) return "";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 function showStatus(msg, loading) {
   playerStatus.innerHTML = loading
@@ -274,9 +404,7 @@ function showStatus(msg, loading) {
   videoPlayer.style.display = "none";
   embedFrame.style.display = "none";
 }
-function hideStatus() {
-  playerStatus.style.display = "none";
-}
+function hideStatus() { playerStatus.style.display = "none"; }
 function destroyHls() {
   if (hls) { try { hls.destroy(); } catch(e){} hls = null; }
   videoPlayer.removeAttribute("src");
@@ -297,17 +425,17 @@ function initPlyr() {
 function setSourceTabStatus(src, state) {
   const btn = sourceTabs.querySelector(`button[data-source="${src}"]`);
   if (!btn) return;
-  btn.classList.remove("loading", "failed", "active");
+  btn.classList.remove("loading","failed","active");
   if (state === "active") btn.classList.add("active");
   else if (state === "loading") btn.classList.add("loading");
   else if (state === "failed") btn.classList.add("failed");
 }
 function resetSourceTabs() {
-  sourceTabs.querySelectorAll("button[data-source]").forEach(b => b.classList.remove("loading", "failed"));
+  sourceTabs.querySelectorAll("button[data-source]").forEach(b => b.classList.remove("loading","failed"));
   retryBtn.classList.remove("show");
 }
 
-// ================= TMDB FETCH =================
+// ================= TMDB =================
 async function fetchTMDB(path, params = {}, retried = false) {
   const key = localStorage.getItem("tmdb_key") || TMDB_DEMO_KEY;
   const url = new URL(`https://api.themoviedb.org/3${path}`);
@@ -316,34 +444,23 @@ async function fetchTMDB(path, params = {}, retried = false) {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
   let res;
-  try {
-    res = await fetch(url);
-  } catch (e) {
+  try { res = await fetch(url); } catch (e) {
     throw new Error("Network error — check your connection.");
   }
 
   if (res.status === 401) {
     localStorage.removeItem("tmdb_key");
-    if (retried) throw new Error("TMDB API key rejected. Reset it from the footer link.");
-    const newKey = prompt(
-      "TMDB API key is invalid or expired.\n\n" +
-      "Get a free key at:\nhttps://www.themoviedb.org/settings/api\n\n" +
-      "Paste your key below:"
-    );
+    if (retried) throw new Error("TMDB API key rejected.");
+    const newKey = prompt("TMDB API key is invalid.\nGet a free key at https://www.themoviedb.org/settings/api\n\nPaste your key:");
     if (newKey && newKey.trim()) {
       localStorage.setItem("tmdb_key", newKey.trim());
       return fetchTMDB(path, params, true);
     }
-    throw new Error("No API key — cannot fetch content.");
+    throw new Error("No API key.");
   }
-
   if (res.status === 429) {
-    if (retried) throw new Error("TMDB rate limit reached. Wait 10 seconds and try again.");
-    const newKey = prompt(
-      "The shared TMDB demo key is rate-limited.\n\n" +
-      "Paste your own free key from https://www.themoviedb.org/settings/api\n" +
-      "(press Cancel to retry with the demo key once more)"
-    );
+    if (retried) throw new Error("TMDB rate limit. Wait 10 seconds and try again.");
+    const newKey = prompt("Shared TMDB demo key is rate-limited.\nPaste your own free key from https://www.themoviedb.org/settings/api\n(press Cancel to retry demo key once)");
     if (newKey && newKey.trim()) {
       localStorage.setItem("tmdb_key", newKey.trim());
       return fetchTMDB(path, params, true);
@@ -351,28 +468,198 @@ async function fetchTMDB(path, params = {}, retried = false) {
     await new Promise(r => setTimeout(r, 2000));
     return fetchTMDB(path, params, true);
   }
-
   if (!res.ok) throw new Error(`TMDB error ${res.status}`);
   return res.json();
 }
 
-async function fetchTMDBDetail(id, mediaType) {
+async function fetchTMDBDetailFull(id, mediaType) {
   const type = mediaType === "tv" ? "tv" : "movie";
-  const data = await fetchTMDB(`/${type}/${id}`);
+  const data = await fetchTMDB(`/${type}/${id}`, {
+    append_to_response: "credits,external_ids"
+  });
   return {
     ...data,
     mediaType: type,
     title: data.title || data.name || "",
-    year: (data.release_date || data.first_air_date || "").slice(0, 4),
-    imdb_id: data.imdb_id || data.external_ids?.imdb_id || null
+    year: (data.release_date || data.first_air_date || "").slice(0,4),
+    imdb_id: data.imdb_id || data.external_ids?.imdb_id || null,
+    season: 1,
+    episode: 1
   };
+}
+
+async function fetchSeasonEpisodes(tvId, seasonNum) {
+  return fetchTMDB(`/tv/${tvId}/season/${seasonNum}`);
+}
+
+// ================= DETAIL VIEW =================
+function renderDetail(item) {
+  const title = item.title || item.name || "Unknown";
+  const year = (item.release_date || item.first_air_date || "").slice(0,4);
+  const rating = item.vote_average ? item.vote_average.toFixed(1) : null;
+
+  // Hero backdrop
+  detailHero.style.backgroundImage = item.backdrop_path
+    ? `url(${TMDB_BACKDROP}${item.backdrop_path})`
+    : "linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%)";
+
+  // Poster
+  detailPoster.src = item.poster_path ? TMDB_IMG + item.poster_path : PLACEHOLDER_POSTER;
+  detailPoster.alt = title;
+
+  // Title
+  detailTitle.textContent = title;
+
+  // Badges
+  const badges = [];
+  if (rating) badges.push(`<span class="rating">⭐ ${rating}</span>`);
+  if (year) badges.push(`<span>${year}</span>`);
+  if (item.runtime) badges.push(`<span>${formatRuntime(item.runtime)}</span>`);
+  if (item.mediaType === "tv" && item.number_of_seasons) {
+    badges.push(`<span>${item.number_of_seasons} Season${item.number_of_seasons > 1 ? "s" : ""}</span>`);
+  }
+  if (item.mediaType === "tv" && item.number_of_episodes) {
+    badges.push(`<span>${item.number_of_episodes} Episodes</span>`);
+  }
+  if (item.adult) badges.push(`<span class="genre-tag">18+</span>`);
+  if (Array.isArray(item.genres) && item.genres.length) {
+    item.genres.slice(0, 3).forEach(g => {
+      badges.push(`<span class="genre-tag">${escapeHtml(g.name)}</span>`);
+    });
+  }
+  detailBadges.innerHTML = badges.join('<span class="divider">·</span>');
+
+  // Overview
+  detailOverview.textContent = item.overview || "No description available.";
+
+  // Cast
+  const cast = item.credits?.cast || [];
+  if (cast.length) {
+    castSection.style.display = "block";
+    castRow.innerHTML = cast.slice(0, 15).map(c => `
+      <div class="cast-card">
+        ${c.profile_path
+          ? `<img src="${TMDB_PROFILE}${c.profile_path}" alt="${escapeHtml(c.name)}" loading="lazy">`
+          : `<img src="${PLACEHOLDER_POSTER}" alt="">`}
+        <div class="cast-name">${escapeHtml(c.name)}</div>
+        <div class="cast-role">${escapeHtml(c.character || "")}</div>
+      </div>
+    `).join("");
+  } else {
+    castSection.style.display = "none";
+  }
+
+  // Episode picker (TV only)
+  if (item.mediaType === "tv" && Array.isArray(item.seasons) && item.seasons.some(s => s.season_number > 0)) {
+    episodeSection.style.display = "flex";
+    populateSeasonUI(item);
+  } else {
+    episodeSection.style.display = "none";
+  }
+}
+
+async function populateSeasonUI(item) {
+  const seasons = item.seasons.filter(s => s.season_number > 0);
+  seasonSelect.innerHTML = seasons.map(s =>
+    `<option value="${s.season_number}" ${s.season_number === (item.season || 1) ? "selected" : ""}>Season ${s.season_number}</option>`
+  ).join("");
+  seasonSelect.disabled = false;
+
+  // Load first / current season
+  await loadEpisodesFor(item, item.season || 1);
+
+  // Wire events (replace previous)
+  seasonSelect.onchange = async () => {
+    const season = parseInt(seasonSelect.value);
+    item.season = season;
+    item.episode = 1;
+    await loadEpisodesFor(item, season);
+    if (currentItem === item) {
+      playItem(item, currentSource, []);
+    }
+  };
+  episodeSelect.onchange = () => {
+    const ep = parseInt(episodeSelect.value);
+    item.episode = ep;
+    if (currentItem === item) {
+      playItem(item, currentSource, []);
+    }
+  };
+}
+
+async function loadEpisodesFor(item, seasonNum) {
+  if (seasonLoading) return;
+  seasonLoading = true;
+  episodeSelect.disabled = true;
+  episodeSelect.innerHTML = `<option>Loading…</option>`;
+  try {
+    const data = await fetchSeasonEpisodes(item.id, seasonNum);
+    const eps = data.episodes || [];
+    if (!eps.length) {
+      episodeSelect.innerHTML = `<option>No episodes</option>`;
+      return;
+    }
+    episodeSelect.innerHTML = eps.map(e =>
+      `<option value="${e.episode_number}" ${e.episode_number === (item.episode || 1) ? "selected" : ""}>E${e.episode_number} — ${escapeHtml(e.name || "Untitled")}</option>`
+    ).join("");
+    if (!episodeSelect.value || !eps.find(e => e.episode_number === item.episode)) {
+      item.episode = eps[0].episode_number;
+      episodeSelect.value = String(item.episode);
+    }
+  } catch (err) {
+    console.error("Episode load failed:", err);
+    episodeSelect.innerHTML = `<option>Failed to load</option>`;
+  } finally {
+    seasonLoading = false;
+    episodeSelect.disabled = false;
+  }
+}
+
+// ================= OPEN DETAIL =================
+async function openDetail(partialItem) {
+  playSessionId++; // invalidate any previous callbacks
+  currentItem = partialItem;
+  currentSource = DEFAULT_SOURCE;
+
+  // Show modal immediately with a loading skeleton
+  playerModal.classList.add("open");
+  playerModal.scrollTop = 0;
+  detailHero.style.backgroundImage = "linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%)";
+  detailPoster.src = partialItem.poster || PLACEHOLDER_POSTER;
+  detailTitle.textContent = partialItem.title || "Loading…";
+  detailBadges.innerHTML = "";
+  detailOverview.textContent = "Loading details…";
+  castSection.style.display = "none";
+  episodeSection.style.display = "none";
+  showStatus("Fetching title details…", true);
+
+  try {
+    const full = await fetchTMDBDetailFull(partialItem.id, partialItem.mediaType);
+    const merged = {
+      ...partialItem,
+      ...full,
+      // Ensure poster fallback if detail has none
+      poster: full.poster_path ? TMDB_IMG + full.poster_path : partialItem.poster,
+      // Fresh episode/season defaults
+      season: 1,
+      episode: 1
+    };
+    currentItem = merged;
+    renderDetail(merged);
+    resetSourceTabs();
+    playItem(merged, DEFAULT_SOURCE, []);
+  } catch (err) {
+    console.warn("Detail fetch failed, using partial info:", err);
+    detailOverview.textContent = partialItem.overview || "No description available.";
+    // Still try to play
+    resetSourceTabs();
+    playItem(partialItem, DEFAULT_SOURCE, []);
+  }
 }
 
 // ================= CARD =================
 function createCard(item) {
-  const poster = item.poster_path
-    ? TMDB_IMG + item.poster_path
-    : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+  const poster = item.poster_path ? TMDB_IMG + item.poster_path : PLACEHOLDER_POSTER;
   const title = item.title || item.name || "Unknown";
   const year = (item.release_date || item.first_air_date || "").slice(0,4);
   const rating = item.vote_average ? item.vote_average.toFixed(1) : "N/A";
@@ -386,29 +673,16 @@ function createCard(item) {
     <div class="card-title">${escapeHtml(title)}</div>
     <div class="card-meta"><span>${year}</span><span>⭐ ${rating}</span></div>
   `;
-
-  card.addEventListener("click", async () => {
-    const fallback = {
-      id: item.id, title, poster, year, rating, mediaType,
-      overview: item.overview || "", season: 1, episode: 1
-    };
-
-    // CRITICAL: fetch full TMDB detail BEFORE touching any source
-    let full = fallback;
-    try {
-      const detail = await fetchTMDBDetail(item.id, mediaType);
-      full = {
-        ...fallback,
-        ...detail,
-        poster: poster || fallback.poster,
-        rating: detail.vote_average ? detail.vote_average.toFixed(1) : rating,
-        season: 1, episode: 1
-      };
-    } catch (err) {
-      console.warn("TMDB detail fetch failed, using fallback metadata:", err);
-    }
-
-    playItem(full, "vidlink", []);
+  card.addEventListener("click", () => {
+    openDetail({
+      id: item.id,
+      title,
+      poster,
+      year,
+      rating,
+      mediaType,
+      overview: item.overview || ""
+    });
   });
   return card;
 }
@@ -428,7 +702,7 @@ function renderRow(title, items) {
 }
 
 async function loadHomepage() {
-  contentRows.innerHTML = '<div class="section-status"><div class="spinner"></div>Loading content...</div>';
+  contentRows.innerHTML = '<div class="section-status"><div class="spinner"></div>Loading content…</div>';
   try {
     const [trending, nowPlaying, popMovies, popTV, topRated, upcoming] = await Promise.allSettled([
       fetchTMDB("/trending/all/week"),
@@ -438,13 +712,11 @@ async function loadHomepage() {
       fetchTMDB("/movie/top_rated"),
       fetchTMDB("/movie/upcoming")
     ]);
-
     const val = r => r.status === "fulfilled" ? r.value : null;
     const t = val(trending), np = val(nowPlaying), pm = val(popMovies);
     const pt = val(popTV), tr = val(topRated), up = val(upcoming);
 
     contentRows.innerHTML = "";
-
     const trendingItems = (t?.results || []).filter(r => r.media_type !== "person");
     if (trendingItems.length) renderRow("🔥 Trending Now", trendingItems.slice(0, 18));
     if (np?.results) renderRow("🎥 In Theaters", np.results.slice(0, 18));
@@ -457,7 +729,6 @@ async function loadHomepage() {
       contentRows.innerHTML = '<div class="section-status">⚠️ Could not load content from TMDB.<br>Check the TMDB key from the footer.</div>';
       return;
     }
-
     const heroCandidate = trendingItems.find(x => x.backdrop_path) || trendingItems[0];
     if (heroCandidate) updateHero(heroCandidate);
   } catch (err) {
@@ -474,7 +745,7 @@ function updateHero(item) {
     year: (item.release_date || item.first_air_date || "").slice(0,4),
     rating: item.vote_average ? item.vote_average.toFixed(1) : "N/A",
     mediaType: item.media_type || "movie",
-    overview: item.overview || "", season: 1, episode: 1
+    overview: item.overview || ""
   };
   heroTitle.textContent = heroItem.title;
   heroMeta.innerHTML = `
@@ -499,25 +770,20 @@ async function performSearch() {
   try {
     const data = await fetchTMDB("/search/multi", { query, include_adult: "false" });
     const results = (data.results || []).filter(r => r.media_type === "movie" || r.media_type === "tv");
-
     contentRows.innerHTML = "";
-
     if (!results.length) {
-      contentRows.innerHTML = `<div class="section-status">😕 No results for “${escapeHtml(query)}”.</div>`;
+      contentRows.innerHTML = `<div class="section-status">😕 No results for "${escapeHtml(query)}".</div>`;
       return;
     }
-
     const header = document.createElement("div");
     header.className = "search-header";
-    header.innerHTML = `<h2>Results for “${escapeHtml(query)}”</h2><span class="count">${results.length} title${results.length===1?"":"s"}</span>`;
+    header.innerHTML = `<h2>Results for "${escapeHtml(query)}"</h2><span class="count">${results.length} title${results.length === 1 ? "" : "s"}</span>`;
     contentRows.appendChild(header);
-
     const grid = document.createElement("div");
     grid.className = "search-grid";
     results.forEach(item => grid.appendChild(createCard(item)));
     contentRows.appendChild(grid);
-
-    const best = results.find(r => r.backdrop_path && (r.media_type === "movie" || r.media_type === "tv"));
+    const best = results.find(r => r.backdrop_path);
     if (best) updateHero(best);
   } catch (err) {
     console.error("Search failed:", err);
@@ -534,7 +800,6 @@ function buildEmbedUrl(source, item) {
   const isMovie = item.mediaType === "movie";
   const s = item.season || 1;
   const e = item.episode || 1;
-
   switch (source) {
     case "vidsrcto":
       return isMovie
@@ -632,9 +897,7 @@ function playStreamUrl(url, onPlaybackError) {
     else showStatus("No stream URL returned.", false);
     return;
   }
-
   const isHls = url.includes(".m3u8") || url.includes("m3u8");
-
   if (isHls) {
     if (Hls.isSupported()) {
       hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
@@ -665,11 +928,10 @@ function playStreamUrl(url, onPlaybackError) {
       videoPlayer.play().catch(() => {});
       return;
     }
-    if (onPlaybackError) onPlaybackError(new Error("HLS not supported in this browser"));
+    if (onPlaybackError) onPlaybackError(new Error("HLS not supported"));
     else showStatus("HLS not supported in this browser.", false);
     return;
   }
-
   videoPlayer.src = url;
   hideStatus();
   videoPlayer.style.display = "block";
@@ -690,7 +952,6 @@ function playEmbedUrl(url) {
 async function playItem(item, source, attempted = []) {
   const session = ++playSessionId;
 
-  // Skip already-attempted source
   if (attempted.includes(source)) {
     const remaining = ALL_SOURCES.filter(s => !attempted.includes(s));
     if (!remaining.length) {
@@ -704,15 +965,13 @@ async function playItem(item, source, attempted = []) {
 
   currentItem = item;
   currentSource = source;
-  playerTitle.textContent = item.title + (item.year ? ` (${item.year})` : "");
-  playerModal.classList.add("open");
 
   if (attempted.length === 0) resetSourceTabs();
   setSourceTabStatus(source, "loading");
   sourceTabs.querySelectorAll("button[data-source]").forEach(b => b.classList.remove("active"));
   sourceTabs.querySelector(`button[data-source="${source}"]`)?.classList.add("active");
 
-  // Embed sources need no fetch — build URL and load immediately
+  // Embed sources
   if (EMBED_SOURCES.includes(source)) {
     const embedUrl = buildEmbedUrl(source, item);
     if (!embedUrl) {
@@ -735,13 +994,10 @@ async function playItem(item, source, attempted = []) {
 
   // Direct stream sources
   showStatus(`Loading ${source}…`, true);
-
   try {
     const url = await getDirectStream(source, item);
     if (session !== playSessionId) return;
-
     setSourceTabStatus(source, "active");
-
     playStreamUrl(url, (playErr) => {
       if (session !== playSessionId) return;
       console.warn(`Playback failed on ${source}:`, playErr);
@@ -753,26 +1009,22 @@ async function playItem(item, source, attempted = []) {
         retryBtn.classList.add("show");
         return;
       }
-      const next = remaining[0];
-      showStatus(`${source} playback failed. Trying ${next}…`, true);
-      setTimeout(() => playItem(item, next, nextAttempted), 2000);
+      showStatus(`${source} playback failed. Trying ${remaining[0]}…`, true);
+      setTimeout(() => playItem(item, remaining[0], nextAttempted), 2000);
     });
   } catch (err) {
     if (session !== playSessionId) return;
     console.warn(`${source} fetch failed:`, err);
     setSourceTabStatus(source, "failed");
-
     const nextAttempted = [...attempted, source];
     const remaining = ALL_SOURCES.filter(s => !nextAttempted.includes(s));
-
     if (!remaining.length) {
       showStatus(`All sources failed. Last error: ${err.message}`, false);
       retryBtn.classList.add("show");
       return;
     }
-    const next = remaining[0];
-    showStatus(`${source} failed. Trying ${next}…`, true);
-    setTimeout(() => playItem(item, next, nextAttempted), 2000);
+    showStatus(`${source} failed. Trying ${remaining[0]}…`, true);
+    setTimeout(() => playItem(item, remaining[0], nextAttempted), 2000);
   }
 }
 
@@ -786,7 +1038,7 @@ sourceTabs.addEventListener("click", (e) => {
   if (e.target === retryBtn) {
     if (!currentItem) return;
     resetSourceTabs();
-    playItem(currentItem, "vidlink", []);
+    playItem(currentItem, DEFAULT_SOURCE, []);
     return;
   }
   const btn = e.target.closest("button[data-source]");
@@ -794,42 +1046,37 @@ sourceTabs.addEventListener("click", (e) => {
   playItem(currentItem, btn.dataset.source, []);
 });
 
-closePlayer.addEventListener("click", () => {
+function closeModal() {
   playSessionId++;
   playerModal.classList.remove("open");
   destroyHls();
   embedFrame.src = "about:blank";
   embedFrame.style.display = "none";
   if (plyr) plyr.pause();
-});
-
+}
+closePlayer.addEventListener("click", closeModal);
 playerModal.addEventListener("click", (e) => {
-  if (e.target === playerModal) {
-    playSessionId++;
-    playerModal.classList.remove("open");
-    destroyHls();
-    embedFrame.src = "about:blank";
-    embedFrame.style.display = "none";
-    if (plyr) plyr.pause();
-  }
+  // Close only if click was outside modal content (backdrop click)
+  if (e.target === playerModal) closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && playerModal.classList.contains("open")) closeModal();
 });
 
 heroPlayBtn.addEventListener("click", () => {
-  if (heroItem) playItem(heroItem, "vidlink", []);
+  if (heroItem) openDetail(heroItem);
 });
 heroInfoBtn.addEventListener("click", () => {
-  if (heroItem) playItem(heroItem, "vidlink", []);
+  if (heroItem) openDetail(heroItem);
 });
 
 window.addEventListener("scroll", () => {
   navbar.classList.toggle("scrolled", window.scrollY > 50);
 });
-
 window.addEventListener("beforeunload", () => {
   destroyHls();
   if (plyr) plyr.destroy();
 });
-
 document.getElementById("resetKeyLink").addEventListener("click", (e) => {
   e.preventDefault();
   localStorage.removeItem("tmdb_key");
