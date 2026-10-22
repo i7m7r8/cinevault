@@ -12,7 +12,6 @@
 :root{--bg:#141414;--panel:#181818;--card:#1f1f1f;--red:#e50914;--text:#e5e5e5;--dim:#8c8c8c;--green:#46d369;--amber:#f5a623;--border:#2a2a2a;}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}
 body{background:var(--bg);color:var(--text);overflow-x:hidden;}
-/* NAVBAR */
 .navbar{position:fixed;top:0;left:0;right:0;height:68px;padding:0 4%;display:flex;align-items:center;gap:28px;z-index:100;background:linear-gradient(180deg,rgba(0,0,0,.9),transparent);transition:background .3s;}
 .navbar.scrolled{background:var(--bg);}
 .logo{font-size:26px;font-weight:900;color:var(--red);letter-spacing:-1px;cursor:pointer;white-space:nowrap;}
@@ -27,7 +26,6 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .search-box button{background:var(--red);border:none;border-radius:4px;padding:8px 18px;color:#fff;font-weight:600;cursor:pointer;font-size:14px;min-width:80px;}
 .search-box button:hover{background:#b2070f;}
 .search-box button:disabled{opacity:.6;cursor:wait;}
-/* HERO */
 .hero{position:relative;height:56vw;max-height:80vh;min-height:360px;background:#000;display:flex;align-items:flex-end;}
 .hero-bg{position:absolute;inset:0;background-size:cover;background-position:center 20%;opacity:.45;transition:background-image .5s;}
 .hero-grad{position:absolute;inset:0;background:linear-gradient(0deg,var(--bg) 0%,rgba(20,20,20,.4) 40%,transparent 70%);}
@@ -41,13 +39,11 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .btn-play:hover{opacity:.8;}
 .btn-info{background:rgba(109,109,110,.7);color:#fff;border:none;border-radius:4px;padding:12px 28px;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;}
 .btn-info:hover{background:rgba(109,109,110,.5);}
-/* ROWS */
 .rows{padding:0 0 40px;margin-top:-60px;position:relative;z-index:3;}
 .row{padding:0 4%;margin-bottom:32px;}
 .row h2{font-size:clamp(16px,1.6vw,22px);font-weight:700;margin-bottom:12px;}
 .row-inner{display:flex;gap:8px;overflow-x:auto;scroll-behavior:smooth;padding-bottom:8px;scrollbar-width:none;}
 .row-inner::-webkit-scrollbar{display:none;}
-/* CARD */
 .card{position:relative;border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .3s,box-shadow .3s;background:var(--card);}
 .row-inner .card{flex:0 0 200px;}
 .card:hover{transform:scale(1.06);z-index:2;box-shadow:0 8px 24px #000;}
@@ -55,12 +51,10 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .card .card-title{font-size:12px;padding:8px 6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .card .card-meta{font-size:11px;color:var(--dim);padding:0 6px 8px;display:flex;justify-content:space-between;}
 .card .quality-tag{position:absolute;top:6px;right:6px;background:var(--red);font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;}
-/* SEARCH GRID */
 .search-header{padding:24px 4% 8px;display:flex;align-items:baseline;gap:16px;}
 .search-header h2{font-size:clamp(18px,2vw,26px);font-weight:700;}
 .search-header .count{color:var(--dim);font-size:14px;}
 .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;padding:24px 4% 40px;}
-/* DETAIL MODAL */
 .detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:200;overflow-y:auto;}
 .detail-modal.open{display:block;}
 .detail-close{position:fixed;top:16px;right:4%;width:44px;height:44px;background:rgba(0,0,0,.7);border:none;border-radius:50%;font-size:28px;color:#fff;cursor:pointer;z-index:220;display:flex;align-items:center;justify-content:center;}
@@ -77,23 +71,19 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .detail-badges .divider{color:#555;}
 .detail-overview{font-size:14px;line-height:1.6;color:#d2d2d2;max-width:720px;margin-bottom:18px;}
 .detail-actions{display:flex;gap:12px;flex-wrap:wrap;}
-/* Pill nav */
 .pill-nav{position:sticky;top:0;z-index:50;background:rgba(20,20,20,.95);backdrop-filter:blur(12px);padding:14px 4%;display:flex;gap:8px;border-bottom:1px solid var(--border);}
 .pill-nav button{background:transparent;border:1px solid #444;border-radius:20px;padding:8px 20px;color:#bbb;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
 .pill-nav button:hover{border-color:#888;color:#fff;}
 .pill-nav button.active{background:#fff;color:#000;border-color:#fff;}
-/* Detail Body */
 .detail-body{max-width:1400px;margin:0 auto;padding:24px 4% 60px;}
 .d-section{margin-bottom:32px;}
 .d-section-title{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#aaa;font-weight:700;margin-bottom:12px;}
-/* Cast */
 .cast-row{display:flex;gap:16px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
 .cast-row::-webkit-scrollbar{display:none;}
 .cast-card{flex:0 0 100px;text-align:center;}
 .cast-card img{width:76px;height:76px;border-radius:50%;object-fit:cover;background:#222;margin:0 auto 6px;display:block;}
 .cast-name{font-size:12px;font-weight:600;line-height:1.3;}
 .cast-role{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.3;}
-/* Season/Episode */
 .season-controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
 .season-controls select{background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:10px 16px;color:#fff;font-size:14px;cursor:pointer;outline:none;min-width:180px;}
 .season-controls select:focus{border-color:var(--red);}
@@ -109,7 +99,6 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .episode-info .ep-meta{font-size:11px;color:var(--dim);margin-bottom:4px;}
 .episode-info .ep-overview{font-size:12px;color:#bbb;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .episode-num{font-size:18px;font-weight:800;color:#555;width:30px;text-align:center;flex-shrink:0;}
-/* Streams */
 .stream-list{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding-right:6px;}
 .stream-item{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#1a1a1a;border-radius:8px;cursor:pointer;transition:background .2s;border:1px solid transparent;}
 .stream-item:hover{background:#252525;border-color:#444;}
@@ -119,14 +108,11 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 .stream-item .s-right{display:flex;align-items:center;gap:12px;}
 .stream-item .s-quality{background:#2a2a2a;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700;color:var(--green);}
 .stream-item .s-play{color:var(--red);font-size:18px;}
-/* Player */
 .player-shell{width:100%;max-width:1100px;margin:20px auto 0;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #000;position:relative;}
 .player-shell .artplayer-app{width:100%;aspect-ratio:16/9;background:#000;}
 .player-status{color:#888;font-size:14px;text-align:center;padding:40px 16px;line-height:1.6;}
-/* Similar */
 .similar-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
 .similar-row::-webkit-scrollbar{display:none;}
-/* Utility */
 .section-status{padding:40px 4%;text-align:center;color:#888;font-size:15px;}
 .spinner{width:28px;height:28px;border:3px solid #333;border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -156,20 +142,11 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
 </style>
 </head>
 <body>
-
-<!-- NAVBAR -->
 <nav class="navbar" id="navbar">
   <div class="logo" onclick="location.reload()">STREAM<span>VAULT</span></div>
-  <div class="nav-links">
-    <span class="active">Home</span><span>TV Shows</span><span>Movies</span><span>New & Popular</span>
-  </div>
-  <div class="search-box">
-    <input id="searchInput" placeholder="Search movies, shows..." autocomplete="off">
-    <button id="searchBtn">Search</button>
-  </div>
+  <div class="nav-links"><span class="active">Home</span><span>TV Shows</span><span>Movies</span><span>New & Popular</span></div>
+  <div class="search-box"><input id="searchInput" placeholder="Search movies, shows..." autocomplete="off"><button id="searchBtn">Search</button></div>
 </nav>
-
-<!-- HERO -->
 <header class="hero" id="hero">
   <div class="hero-bg" id="heroBg"></div>
   <div class="hero-grad"></div>
@@ -177,17 +154,10 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
     <h1 id="heroTitle">Welcome to StreamVault</h1>
     <div class="hero-meta" id="heroMeta"><span class="match">—</span><span>—</span><span>HD</span></div>
     <p class="hero-desc" id="heroDesc">Loading featured content...</p>
-    <div class="hero-btns">
-      <button class="btn-play" id="heroPlayBtn">▶ Play</button>
-      <button class="btn-info" id="heroInfoBtn">ℹ More Info</button>
-    </div>
+    <div class="hero-btns"><button class="btn-play" id="heroPlayBtn">▶ Play</button><button class="btn-info" id="heroInfoBtn">ℹ More Info</button></div>
   </div>
 </header>
-
-<!-- ROWS -->
 <main class="rows" id="contentRows"></main>
-
-<!-- DETAIL MODAL -->
 <div class="detail-modal" id="detailModal">
   <button class="detail-close" id="detailClose">&times;</button>
   <div class="detail-hero" id="detailHero">
@@ -197,80 +167,51 @@ body{background:var(--bg);color:var(--text);overflow-x:hidden;}
         <h1 id="detailTitle">—</h1>
         <div class="detail-badges" id="detailBadges"></div>
         <p class="detail-overview" id="detailOverview"></p>
-        <div class="detail-actions">
-          <button class="btn-play" id="detailPlayBtn">▶ Play</button>
-          <button class="btn-info" id="detailInfoBtn">ℹ More Info</button>
-        </div>
+        <div class="detail-actions"><button class="btn-play" id="detailPlayBtn">▶ Play</button><button class="btn-info" id="detailInfoBtn">ℹ More Info</button></div>
       </div>
     </div>
   </div>
   <div class="pill-nav" id="pillNav">
-    <button data-tab="episodes" class="active">Episodes</button>
-    <button data-tab="cast">Cast</button>
-    <button data-tab="similar">More Like This</button>
-    <button data-tab="sources">Sources</button>
+    <button data-tab="episodes" class="active">Episodes</button><button data-tab="cast">Cast</button><button data-tab="similar">More Like This</button><button data-tab="sources">Sources</button>
   </div>
   <div class="detail-body">
-    <div class="d-section" id="episodesSection" style="display:none;">
-      <div class="d-section-title">Episodes</div>
-      <div class="season-controls"><select id="seasonSelect"></select></div>
-      <div class="episode-list" id="episodeList"></div>
-    </div>
-    <div class="d-section" id="castSection" style="display:none;">
-      <div class="d-section-title">Top Cast</div>
-      <div class="cast-row" id="castRow"></div>
-    </div>
-    <div class="d-section" id="similarSection" style="display:none;">
-      <div class="d-section-title">More Like This</div>
-      <div class="similar-row" id="similarRow"></div>
-    </div>
+    <div class="d-section" id="episodesSection" style="display:none;"><div class="d-section-title">Episodes</div><div class="season-controls"><select id="seasonSelect"></select></div><div class="episode-list" id="episodeList"></div></div>
+    <div class="d-section" id="castSection" style="display:none;"><div class="d-section-title">Top Cast</div><div class="cast-row" id="castRow"></div></div>
+    <div class="d-section" id="similarSection" style="display:none;"><div class="d-section-title">More Like This</div><div class="similar-row" id="similarRow"></div></div>
     <div class="d-section" id="sourcesSection">
       <div class="d-section-title">Stream Sources</div>
-      <div class="stream-list" id="streamList">
-        <div class="section-status" style="padding:20px 0;">Loading streams…</div>
-      </div>
-      <div class="player-shell" style="margin-top:16px;">
-        <div class="artplayer-app" id="artplayerApp"></div>
-        <div class="player-status" id="playerStatus">Select a stream above to start playing</div>
-      </div>
+      <div class="stream-list" id="streamList"><div class="section-status" style="padding:20px 0;">Loading streams…</div></div>
+      <div class="player-shell" style="margin-top:16px;"><div class="artplayer-app" id="artplayerApp"></div><div class="player-status" id="playerStatus">Select a stream above to start playing</div></div>
     </div>
   </div>
 </div>
-
-<div class="footer">
-  StreamVault · Stremio addons + Nuvio providers · <a href="#" id="resetKeyLink">Reset TMDB key</a>
-</div>
-
+<div class="footer">StreamVault · Stremio addons + Nuvio providers · <a href="#" id="resetKeyLink">Reset TMDB key</a></div>
 <script>
 (function(){
 "use strict";
-
-// ================= CONFIG =================
 const TMDB_IMG="https://image.tmdb.org/t/p/w500";
 const TMDB_PROFILE="https://image.tmdb.org/t/p/w185";
 const TMDB_STILL="https://image.tmdb.org/t/p/w300";
 const TMDB_BACKDROP="https://image.tmdb.org/t/p/original";
 const TMDB_DEMO_KEY="8265bd1679663a7ea12ac168da84d2e8";
 
-// Stremio addons (HTTP-native, work in browser with CORS)
+// Stremio addons — try Torrentio via allorigins first, then others
 const STREMIO_ADDONS = [
-  { name: "Torrentio", base: "https://torrentio.strem.fun" },
-  { name: "Comet", base: "https://comet.elfhosted.com" },
-  { name: "MediaFusion", base: "https://mediafusion.elfhosted.com" },
-  { name: "Peerflix", base: "https://peerflix.elfhosted.com" },
+  { name: "Torrentio", base: "https://torrentio.strem.fun", preferProxy: true },
+  { name: "Comet", base: "https://comet.elfhosted.com", preferProxy: false },
+  { name: "MediaFusion", base: "https://mediafusion.elfhosted.com", preferProxy: false },
+  { name: "Peerflix", base: "https://peerflix.elfhosted.com", preferProxy: false },
 ];
 
-// Nuvio provider (transpiled, browser-compatible)
 const NUVIO_PROVIDER_URL = "https://raw.githubusercontent.com/yoruix/nuvio-providers/refs/heads/main/providers/vixsrc.js";
 
-// CORS proxy (rotate if one fails)
+// Proxy chain — allorigins first for Torrentio Cloudflare bypass
 const CORS_PROXIES = [
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://cors.eu.org/${u}`,
 ];
 
-// ================= DOM =================
 const $ = id => document.getElementById(id);
 const searchInput = $("searchInput"), searchBtn = $("searchBtn"), contentRows = $("contentRows");
 const heroBg = $("heroBg"), heroTitle = $("heroTitle"), heroMeta = $("heroMeta"), heroDesc = $("heroDesc");
@@ -287,13 +228,11 @@ const sourcesSection = $("sourcesSection");
 const streamList = $("streamList");
 const artplayerApp = $("artplayerApp"), playerStatus = $("playerStatus");
 
-// ================= STATE =================
 let art = null, hls = null, dash = null;
 let currentItem = null, heroItem = null;
 let activeSeason = 1, activeEpisode = 1;
-let nuvioGetStreams = null; // loaded provider function
+let nuvioGetStreams = null;
 
-// ================= UTILS =================
 function esc(t){const d=document.createElement("div");d.textContent=t;return d.innerHTML;}
 function fmtRuntime(m){if(!m)return"";const h=Math.floor(m/60),x=m%60;return h>0?`${h}h ${x}m`:`${x}m`;}
 function showPlayerStatus(msg,loading){
@@ -308,7 +247,6 @@ function destroyPlayer(){
   if(art){try{art.destroy();}catch(e){}art=null;}
 }
 
-// ================= TMDB =================
 async function fetchTMDB(path,params={},retried=false){
   const key = localStorage.getItem("tmdb_key") || TMDB_DEMO_KEY;
   const url = new URL(`https://api.themoviedb.org/3${path}`);
@@ -342,10 +280,10 @@ async function fetchFullDetail(id,mediaType){
 }
 async function fetchSeason(tvId,seasonNum){return fetchTMDB(`/tv/${tvId}/season/${seasonNum}`);}
 
-// ================= CORS FETCH =================
-async function fetchWithCORS(url){
+async function fetchWithCORS(url, preferProxy){
   let lastErr;
-  for(const build of CORS_PROXIES){
+  const proxies = preferProxy ? CORS_PROXIES : [CORS_PROXIES[1], CORS_PROXIES[0], CORS_PROXIES[2]];
+  for(const build of proxies){
     try{
       const res = await fetch(build(url));
       if(res.ok) return res;
@@ -355,20 +293,28 @@ async function fetchWithCORS(url){
   throw lastErr || new Error("All CORS proxies failed");
 }
 
-// ================= NUVIO PROVIDER LOADER =================
+// Build correct Stremio ID: tt{imdbId} for movies, tt{imdbId}:{s}:{e} for series
+function buildStremioId(item){
+  const imdb = item.imdb_id;
+  if(item.mediaType === "movie"){
+    return imdb || `tmdb:${item.id}`;
+  }
+  // Series — Stremio requires tt{id}:season:episode
+  if(imdb) return `${imdb}:${activeSeason}:${activeEpisode}`;
+  // Fallback for TMDB-only series
+  return `tmdb:${item.id}:${activeSeason}:${activeEpisode}`;
+}
+
 async function loadNuvioProvider(){
   if(nuvioGetStreams) return nuvioGetStreams;
   try{
-    const res = await fetchWithCORS(NUVIO_PROVIDER_URL);
+    const res = await fetchWithCORS(NUVIO_PROVIDER_URL, false);
     const code = await res.text();
     const module = { exports: {} };
-    // The provider is already transpiled and uses only fetch + regex
     const fn = new Function("module","exports","fetch","console", code);
     fn(module, module.exports, window.fetch.bind(window), console);
     let getStreams = module.exports.getStreams;
-    if(!getStreams && typeof globalThis.getStreams === "function"){
-      getStreams = globalThis.getStreams;
-    }
+    if(!getStreams && typeof globalThis.getStreams === "function") getStreams = globalThis.getStreams;
     if(typeof getStreams !== "function") throw new Error("No getStreams export");
     nuvioGetStreams = getStreams;
     console.log("Nuvio provider loaded");
@@ -379,22 +325,23 @@ async function loadNuvioProvider(){
   }
 }
 
-// ================= STREAM FETCHING =================
 async function fetchAllStreams(item){
   streamList.innerHTML = '<div class="section-status" style="padding:20px 0;"><div class="spinner"></div>Searching sources…</div>';
   const allStreams = [];
   const isMovie = item.mediaType === "movie";
   const type = isMovie ? "movie" : "series";
-  const imdbId = item.imdb_id;
-  const stremioId = imdbId || `tmdb:${item.id}`;
+  const stremioId = buildStremioId(item);
 
-  // 1. Stremio addons (parallel)
+  console.log("Stremio request:", type, stremioId);
+
+  // 1. Stremio addons
   const stremioPromises = STREMIO_ADDONS.map(async addon => {
     try{
       const url = `${addon.base}/stream/${type}/${stremioId}.json`;
-      const res = await fetchWithCORS(url);
+      const res = await fetchWithCORS(url, addon.preferProxy);
       const data = await res.json();
       const streams = data.streams || [];
+      console.log(`${addon.name} returned ${streams.length} streams`);
       return streams.map(s => ({
         name: s.name || addon.name,
         title: s.title || s.name || "Stream",
@@ -409,7 +356,7 @@ async function fetchAllStreams(item){
     }
   });
 
-  // 2. Nuvio provider (single, fallback)
+  // 2. Nuvio provider
   const nuvioPromise = (async () => {
     try{
       const getStreams = await loadNuvioProvider();
@@ -434,26 +381,27 @@ async function fetchAllStreams(item){
     if(r.status === "fulfilled" && Array.isArray(r.value)) allStreams.push(...r.value);
   });
 
-  // Sort by quality (descending)
-  allStreams.sort((a,b) => {
+  // Only keep streams with a direct playable URL (not infohash-only)
+  const playable = allStreams.filter(s => s.url && (s.url.startsWith("http") || s.url.startsWith("magnet:")));
+  playable.sort((a,b) => {
     const qa = parseInt(a.quality) || 0;
     const qb = parseInt(b.quality) || 0;
     return qb - qa;
   });
 
-  renderStreams(allStreams);
+  renderStreams(playable);
 }
 
 function renderStreams(streams){
   if(streams.length === 0){
-    streamList.innerHTML = '<div class="section-status">😕 No streams found for this title.</div>';
+    streamList.innerHTML = '<div class="section-status">😕 No streams found for this title.<br><small style="color:#666;margin-top:8px;display:block;">Addons may be blocked by Cloudflare. Try a different network or add more addons.</small></div>';
     return;
   }
   streamList.innerHTML = streams.map((s, idx) => `
     <div class="stream-item" data-index="${idx}">
       <div class="s-left">
         <div class="s-name">${esc(s.name || "Stream")}</div>
-        <div class="s-provider">${esc(s.provider || "")}</div>
+        <div class="s-provider">${esc(s.provider || "")} · ${esc(s.title || "")}</div>
       </div>
       <div class="s-right">
         <span class="s-quality">${esc(s.quality || "HD")}</span>
@@ -471,51 +419,37 @@ function renderStreams(streams){
   });
 }
 
-// ================= PLAYER =================
 function playStream(url, headers){
   destroyPlayer();
   hidePlayerStatus();
-
   if(!url){ showPlayerStatus("Invalid stream URL", false); return; }
 
   const isHls = url.includes(".m3u8") || url.includes("m3u8");
   const isDash = url.includes(".mpd") || url.includes("mpd");
+  const isMagnet = url.startsWith("magnet:");
+
+  if(isMagnet){
+    showPlayerStatus("Magnet links require a torrent client — use a direct URL stream instead.", false);
+    return;
+  }
 
   art = new Artplayer({
-    container: artplayerApp,
-    url: url,
-    autoplay: true,
-    muted: false,
-    volume: 0.8,
-    pip: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    playbackRate: true,
-    aspectRatio: true,
-    setting: true,
-    hotkey: true,
-    screenshot: true,
-    airplay: true,
-    theme: "#e50914",
-    lang: "en",
+    container: artplayerApp, url: url,
+    autoplay: true, muted: false, volume: 0.8,
+    pip: true, fullscreen: true, fullscreenWeb: true,
+    playbackRate: true, aspectRatio: true, setting: true, hotkey: true, screenshot: true, airplay: true,
+    theme: "#e50914", lang: "en",
     type: isHls ? 'm3u8' : isDash ? 'mpd' : 'mp4',
     customType: {
       m3u8: function(video, url, art){
         if(Hls.isSupported()){
           if(hls) hls.destroy();
-          hls = new Hls({
-            xhrSetup: (xhr) => {
-              if(headers){
-                Object.keys(headers).forEach(k => xhr.setRequestHeader(k, headers[k]));
-              }
-            }
-          });
-          hls.loadSource(url);
-          hls.attachMedia(video);
+          hls = new Hls({ xhrSetup: (xhr) => {
+            if(headers) Object.keys(headers).forEach(k => xhr.setRequestHeader(k, headers[k]));
+          }});
+          hls.loadSource(url); hls.attachMedia(video);
           hls.on(Hls.Events.MANIFEST_PARSED, () => art.play());
-          hls.on(Hls.Events.ERROR, (e, data) => {
-            if(data.fatal) console.error("HLS fatal:", data.details);
-          });
+          hls.on(Hls.Events.ERROR, (e, data) => { if(data.fatal) console.error("HLS fatal:", data.details); });
         } else if(video.canPlayType('application/vnd.apple.mpegurl')){
           video.src = url; art.play();
         }
@@ -531,7 +465,6 @@ function playStream(url, headers){
   art.on('error', () => console.error('ArtPlayer error'));
 }
 
-// ================= HOME =================
 const PLACEHOLDER_POSTER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' fill='%23222'%3E%3Crect width='200' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='14' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
 const PLACEHOLDER_STILL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='170' fill='%23222'%3E%3Crect width='300' height='170'/%3E%3C/svg%3E";
 
@@ -596,8 +529,6 @@ function updateHero(item){
   heroDesc.textContent = item.overview || "No description available.";
   if(item.backdrop_path) heroBg.style.backgroundImage = `url(${TMDB_BACKDROP}${item.backdrop_path})`;
 }
-
-// ================= SEARCH =================
 async function performSearch(){
   const q = searchInput.value.trim(); if(!q){searchInput.focus();return;}
   searchBtn.disabled = true; searchBtn.textContent = "…";
@@ -617,7 +548,6 @@ async function performSearch(){
   finally{ searchBtn.disabled = false; searchBtn.textContent = "Search"; }
 }
 
-// ================= DETAIL =================
 async function openDetail(partial){
   detailModal.classList.add("open");
   detailModal.scrollTop = 0;
@@ -727,14 +657,10 @@ async function loadSeasonEpisodes(item, seasonNum){
   }catch(e){ episodeList.innerHTML = '<div class="section-status">Failed to load episodes.</div>'; }
 }
 
-// ================= EVENTS =================
 searchBtn.addEventListener("click", performSearch);
 searchInput.addEventListener("keydown", e => { if(e.key==="Enter"){e.preventDefault();performSearch();} });
 
-function closeDetail(){
-  detailModal.classList.remove("open");
-  destroyPlayer();
-}
+function closeDetail(){ detailModal.classList.remove("open"); destroyPlayer(); }
 detailClose.addEventListener("click", closeDetail);
 detailModal.addEventListener("click", e => { if(e.target===detailModal) closeDetail(); });
 document.addEventListener("keydown", e => { if(e.key==="Escape" && detailModal.classList.contains("open")) closeDetail(); });
@@ -762,10 +688,8 @@ document.getElementById("resetKeyLink").addEventListener("click", e => {
   alert("TMDB key cleared. Reload and enter a new key on next API call.");
 });
 
-// ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
   loadHomepage();
-  // Preload Nuvio provider in background
   loadNuvioProvider().catch(()=>{});
 });
 })();
