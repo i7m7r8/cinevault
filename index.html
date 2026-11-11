@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live TV Player</title>
+    <!-- HLS.js for playing .m3u8 streams -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: #0f0f13; color: #fff; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 300px; background: #1a1a24; border-right: 1px solid #2a2a35; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #2a2a35; }
+        .sidebar-header h1 { font-size: 1.2rem; margin-bottom: 10px; color: #e50914; }
+        .input-group { display: flex; gap: 8px; }
+        .input-group input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #0f0f13; color: #fff; }
+        .input-group button { padding: 8px 12px; background: #e50914; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: bold; }
+        .input-group button:hover { background: #b80710; }
+        
+        .channel-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .channel-item { padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #2a2a35; font-size: 0.9rem; display: flex; justify-content: space-between; }
+        .channel-item:hover { background: #2a2a35; }
+        .channel-item.active { background: #e50914; font-weight: bold; }
+        .channel-group { font-size: 0.75rem; color: #888; background: #333; padding: 2px 6px; border-radius: 4px; }
+        .channel-item.active .channel-group { background: rgba(0,0,0,0.3); color: #fff; }
+
+        /* Player Area */
+        .player-container { flex: 1; display: flex; flex-direction: column; background: #000; }
+        .video-wrapper { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; max-height: 100vh; }
+        .status-bar { padding: 10px 20px; background: #1a1a24; border-top: 1px solid #2a2a35; font-size: 0.85rem; color: #aaa; display: flex; justify-content: space-between; }
+        .status-bar .title { color: #fff; font-weight: bold; }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; height: 40vh; border-right: none; border-bottom: 1px solid #2a2a35; }
+            .player-container { height: 60vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>📺 Live TV</h1>
+            <div class="input-group">
+                <input type="text" id="playlistUrl" placeholder="M3U Playlist URL..." value="https://iptv-org.github.io/iptv/categories/sports.m3u">
+                <button onclick="loadPlaylist()">Load</button>
+            </div>
+        </div>
+        <div class="channel-list" id="channelList">
+            <!-- Channels will appear here -->
+            <div style="padding: 20px; text-align: center; color: #666;">Loading channels...</div>
+        </div>
+    </div>
+
+    <div class="player-container">
+        <div class="video-wrapper">
+            <video id="videoPlayer" controls autoplay playsinline></video>
+        </div>
+        <div class="status-bar">
+            <span id="statusText">Ready. Select a channel.</span>
+            <span class="title" id="nowPlaying">None</span>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoPlayer');
+        const channelListEl = document.getElementById('channelList');
+        const statusText = document.getElementById('statusText');
+        const nowPlaying = document.getElementById('nowPlaying');
+        let hls = null;
+
+        // Fetch and parse M3U playlist
+        async function loadPlaylist() {
+            const url = document.getElementById('playlistUrl').value;
+            if (!url) return alert('Please enter a playlist URL');
+            
+            statusText.innerText = 'Fetching playlist...';
+            channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading...</div>';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const text = await response.text();
+                parseM3U(text);
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = 'Error loading playlist. Check CORS or URL.';
+                channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #ff5555;">Failed to load. The playlist server may block browser requests (CORS).</div>';
+            }
+        }
+
+        // Parse M3U text into channel objects
+        function parseM3U(text) {
+            const lines = text.split('\n');
+            const channels = [];
+            let currentChannel = null;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('#EXTINF:')) {
+                    // Extract group-title if available
+                    let group = 'General';
+                    const groupMatch = line.match(/group-title="([^"]+)"/);
+                    if (groupMatch) group = groupMatch[1];
+
+                    // Extract name (after the last comma)
+                    const name = line.split(',').pop().trim();
+                    currentChannel = { name: name, group: group, url: '' };
+                } else if (line && !line.startsWith('#') && currentChannel) {
+                    currentChannel.url = line;
+                    channels.push(currentChannel);
+                    currentChannel = null;
+                }
+            });
+
+            renderChannels(channels);
+            statusText.innerText = `Loaded ${channels.length} channels.`;
+        }
+
+        // Render channel list to sidebar
+        function renderChannels(channels) {
+            channelListEl.innerHTML = '';
+            if (channels.length === 0) {
+                channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No channels found.</div>';
+                return;
+            }
+
+            channels.forEach((ch, index) => {
+                const div = document.createElement('div');
+                div.className = 'channel-item';
+                div.innerHTML = `
+                    <span>${ch.name}</span>
+                    <span class="channel-group">${ch.group}</span>
+                `;
+                div.onclick = () => playChannel(ch, div);
+                channelListEl.appendChild(div);
+            });
+        }
+
+        // Play selected stream
+        function playChannel(channel, element) {
+            // Update UI
+            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            nowPlaying.innerText = channel.name;
+            statusText.innerText = 'Connecting...';
+
+            const url = channel.url;
+
+            // Destroy existing HLS instance if any
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+
+            if (Hls.isSupported()) {
+                hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                    statusText.innerText = 'Playing: ' + channel.name;
+                });
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                statusText.innerText = 'Network error. Stream may be offline.';
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                statusText.innerText = 'Media error. Trying to recover...';
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                statusText.innerText = 'Fatal error. Cannot play stream.';
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS support (Safari/iOS)
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                    statusText.innerText = 'Playing: ' + channel.name;
+                });
+            } else {
+                statusText.innerText = 'HLS not supported in this browser.';
+            }
+        }
+
+        // Load default playlist on start
+        window.onload = loadPlaylist;
+    </script>
+</body>
+</html>
