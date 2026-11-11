@@ -1,0 +1,13 @@
+[package]
+name = "rust-live-tv"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+crispy-m3u = "0.1.1"
+gstreamer = "0.23"
+gstreamer-player = "0.25"
+rfd = "0.15"
+ureq = "2"
