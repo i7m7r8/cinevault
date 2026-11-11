@@ -1,11 +1,12 @@
 use eframe::egui;
-use crispy_m3u::{parse, M3uEntry};
-use gstreamer_player::Player;
-use std::sync::mpsc::{self, Sender};
-use std::thread;
+use crispy_m3u::parse;
+use gstreamer_player::{Player, PlayerGMainContextSignalDispatcher, PlayerSignalDispatcher};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 fn main() -> Result<(), eframe::Error> {
+    // Initialize GStreamer
     gstreamer::init().expect("Failed to initialize GStreamer");
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([900.0, 650.0]),
         ..Default::default()
@@ -24,48 +25,42 @@ struct Channel {
     group: Option<String>,
 }
 
-enum PlaybackCommand {
-    Play(String),
-    Stop,
-}
-
 struct LiveTvApp {
     playlist_url: String,
-    sports_url: String, // New: stores the sports playlist URL
+    sports_url: String,
     channels: Vec<Channel>,
     selected_channel: Option<usize>,
     status: String,
     is_loading: bool,
-    playback_tx: Sender<PlaybackCommand>,
+    // Holds the player on the main thread
+    player: Player,
+    // Channel to receive fetched playlist text from the background thread
+    fetch_tx: Sender<Result<String, String>>,
+    fetch_rx: Receiver<Result<String, String>>,
 }
 
 impl LiveTvApp {
     fn new() -> Self {
-        let (tx, rx) = mpsc::channel();
-        // Spawn player thread (same as before)
-        thread::spawn(move || {
-            let player = Player::new(None, None).expect("Failed to create GStreamer player");
-            loop {
-                match rx.recv() {
-                    Ok(PlaybackCommand::Play(uri)) => {
-                        player.set_uri(&uri);
-                        player.play();
-                    }
-                    Ok(PlaybackCommand::Stop) => player.stop(),
-                    Err(_) => break,
-                }
-            }
-        });
+        // 1. Initialize GStreamer Player with a signal dispatcher
+        let dispatcher = PlayerGMainContextSignalDispatcher::new(None);
+        let player = Player::new(
+            None::<&gstreamer_player::PlayerVideoRenderer>,
+            Some(&dispatcher.upcast::<PlayerSignalDispatcher>()),
+        );
+
+        // 2. Set up channel for background fetching
+        let (fetch_tx, fetch_rx) = mpsc::channel();
 
         Self {
             playlist_url: String::new(),
-            // Default to a reliable, auto-updated sports playlist (iptv-org)
             sports_url: "https://iptv-org.github.io/iptv/categories/sports.m3u".to_string(),
             channels: Vec::new(),
             selected_channel: None,
             status: "Ready. Load a general or sports playlist.".to_string(),
             is_loading: false,
-            playback_tx: tx,
+            player,
+            fetch_tx,
+            fetch_rx,
         }
     }
 
@@ -76,9 +71,10 @@ impl LiveTvApp {
                     .entries
                     .into_iter()
                     .filter_map(|entry| {
-                        let name = entry.name.clone()?;
-                        let url = entry.url.clone();
-                        let group = entry.attributes.get("group-title").cloned();
+                        // Access fields directly as per crispy-m3u 0.1.1
+                        let name = entry.name?;
+                        let url = entry.url;
+                        let group = entry.group_title;
                         Some(Channel { name, url, group })
                     })
                     .collect();
@@ -93,35 +89,35 @@ impl LiveTvApp {
         self.is_loading = true;
         self.status = "Fetching playlist...".to_string();
         let url = url.to_string();
-        let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
+        let tx = self.fetch_tx.clone();
+        
+        // Spawn background thread for network request
+        std::thread::spawn(move || {
             let result = ureq::get(&url)
                 .call()
-                .and_then(|r| r.into_string().map_err(|e| ureq::Error::from(e)));
+                .map_err(|e| e.to_string())
+                .and_then(|r| r.into_string().map_err(|e| e.to_string()));
             let _ = tx.send(result);
         });
-        if let Ok(result) = rx.recv_timeout(std::time::Duration::from_secs(15)) {
-            self.is_loading = false;
-            match result {
-                Ok(text) => self.load_playlist_from_text(&text),
-                Err(e) => self.status = format!("Failed to fetch: {}", e),
-            }
-        } else {
-            self.is_loading = false;
-            self.status = "Fetch timed out.".to_string();
-        }
-    }
-
-    // New helper: loads the sports list using the dedicated sports_url
-    fn load_sports(&mut self) {
-        if !self.sports_url.trim().is_empty() {
-            self.load_playlist_from_url(self.sports_url.trim());
-        }
     }
 }
 
 impl eframe::App for LiveTvApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Check if the background thread finished fetching
+        if self.is_loading {
+            if let Ok(result) = self.fetch_rx.try_recv() {
+                self.is_loading = false;
+                match result {
+                    Ok(text) => self.load_playlist_from_text(&text),
+                    Err(e) => self.status = format!("Failed to fetch: {}", e),
+                }
+            } else {
+                // Request a repaint so the UI updates when fetch finishes
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("M3U URL:");
@@ -142,11 +138,11 @@ impl eframe::App for LiveTvApp {
                 }
             });
             ui.horizontal(|ui| {
-                // Sports quick-load section
                 ui.label("Sports URL:");
                 ui.text_edit_singleline(&mut self.sports_url);
                 if ui.button("⚽ Load Sports").clicked() && !self.is_loading {
-                    self.load_sports();
+                    let url = self.sports_url.trim();
+                    if !url.is_empty() { self.load_playlist_from_url(url); }
                 }
             });
             ui.separator();
@@ -168,7 +164,9 @@ impl eframe::App for LiveTvApp {
                         };
                         if ui.selectable_label(is_selected, label).clicked() {
                             self.selected_channel = Some(i);
-                            let _ = self.playback_tx.send(PlaybackCommand::Play(ch.url.clone()));
+                            // Play using the main thread player
+                            self.player.set_uri(&ch.url);
+                            self.player.play();
                             self.status = format!("Playing: {}", ch.name);
                         }
                     }
@@ -188,7 +186,7 @@ impl eframe::App for LiveTvApp {
                 }
                 ui.add_space(20.0);
                 if ui.button("⏹ Stop Playback").clicked() {
-                    let _ = self.playback_tx.send(PlaybackCommand::Stop);
+                    self.player.stop();
                     self.selected_channel = None;
                     self.status = "Stopped.".to_string();
                 }
