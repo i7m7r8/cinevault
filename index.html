@@ -2,201 +2,608 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live TV Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CineVault TV - Live Streaming</title>
     <!-- HLS.js for playing .m3u8 streams -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
-        body { background: #0f0f13; color: #fff; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 300px; background: #1a1a24; border-right: 1px solid #2a2a35; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid #2a2a35; }
-        .sidebar-header h1 { font-size: 1.2rem; margin-bottom: 10px; color: #e50914; }
-        .input-group { display: flex; gap: 8px; }
-        .input-group input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #0f0f13; color: #fff; }
-        .input-group button { padding: 8px 12px; background: #e50914; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: bold; }
-        .input-group button:hover { background: #b80710; }
-        
-        .channel-list { flex: 1; overflow-y: auto; padding: 10px; }
-        .channel-item { padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #2a2a35; font-size: 0.9rem; display: flex; justify-content: space-between; }
-        .channel-item:hover { background: #2a2a35; }
-        .channel-item.active { background: #e50914; font-weight: bold; }
-        .channel-group { font-size: 0.75rem; color: #888; background: #333; padding: 2px 6px; border-radius: 4px; }
-        .channel-item.active .channel-group { background: rgba(0,0,0,0.3); color: #fff; }
+        :root {
+            --bg: #141414;
+            --bg-nav: rgba(20, 20, 20, 0.95);
+            --accent: #e50914;
+            --text: #ffffff;
+            --text-muted: #aaaaaa;
+            --card-hover: #2a2a2a;
+        }
 
-        /* Player Area */
-        .player-container { flex: 1; display: flex; flex-direction: column; background: #000; }
-        .video-wrapper { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: 100%; max-height: 100vh; }
-        .status-bar { padding: 10px 20px; background: #1a1a24; border-top: 1px solid #2a2a35; font-size: 0.85rem; color: #aaa; display: flex; justify-content: space-between; }
-        .status-bar .title { color: #fff; font-weight: bold; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
 
-        /* Mobile responsiveness */
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100%; height: 40vh; border-right: none; border-bottom: 1px solid #2a2a35; }
-            .player-container { height: 60vh; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Hide scrollbar for the whole body */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        /* ================= NAVBAR ================= */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 70px;
+            padding: 0 4%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-nav);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            transition: background 0.3s ease;
+        }
+
+        .logo {
+            color: var(--accent);
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 6px 12px;
+            transition: all 0.3s;
+        }
+
+        .search-box:focus-within {
+            border-color: #fff;
+            background: #000;
+        }
+
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            outline: none;
+            font-size: 14px;
+            width: 150px;
+            transition: width 0.3s;
+        }
+
+        .search-box input:focus {
+            width: 200px;
+        }
+
+        .btn-load {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-load:hover {
+            background: #b80710;
+        }
+
+        /* ================= MAIN CONTENT ================= */
+        main {
+            padding-top: 90px;
+            padding-bottom: 50px;
+            min-height: 100vh;
+        }
+
+        .hero {
+            padding: 0 4% 20px 4%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Rows */
+        .row-container {
+            margin-bottom: 35px;
+        }
+
+        .row-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            padding: 0 4%;
+            margin-bottom: 12px;
+            color: #e5e5e5;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            padding: 10px 4%;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+        }
+
+        .row::-webkit-scrollbar {
+            height: 8px;
+        }
+        .row::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        .row::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* Channel Cards */
+        .card {
+            flex: 0 0 auto;
+            width: 220px;
+            height: 130px;
+            border-radius: 6px;
+            scroll-snap-align: start;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            background: #222;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+            z-index: 10;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 80%);
+            z-index: 1;
+        }
+
+        .card-bg-text {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 80px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.05);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .card-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .card-name {
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.2;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-badge {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Play icon overlay on hover */
+        .card-play-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            width: 40px;
+            height: 40px;
+            background: rgba(229, 9, 20, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 3;
+        }
+
+        .card-play-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: #fff;
+            margin-left: 3px;
+        }
+
+        .card:hover .card-play-icon {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* ================= PLAYER OVERLAY ================= */
+        #playerOverlay {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 999;
+            display: none;
+            flex-direction: column;
+        }
+
+        #playerOverlay.active {
+            display: flex;
+        }
+
+        .player-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 4%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-back {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .player-title {
+            font-size: 18px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .video-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            max-height: 100vh;
+            outline: none;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h1>📺 Live TV</h1>
-            <div class="input-group">
-                <input type="text" id="playlistUrl" placeholder="M3U Playlist URL..." value="https://iptv-org.github.io/iptv/categories/sports.m3u">
-                <button onclick="loadPlaylist()">Load</button>
+    <!-- Navigation -->
+    <nav>
+        <div class="logo" onclick="location.reload()">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="#e50914"><path d="M4 2v20h16V2H4zm12 15.5c-1.5 1.5-4 1.5-5.5 0-1.5-1.5-1.5-4 0-5.5l2-2 5.5 5.5-2 2zm2-6.5l-2 2L11 7l2-2c1.5-1.5 4-1.5 5.5 0 1.5 1.5 1.5 4 0 5.5z"/></svg>
+            CINEVAULT TV
+        </div>
+        <div class="nav-controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search channels..." onkeyup="filterChannels()">
             </div>
+            <button class="btn-load" onclick="loadPlaylist()">Load Playlist</button>
         </div>
-        <div class="channel-list" id="channelList">
-            <!-- Channels will appear here -->
-            <div style="padding: 20px; text-align: center; color: #666;">Loading channels...</div>
-        </div>
-    </div>
+    </nav>
 
-    <div class="player-container">
-        <div class="video-wrapper">
-            <video id="videoPlayer" controls autoplay playsinline></video>
+    <!-- Main Content -->
+    <main id="browseView">
+        <div class="hero">
+            <h1>Live Sports & Entertainment</h1>
+            <p id="statusText">Ready to load playlist.</p>
         </div>
-        <div class="status-bar">
-            <span id="statusText">Ready. Select a channel.</span>
-            <span class="title" id="nowPlaying">None</span>
+        <div id="rowsContainer">
+            <!-- Rows will be generated here -->
+        </div>
+    </main>
+
+    <!-- Fullscreen Player -->
+    <div id="playerOverlay">
+        <div class="player-header">
+            <button class="btn-back" onclick="closePlayer()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                Back
+            </button>
+            <div class="player-title" id="nowPlayingText">Playing...</div>
+        </div>
+        <div class="video-wrapper" id="videoWrapper">
+            <video id="videoPlayer" controls autoplay playsinline></video>
         </div>
     </div>
 
     <script>
         const video = document.getElementById('videoPlayer');
-        const channelListEl = document.getElementById('channelList');
+        const rowsContainer = document.getElementById('rowsContainer');
         const statusText = document.getElementById('statusText');
-        const nowPlaying = document.getElementById('nowPlaying');
+        const playerOverlay = document.getElementById('playerOverlay');
+        const nowPlayingText = document.getElementById('nowPlayingText');
+        const videoWrapper = document.getElementById('videoWrapper');
+        
         let hls = null;
+        let allChannels = [];
 
-        // Fetch and parse M3U playlist
+        // Default Playlist URL
+        const DEFAULT_PLAYLIST = "https://iptv-org.github.io/iptv/categories/sports.m3u";
+
+        // 1. Fetch and Parse Playlist
         async function loadPlaylist() {
-            const url = document.getElementById('playlistUrl').value;
-            if (!url) return alert('Please enter a playlist URL');
-            
-            statusText.innerText = 'Fetching playlist...';
-            channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading...</div>';
+            statusText.innerText = "Fetching playlist... Please wait.";
+            rowsContainer.innerHTML = `<div class="empty-state"><div class="loader" style="margin: 0 auto 20px auto;"></div>Loading channels...</div>`;
 
             try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Network response was not ok');
+                const response = await fetch(DEFAULT_PLAYLIST);
+                if (!response.ok) throw new Error('Network error');
                 const text = await response.text();
                 parseM3U(text);
             } catch (error) {
                 console.error(error);
-                statusText.innerText = 'Error loading playlist. Check CORS or URL.';
-                channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #ff5555;">Failed to load. The playlist server may block browser requests (CORS).</div>';
+                statusText.innerText = "Error loading playlist.";
+                rowsContainer.innerHTML = `<div class="empty-state">Failed to load. The server may block browser requests (CORS).</div>`;
             }
         }
 
-        // Parse M3U text into channel objects
         function parseM3U(text) {
             const lines = text.split('\n');
-            const channels = [];
+            allChannels = [];
             let currentChannel = null;
 
             lines.forEach(line => {
                 line = line.trim();
                 if (line.startsWith('#EXTINF:')) {
-                    // Extract group-title if available
-                    let group = 'General';
+                    let group = 'Uncategorized';
                     const groupMatch = line.match(/group-title="([^"]+)"/);
                     if (groupMatch) group = groupMatch[1];
 
-                    // Extract name (after the last comma)
                     const name = line.split(',').pop().trim();
                     currentChannel = { name: name, group: group, url: '' };
                 } else if (line && !line.startsWith('#') && currentChannel) {
                     currentChannel.url = line;
-                    channels.push(currentChannel);
+                    allChannels.push(currentChannel);
                     currentChannel = null;
                 }
             });
 
-            renderChannels(channels);
-            statusText.innerText = `Loaded ${channels.length} channels.`;
+            renderCategories(allChannels);
+            statusText.innerText = `Loaded ${allChannels.length} live channels.`;
         }
 
-        // Render channel list to sidebar
-        function renderChannels(channels) {
-            channelListEl.innerHTML = '';
+        // 2. Render Netflix-Style Rows
+        function renderCategories(channels) {
+            rowsContainer.innerHTML = '';
+            
             if (channels.length === 0) {
-                channelListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No channels found.</div>';
+                rowsContainer.innerHTML = `<div class="empty-state">No channels found in this playlist.</div>`;
                 return;
             }
 
-            channels.forEach((ch, index) => {
-                const div = document.createElement('div');
-                div.className = 'channel-item';
-                div.innerHTML = `
-                    <span>${ch.name}</span>
-                    <span class="channel-group">${ch.group}</span>
-                `;
-                div.onclick = () => playChannel(ch, div);
-                channelListEl.appendChild(div);
+            // Group channels by category
+            const grouped = {};
+            channels.forEach(ch => {
+                if (!grouped[ch.group]) grouped[ch.group] = [];
+                grouped[ch.group].push(ch);
             });
+
+            // Generate a row for each category
+            for (const [groupName, groupChannels] of Object.entries(grouped)) {
+                const rowContainer = document.createElement('div');
+                rowContainer.className = 'row-container';
+
+                const title = document.createElement('div');
+                title.className = 'row-title';
+                title.innerText = groupName;
+                rowContainer.appendChild(title);
+
+                const row = document.createElement('div');
+                row.className = 'row';
+
+                groupChannels.forEach(ch => {
+                    const card = createCard(ch);
+                    row.appendChild(card);
+                });
+
+                rowContainer.appendChild(row);
+                rowsContainer.appendChild(rowContainer);
+            }
         }
 
-        // Play selected stream
-        function playChannel(channel, element) {
-            // Update UI
-            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-            element.classList.add('active');
-            nowPlaying.innerText = channel.name;
-            statusText.innerText = 'Connecting...';
+        // 3. Create individual channel cards
+        function createCard(channel) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            // Generate a unique dark gradient based on channel name
+            const hash = channel.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const hue = hash % 360;
+            card.style.background = `linear-gradient(135deg, hsl(${hue}, 40%, 15%) 0%, #141414 100%)`;
 
-            const url = channel.url;
+            card.innerHTML = `
+                <div class="card-bg-text">${channel.name.charAt(0).toUpperCase()}</div>
+                <div class="card-play-icon">
+                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+                <div class="card-content">
+                    <div class="card-badge">${channel.group}</div>
+                    <div class="card-name">${channel.name}</div>
+                </div>
+            `;
 
-            // Destroy existing HLS instance if any
+            card.onclick = () => playChannel(channel);
+            return card;
+        }
+
+        // 4. Play Channel
+        function playChannel(channel) {
+            playerOverlay.classList.add('active');
+            nowPlayingText.innerText = channel.name;
+            
+            // Add loader
+            const existingLoader = document.getElementById('playerLoader');
+            if(existingLoader) existingLoader.remove();
+            videoWrapper.insertAdjacentHTML('beforeend', `<div id="playerLoader" class="loader" style="position:absolute; z-index:5;"></div>`);
+
             if (hls) {
                 hls.destroy();
                 hls = null;
             }
 
             if (Hls.isSupported()) {
-                hls = new Hls();
-                hls.loadSource(url);
+                hls = new Hls({ debug: false });
+                hls.loadSource(channel.url);
                 hls.attachMedia(video);
+                
                 hls.on(Hls.Events.MANIFEST_PARSED, function() {
                     video.play();
-                    statusText.innerText = 'Playing: ' + channel.name;
+                    const loader = document.getElementById('playerLoader');
+                    if(loader) loader.remove();
                 });
+
                 hls.on(Hls.Events.ERROR, function(event, data) {
                     if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                statusText.innerText = 'Network error. Stream may be offline.';
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                statusText.innerText = 'Media error. Trying to recover...';
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                statusText.innerText = 'Fatal error. Cannot play stream.';
-                                hls.destroy();
-                                break;
-                        }
+                        console.error("Stream Error:", data);
+                        nowPlayingText.innerText = "Stream Offline or Blocked";
+                        const loader = document.getElementById('playerLoader');
+                        if(loader) loader.remove();
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Native HLS support (Safari/iOS)
-                video.src = url;
+                // Safari native support
+                video.src = channel.url;
                 video.addEventListener('loadedmetadata', function() {
                     video.play();
-                    statusText.innerText = 'Playing: ' + channel.name;
+                    const loader = document.getElementById('playerLoader');
+                    if(loader) loader.remove();
                 });
-            } else {
-                statusText.innerText = 'HLS not supported in this browser.';
             }
         }
 
-        // Load default playlist on start
+        // 5. Close Player
+        function closePlayer() {
+            playerOverlay.classList.remove('active');
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            video.pause();
+            video.src = "";
+            nowPlayingText.innerText = "Playing...";
+        }
+
+        // 6. Search Filter
+        function filterChannels() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allChannels.filter(ch => 
+                ch.name.toLowerCase().includes(query) || 
+                ch.group.toLowerCase().includes(query)
+            );
+            
+            // If searching, show all results in one row. If empty, show categories.
+            if (query.length > 0) {
+                rowsContainer.innerHTML = `
+                    <div class="row-container">
+                        <div class="row-title">Search Results (${filtered.length})</div>
+                        <div class="row" id="searchRow"></div>
+                    </div>
+                `;
+                const row = document.getElementById('searchRow');
+                filtered.forEach(ch => row.appendChild(createCard(ch)));
+            } else {
+                renderCategories(allChannels);
+            }
+        }
+
+        // Initial Load
         window.onload = loadPlaylist;
     </script>
 </body>
