@@ -1,0 +1,18 @@
+name: Build Rust App
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GStreamer dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release
+      - name: Upload Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinevault
+          path: target/release/rust-live-tv
