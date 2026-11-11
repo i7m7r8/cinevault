@@ -1,5 +1,5 @@
 [package]
-name = "rust-live-tv"
+name = "cinevault"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,5 +9,6 @@ egui = "0.29"
 crispy-m3u = "0.1.1"
 gstreamer = "0.23"
 gstreamer-player = "0.25"
+glib = "0.20"
 rfd = "0.15"
 ureq = "2"
